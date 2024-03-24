@@ -1,0 +1,46 @@
+name: SonarQube scan
+# Moved into ci-main.yml, now only on request workflow
+#on:
+#  push:
+##    branches:
+#     - main
+#      - develop
+#      - 'release/**'
+#  pull_request:
+#      types: [opened, synchronize, reopened]
+on:
+  workflow_dispatch:
+    inputs:
+      sonar-token:
+        required: true
+        type: string
+  
+jobs:
+  sonarqube:
+    runs-on: ubuntu-latest-4-cores
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Generate coverage.out and covreport.xml file
+      run: go test -v -coverprofile="coverage.out" ./... 
+    - name: Copy file
+      run: cp coverage.out test/unittest/coverage.out
+    - name: cat the file
+      run: cat test/unittest/coverage.out
+    
+    - name: SonarQube Scan
+      uses: sonarsource/sonarqube-scan-action@master
+      env:
+        SONAR_TOKEN: ${{ inputs.sonar-token }}
+        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        
+    - name: Upload test coverage artifact
+      uses: actions/upload-artifact@v4
+      with:
+        # Name of the artifact to upload.
+        # Optional. Default is 'artifact'
+        name: test-coverage.out
+        # A file, directory or wildcard pattern that describes what to upload
+        path: test/unittest/coverage.out
