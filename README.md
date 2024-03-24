@@ -1,2 +1,2 @@
-# common-github-actions
-A test repo for common github actions
+# Common Github Actions for Chef
+Location for reusable workflows
