@@ -1,0 +1,45 @@
+name: Build the CLI with go-releaser
+on: 
+  workflow_call:
+    inputs:
+      application-name:
+        required: true
+        type: string
+      
+permissions:
+  contents: write
+
+env:
+  APPLICATION_NAME: ${{ inputs.application-name }}
+  API_VERSION: ${{ github.ref_name }}
+  
+jobs:
+  # Build GoLang binaries per .goreleaser.yaml with go-releaser makes these artifacts in GitHub 
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      -
+        name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '>=1.21'
+      - run: go version
+    #   - name: Configure git for private modules linux
+    #     if: ${{ matrix.os == 'ubuntu-latest' }}
+    #     env:
+    #       GOPRIVATE: github.com/progress-platform-services/*
+    #     run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+      -
+        name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
