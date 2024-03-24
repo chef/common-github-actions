@@ -1,0 +1,44 @@
+
+  # do these as repo or org variables (like secrets)
+  # ECR_REGISTRY is set on login below to 448877188565.dkr.ecr.us-east-2.amazonaws.com
+  ECR_REPOSITORY: 'arch-sample-service'
+  CONTAINER_IMAGE_TAG: ${{ github.sha }}
+  # do not need as this is in ECR_REPO ... CONTAINER_IMAGE_NAME: 'arch-sample-service'
+
+
+  # Build GoLang binary - publish binaries from /bin - CONVERT TO go-releaser
+  build:
+    name: 'Build GoLang binaries'
+    runs-on: ubuntu-latest
+    steps:
+    # https://github.com/actions/checkout
+    - uses: actions/checkout@v4
+    - name: Set up Go environment
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.21.x
+        cache: true
+        check-latest: true
+    - name: 'Build: go vet'
+      run: |
+        go vet .
+    #        golint .
+    - name: 'Build: go get (dependencies) - ADDED DOCKER STEP'
+      run: go get -d -v ./...
+    - name: 'Build: go install - ADDED DOCKER STEP'
+      run: go install -v ./...
+    - name: 'Build: go mod tidy - ADDED DOCKER STEP'
+      run: go mod tidy
+
+      # add architecture options only in CONTAINERIZATION - this one runs on Ubuntu runner, so GOARCH ARM and x86 on ubuntu only
+    - name: Run Go build
+      run: go build -o bin/$APPLICATION_NAME -v .
+    # - name: list outputs
+    #  run: ls bin
+    - name: Upload binaries to runner artifacts
+      uses: actions/upload-artifact@v4
+      with:
+      # Name of the artifact to upload.
+        name: arch-sample-service
+      # A file, directory or wildcard pattern that describes what to upload
+        path: bin/arch-sample-service

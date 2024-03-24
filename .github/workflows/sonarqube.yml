@@ -1,14 +1,11 @@
 name: SonarQube scan
-# Moved into ci-main.yml, now only on request workflow
-#on:
-#  push:
-##    branches:
-#     - main
-#      - develop
-#      - 'release/**'
-#  pull_request:
-#      types: [opened, synchronize, reopened]
+
 on:
+  workflow_call:
+    inputs:
+      sonar-token:
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       sonar-token:
