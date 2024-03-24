@@ -2,15 +2,7 @@ name: SonarQube scan
 
 on:
   workflow_call:
-    inputs:
-      sonar-token:
-        required: true
-        type: string
   workflow_dispatch:
-    inputs:
-      sonar-token:
-        required: true
-        type: string
   
 jobs:
   sonarqube:
@@ -30,7 +22,7 @@ jobs:
     - name: SonarQube Scan
       uses: sonarsource/sonarqube-scan-action@master
       env:
-        SONAR_TOKEN: ${{ inputs.sonar-token }}
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         
     - name: Upload test coverage artifact
