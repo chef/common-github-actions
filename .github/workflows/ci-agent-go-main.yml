@@ -1,0 +1,87 @@
+name: CI workflow for GoLang CLIs
+      
+on:
+  # pull_request:
+  #   types: [opened, synchronize, reopened, closed]
+  # push:
+  #   branches:
+  #     - main
+  push:
+    tags:
+        - 'v*.*.*'
+      
+env:
+  BLDR_URL: 'https://bldr.habitat.sh/'
+  HAB_ORIGIN: 'chef-platform'
+  BLDR_CHANNEL: ${{ github.ref_name }}
+  # should be stable, unstable, (other by name)
+  BLDR_VERSION: '1.0.1'
+  # BLDR_TOKEN: ${{ secrets.BUILDER_TOKEN }} org-wide on https://github.com/organizations/progress-platform-services/settings/secrets/actions
+        
+permissions:
+  contents: write
+
+jobs:
+  agent-matrix:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+      # matrix strategy is described at https://docs.github.com/en/actions/using-jobs/using-a-matrix-for-your-jobs
+
+    runs-on: ${{ matrix.os }}
+    # free runner types are https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners/about-github-hosted-runners
+    # from macos-latest, windows-latest, ubuntu-latest, ubuntu-20.04, ubuntu-18.04, ubuntu-16.04, windows-2019, windows-2016
+    # included software packages on runners are at https://github.com/actions/runner-images#available-images 
+    steps:
+      - name: print OS
+        run: echo "${{ matrix.os }}"
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: install Habitat on Linux
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          echo "STARTING HAB INSTALL ON  ${{ matrix.os }} UBUNTU"
+          curl https://raw.githubusercontent.com/habitat-sh/habitat/main/components/hab/install.sh | sudo bash
+      - name: install Habitat on Windows
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: |
+          echo "STARTING HAB INSTALL ON ${{ matrix.os }} WINDOWS"
+          choco install habitat
+      - name: run habitat packaging
+        run: |
+          hab --version
+          hab pkg build 
+        # create the .HART file, may need a key
+      - name: push habitat package to bldr.habitat.sh
+        run: |
+          echo "pushing to ${{ env.BLDR_URL }}/#/${{ env.HAB_ORIGIN }}:${{ env.BLDR_CHANNEL }}..."
+          source results/last_build.env
+        #  hab pkg upload results/$pkg_artifact -z ${{ secrets.BUILDER_TOKEN }}
+        #  echo "done pushing"
+
+  # Build GoLang binaries per .goreleaser.yaml with go-releaser makes these artifacts in GitHub 
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      -
+        name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '>=1.21'
+      - run: go version
+      # -
+      #   name: Run GoReleaser
+      #   uses: goreleaser/goreleaser-action@v5
+      #   with:
+      #     distribution: goreleaser
+      #     version: latest
+      #     args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

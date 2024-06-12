@@ -1,0 +1,236 @@
+name: Build the CLI with go-releaser
+ 
+# TODO: add another workflow, called by CD on services, to use a CLI to connect to all endpoints
+
+# on: 
+#   pull_request:
+#     types: [opened, synchronize, reopened, closed]
+#   push:
+#     branches:
+#       - main
+#       - develop
+#       - 'feature*'
+#       - 'releases/**'
+#     tags:
+#       - 'v*.*.*'
+#       - v1.**
+#   release:
+#     types: [published]
+on:
+  workflow_dispatch:
+    inputs:
+      api-file-path: 
+        type: string
+        default: "./api/chef-node-management.yaml"
+      cli-version-tag:
+        type: string
+        default: '1.0.0'
+      
+permissions:
+  contents: write
+
+env:
+  APPLICATION_NAME: 'arch-sample-cli'
+  BUILDTYPE: 'CLI'
+  SCCOUTPUTFILE: 'scc.out'
+  BUILDLANGUAGE: 'GoLang'
+  API_VERSION: ${{ inputs.cli-version-tag }}
+  
+jobs:
+  # Determine Build SemVer or GUID (if develop branch)
+  get-version:
+    name: 'Get semVer from API spec'
+    runs-on: ubuntu-latest
+    steps:
+      # https://github.com/actions/checkout
+      - uses: actions/checkout@v4
+      # - name: base version
+      #   id: foo
+      #   run: yq '.info.version' ${{ inputs.api-file-path }}
+      # - name: set environment variable from API file path
+      #   id: bar
+      #   run: echo "API_VERSION=$(yq '.info.version' ${{ inputs.api-file-path }})" >> "$GITHUB_ENV"
+      - name: set environment variable from API file path
+        run: export API_VERSION="$(yq '.info.version' ${{ inputs.api-file-path }})"
+#      run: |
+#          echo "yq '.info.version' ./api/chef-node-management.yaml" >> $GITHUB_OUTPUT
+        id: get_version
+      - name: echo the variable
+        run: |
+          echo "${{ env.API_VERSION }} 1b"
+          echo "${{ steps.get_version.outputs.result }} ONE"
+          echo "${{ join(steps.get_version.outputs.*,'\n') }} TWO"
+        env:
+          API_VERSION: ${{ join(steps.get_version.outputs.*) }}
+      # - name: set env var
+      #   run: export API_VERSION=${{ steps.get_version.outputs.result }}
+      # - name: echo the variable again
+      #   run: |
+      #     echo ${{ env.API_VERSION }}
+    
+  # tag the release
+  create-tag:
+    name: 'tag the release from the input'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: rickstaa/action-create-tag@v1
+        id: "tag_create"
+        with:
+          # TODO: switch to tag: "${{ env.API_VERSION }}"
+          tag: "${{ inputs.cli-version-tag }}"
+          tag_exists_error: true
+      - run: |
+          echo "Tag already present: ${{ steps.tag_create.outputs.tag_exists }}"
+
+  # Build GoLang binaries per .goreleaser.yaml with go-releaser makes these artifacts in GitHub 
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      -
+        name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '>=1.21'
+      - run: go version
+      -
+        name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
+  
+          # - publish binaries to /bin (no longer needed)
+    
+  # manual build for single platform
+  # build:
+  #   name: 'Build and Unit Test GoLang binaries'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   # https://github.com/actions/checkout
+  #   - uses: actions/checkout@v4
+  #   - name: Set up Go environment
+  #     uses: actions/setup-go@v4
+  #     with:
+  #       go-version: '1.21.x'
+  #       cache: true
+  #       check-latest: true     
+  #   - name: 'Build: go vet'
+  #     run: |
+  #       go vet .
+  #   #        golint .
+  #   - name: 'Build: go get (dependencies)'
+  #     run: go get -d -v ./...
+  #   - name: 'Build: go install'
+  #     run: go install -v ./...
+  #   - name: 'Build: go mod tidy'
+  #     run: go mod tidy
+  #   - name: Run Go build
+  #     run: go build -o bin/$APPLICATION_NAME -v .
+  #   # - name: list binary outputs
+  #   #  run: ls bin
+  #   - name: Upload binaries to runner artifacts
+  #     uses: actions/upload-artifact@v4
+  #     with:
+  #     # Name of the artifact to upload.
+  #       name: $APPLICATION_NAME
+  #     # A file, directory or wildcard pattern that describes what to upload
+  #       path: bin/$APPLICATION_NAME
+
+  
+
+  # Unit Test and Sonar (SCA and unit test coverage)
+  #unit-test:
+  #  name: 'Unit test and run Sonar scan'
+  #  runs-on: ubuntu-latest-4-cores
+  #  needs: build
+  #  steps:
+  #  - uses: actions/checkout@v4
+  #    with:
+  #      fetch-depth: 0
+  #  
+  #  - name: 'Unit Test: Generate coverage.out and covreport.xml file'
+  #    run: go test -v -coverprofile="coverage.out" ./... 
+  #  - name: Copy file
+  #    run: cp coverage.out test/unittest/coverage.out
+  #    #    - name: cat the file
+  #    #      run: cat test/unittest/coverage.out
+    
+    # - name: SonarQube Scan
+    #   uses: sonarsource/sonarqube-scan-action@master
+    #   # https://github.com/marketplace/actions/official-sonarqube-scan
+    #   env:
+    #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    #     SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        
+    # - name: Upload test coverage artifact
+    #   uses: actions/upload-artifact@v4
+    #   with:
+    #     # Name of the artifact to upload.
+    #     name: test-coverage.out
+    #     # A file, directory or wildcard pattern that describes what to upload
+    #     path: test/unittest/coverage.out
+ 
+  # Language vulnerability checks (SCA) - OWASP depcheck, gosec
+    # depcheck - https://jeremylong.github.io/DependencyCheck/dependency-check-cli/index.html, https://jeremylong.github.io/DependencyCheck/ (plugin to SQ)
+    # https://github.com/marketplace/actions/gosec-security-checker
+    # https://go.googlesource.com/vuln - govulncheck
+#   language-vuln-checks:
+#     runs-on: ubuntu-latest
+#     needs: veracode-sast
+#     name: 'OWASP depcheck and gosec'
+#     steps:
+#       - name: 'OWASP depcheck and gosec'
+#         run: echo 'hello world'
+
+# srcclr
+# srcclr scan . --recursive --quick
+# srcclr scan .\automate\ --recursive --quick
+# needs SRCCLR_API_TOKEN env var...
+# srcclr scan --url https://github.com/progress-platform-services/chef-node-management-cli --json=veracode_output --no-upload --recursive --ref=main --scan-analyzers="go mod"
+
+# go install github.com/securego/gosec/v2/cmd/gosec@latest
+# GHA at https://github.com/securego/gosec
+# gosec ./... >> ./bin/gosec.out
+
+# go install golang.org/x/vuln/cmd/govulncheck@latest
+# govulncheck ./... >> ./bin/security/govuln.out
+
+# go mod graph >> ./bin/go-dep-graph.out
+
+# go install honnef.co/go/tools/cmd/staticcheck@latest
+# staticcheck ./... >> ./bin/staticcheck.out
+
+# go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.57.1
+# GHA at ?
+# golangci-lint run ./...
+
+# go get github.com/manifest-cyber/cli
+# use the GHA
+
+  # Code signing (can generate MD5 SHA, but also need signature - not GPG but provisioned by Progress EVCode)
+    # https://github.com/mtrojnar/osslsigncode?tab=readme-ov-file 
+#   code-signing:
+#     runs-on: ubuntu-latest
+#     needs: language-vuln-checks
+#     name: 'Code signing'
+#     steps:
+#       - name: 'Code signing'
+#         run: echo 'hello world'
+
+
+
+
+# msftsbom.exe generate -b ./bin -bc . -pn chef-api -pv 0.1.0 -ps "Progress Chef" -nsb "https://chef.io" -V Verbose
+# license_scout
