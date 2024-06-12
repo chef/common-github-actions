@@ -1,0 +1,25 @@
+# events are listed here https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows
+
+on: 
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  push:
+    branches:
+      - main
+      - develop
+      - 'feature*'
+      - 'releases/**'
+    tags:
+      - 'v*.*.*'
+      - v1.**
+  release:
+    types: [published]
+
+jobs:
+ call-job:
+   # runs-on: ubuntu-latest
+   steps:
+     - name: Call templated workflow
+       uses: progress-platform-services/.github/workflows/workflow-templates/ci-cli-go-main.yml@main
+       with:
+         foo: 'baz'

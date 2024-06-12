@@ -1,0 +1,32 @@
+# dispatch action to call a remote echo service
+name: Run echo GHA from chef/common-github-actions
+
+on: 
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  push:
+    branches:
+      - main
+      - develop
+      - 'feature*'
+      - 'releases/**'
+    tags:
+      - 'v*.*.*'
+      - v1.**
+  release:
+    types: [published]
+
+  workflow_dispatch:
+    inputs:
+      foo:
+          type: string
+          default: 'bar'
+           
+jobs: 
+  call-echo-service:
+    runs-on: ubuntu-latest
+    steps:
+       - name: Call simple echo workflow
+         uses: chef/common-github-actions/.github/workflows/ci-all-go-echo.yml@main
+         with:
+           foo: 'hello world'

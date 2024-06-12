@@ -1,0 +1,7 @@
+# this is a dispatch workflow to craete an ad-hoc instance of the workflow by the same name
+# ci-service-go-dispatch --> calls ci-service-go
+
+# copy this to a repo's .github/workflows and navigate to the repo's Actions page, select this workflow and click the button 'Run workflow' in the upper right
+
+# input variables:
+#  branch: defaults to main

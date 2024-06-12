@@ -1,0 +1,18 @@
+# copy this to your repo to enable a dispatch (github action page) driven workflow
+name: CI dispatch workflow for GoLang CLIs
+
+on:
+  workflow_dispatch:
+    inputs:
+      foo:
+        type: string
+        default: 'bar'
+
+jobs:
+ call-job:
+   # runs-on: ubuntu-latest
+   steps:
+     - name: Call templated workflow
+       uses: progress-platform-services/.github/workflows/workflow-templates/ci-cli-go-main.yml@main
+       with:
+         foo: 'baz'

@@ -1,5 +1,6 @@
-# test workflow echos back input, typically called from another repo
-# based on https://docs.github.com/en/actions/using-workflows/reusing-workflows
+# a test GitHub Action which echos back an input variable
+# common github actions in this repo are based on the reuse pattern https://docs.github.com/en/actions/using-workflows/reusing-workflows
+# use stubs/ci-all-go-echo-stub.yml in your repo to call this common action using workflow_call
 
 on:
   workflow_call:
@@ -7,11 +8,13 @@ on:
       message:
         required: true
         type: string
+        
   workflow_dispatch:
     inputs:
       message:
         required: true
         type: string
+
 jobs:
   reusable_echo:
     name: echo message back
