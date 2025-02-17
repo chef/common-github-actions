@@ -23,3 +23,9 @@ jobs:
       - name: echo
         run: |
           echo "Hello ${{ inputs.message }}"
+
+  run-trufflehog:
+    uses: chef/common-github-actions/.github/workflows/trufflehog.yml@main
+    # with:
+    #   message: 'hello world'
+  
