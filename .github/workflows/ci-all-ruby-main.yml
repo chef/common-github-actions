@@ -1,0 +1,25 @@
+# CI pipeline for all Ruby application types on main and release branches
+# use stubs/ci-all-ruby-main-stub.yml in your repo to call this common action using workflow_call
+name: Ruby main and release branch CI flow
+
+on:
+  workflow_call:
+    inputs:
+      message:
+        required: true
+        type: string
+        
+#   workflow_dispatch:
+#     inputs:
+#       message:
+#         required: true
+#         type: string
+
+jobs:
+  reusable_echo:
+    name: echo message back
+    runs-on: ubuntu-latest
+    steps:
+      - name: echo
+        run: |
+          echo "Hello ${{ inputs.message }}"
