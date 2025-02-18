@@ -6,7 +6,8 @@ on:
     
 jobs:
   sonarqube:
-    runs-on: ubuntu-latest-4-cores
+    # runs-on: ubuntu-latest-4-cores
+    runs-on: ip-range-controlled
     steps:
     - uses: actions/checkout@v4
       with:
