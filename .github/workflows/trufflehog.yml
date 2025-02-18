@@ -1,16 +1,7 @@
 name: Trufflehog scan
 
 on:
-  push:
-    branches:
-      - main
-      - develop
-      - 'releases/**'
-  pull_request:
-
   workflow_call:
-  
-  workflow_dispatch:
 
 jobs:
   trufflehog:

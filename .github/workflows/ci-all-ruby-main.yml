@@ -5,10 +5,18 @@ name: Ruby main and release branch CI flow
 on:
   workflow_call:
     inputs:
-      message:
+    #   message:
+    #     required: true
+    #     type: string
+      language:
+        description: 'Primary language in the repository'
         required: true
         type: string
-        
+      outputfilename:
+        description: 'Name of the SCC output file'
+        required: false
+        type: string
+        default: 'scc-output.txt'
 #   workflow_dispatch:
 #     inputs:
 #       message:
@@ -16,16 +24,24 @@ on:
 #         type: string
 
 jobs:
-  reusable_echo:
-    name: echo message back
-    runs-on: ubuntu-latest
-    steps:
-      - name: echo
-        run: |
-          echo "Hello ${{ inputs.message }}"
+#   reusable_echo:
+#     name: echo message back
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: echo
+#         run: |
+#           echo "Hello ${{ inputs.message }}"
+
+  run-scc:
+    uses: chef/common-github-actions/.github/workflows/scc.yml@main
+    with:
+      outputfilename: ${{ inputs.outputfilename }}
 
   run-trufflehog:
     uses: chef/common-github-actions/.github/workflows/trufflehog.yml@main
-    # with:
-    #   message: 'hello world'
+   
+  run-sonarqube:
+    uses: chef/common-github-actions/.github/workflows/ruby-sonarqube.yml@main
+    secrets: inherit
+    # https://docs.github.com/en/actions/sharing-automations/reusing-workflows#passing-inputs-and-secrets-to-a-reusable-workflow
   

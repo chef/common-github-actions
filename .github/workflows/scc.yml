@@ -1,0 +1,41 @@
+name: source code complexity scan
+# from https://github.com/boyter/scc
+    
+on:
+  workflow_call:
+    inputs:
+    #   language:
+    #     description: 'Primary language in the repository'
+    #     required: true
+    #     type: string
+      outputfilename:
+        description: 'Name of the SCC output file'
+        required: false
+        type: string
+        default: 'scc-output.txt'
+
+jobs:
+  scc:
+    runs-on: ubuntu-latest
+    name: 'Complexity and SLOC'
+    # (after - name:) if: ${{ inputs.language == 'Go' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate complexity metrics (using Adapt-API action)
+        id: scc
+        uses: Adapt-API/scc-docker-action@master
+        with:
+          args: -i js,go,html,css,rb --by-file -o ${{ inputs.outputfilename }}
+          
+        #   - name: Echo output to correct file
+        #     run: echo -n "${{ steps.scc.outputs.scc }}" >> ${{ inputs.outputfilename }}
+         #     #   echo -n "${{ fromJson(steps.scc.outputs.scc)[0].Code }}"       
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.outputfilename }}
+          path: ${{ inputs.outputfilename }}
+          retention-days: 30
+          overwrite: true
