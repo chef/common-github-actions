@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
+  trufflehog:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
@@ -23,9 +23,9 @@ jobs:
     - name: Secret Scanning
       uses: trufflesecurity/trufflehog@main
       with:
-        extra_args: --results=verified,unknown --json 
+        extra_args: --json 
         
-        #--fail --github-actions
+        # --fail --github-actions --results=verified,unknown 
         
     # - name: Upload test coverage artifact
     #   uses: actions/upload-artifact@v4
