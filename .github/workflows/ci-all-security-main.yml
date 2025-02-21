@@ -1,0 +1,23 @@
+name: TruffleHog Secret Scan
+
+on:
+  workflow_dispatch:
+  pull_request:
+    #todo - add required branches like release**, CHEF-18 etc..
+    branches: [ main ]
+
+jobs:
+  TruffleHog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: TruffleHog Secret Scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          extra_args: --json
+        continue-on-error: false
