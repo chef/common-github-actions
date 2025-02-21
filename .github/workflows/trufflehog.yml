@@ -16,7 +16,7 @@ jobs:
       with:
         path: ./
         extra_args: --json
-      continue-on-error: true
+      continue-on-error: false
 
       # change this to false if you want to stop a PR
         

@@ -1,6 +1,6 @@
-# CI pipeline for all Ruby application types on main and release branches
-# use stubs/ci-all-ruby-main-stub.yml in your repo to call this common action using workflow_call
-name: Ruby main and release branch CI flow
+# CI pipeline for all application types on main and release branches
+# use stubs/ci-main-pull-request-checks-stub.yml in your repo to call this common action using workflow_call
+name: main and release branch CI flow
 
 on:
   workflow_call:
@@ -17,11 +17,6 @@ on:
         required: false
         type: string
         default: 'scc-output.txt'
-#   workflow_dispatch:
-#     inputs:
-#       message:
-#         required: true
-#         type: string
 
 jobs:
 #   reusable_echo:
@@ -32,7 +27,9 @@ jobs:
 #         run: |
 #           echo "Hello ${{ inputs.message }}"
 
+  # sections to always run (language-independent)
   run-scc:
+    name: source code complexity scan    
     uses: chef/common-github-actions/.github/workflows/scc.yml@main
     with:
       outputfilename: ${{ inputs.outputfilename }}
@@ -44,5 +41,10 @@ jobs:
     uses: chef/common-github-actions/.github/workflows/ruby-sonarqube.yml@main
     secrets: inherit
     
+  # sections for language specific tests (gosec, etc.)
+  run-Ruby-language-specific-tests:
+    if: ${{ inputs.language == 'Ada' }}  # Check if "DEPLOY_ENV" is "production"
+    uses: chef/common-github-actions/.github/workflows/ruby-sonarqube.yml@main
+
     # https://docs.github.com/en/actions/sharing-automations/reusing-workflows#passing-inputs-and-secrets-to-a-reusable-workflow
   
