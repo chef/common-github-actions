@@ -1,4 +1,4 @@
-name: Trufflehog scan
+name: Trufflehog secret scan
 
 on:
   workflow_call:
@@ -14,10 +14,14 @@ jobs:
     - name: Secret Scanning
       uses: trufflesecurity/trufflehog@main
       with:
-        extra_args: --json 
+        path: ./
+        extra_args: --json
+      continue-on-error: true
+
+      # change this to false if you want to stop a PR
         
         # --fail --github-actions --results=verified,unknown 
-        
+
     # - name: Upload test coverage artifact
     #   uses: actions/upload-artifact@v4
     #   with:

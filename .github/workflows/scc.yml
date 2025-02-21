@@ -27,7 +27,8 @@ jobs:
         id: scc
         uses: Adapt-API/scc-docker-action@master
         with:
-          args: -i js,go,html,css,rb --by-file -o ${{ inputs.outputfilename }}
+          args: -o ${{ inputs.outputfilename }}
+          # --by-file -i js,go,html,css,rb 
           
         #   - name: Echo output to correct file
         #     run: echo -n "${{ steps.scc.outputs.scc }}" >> ${{ inputs.outputfilename }}

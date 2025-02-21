@@ -43,5 +43,6 @@ jobs:
   run-sonarqube:
     uses: chef/common-github-actions/.github/workflows/ruby-sonarqube.yml@main
     secrets: inherit
+    
     # https://docs.github.com/en/actions/sharing-automations/reusing-workflows#passing-inputs-and-secrets-to-a-reusable-workflow
   

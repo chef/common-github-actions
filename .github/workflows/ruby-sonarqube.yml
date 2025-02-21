@@ -27,10 +27,11 @@ jobs:
     #   run: go test -v -coverprofile="coverage.out" ./... 
     # - name: Copy file
     #   run: mkdir -p test/coverage; cp coverage.out test/coverage/coverage.out
-    
+
     - name: SonarQube Scan
       # if: always()
       uses: sonarsource/sonarqube-scan-action@v5.0.0
+      continue-on-error: true
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
