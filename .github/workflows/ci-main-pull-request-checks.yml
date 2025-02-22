@@ -58,10 +58,10 @@ on:
         required: false
         type: string
         default: 'public' # (private, public, or internal)
-      github-token:
-        description: 'GitHub token'
-        required: false
-        type: string
+      # github-token:
+      #   description: 'GitHub token'
+      #   required: false
+      #   type: string
 
 env:
   REPO_VISIBILITY: ${{ inputs.visibility }}
