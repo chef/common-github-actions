@@ -16,12 +16,11 @@ jobs:
       with:
         path: ./
         extra_args: --json
+        # --only-verified --fail --github-actions --results=verified,unknown --branch dev
+        # TODO: use the GH_TOKEN --org=progress --token=ghp_xxxxx
       continue-on-error: false
 
-      # change this to false if you want to stop a PR
-        
-        # --fail --github-actions --results=verified,unknown 
-
+    # TODO: store the output somewhere
     # - name: Upload test coverage artifact
     #   uses: actions/upload-artifact@v4
     #   with:

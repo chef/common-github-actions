@@ -1,31 +1,77 @@
 # CI pipeline for all application types on main and release branches
 # use stubs/ci-main-pull-request-checks-stub.yml in your repo to call this common action using workflow_call
-name: main and release branch CI flow
+#
+# on: 
+#   pull_request:
+#     branches: [ main, release/** ]
+#       # types: [opened, synchronize, reopened, closed]
+#   push:
+#     branches: [ main, release/** ]
+#       # - master
+#       # - develop
+#       # - 'features/**' 
+
+#   workflow_dispatch:
+
+# jobs: 
+#   call-ci-main-pr-check-pipeline:
+#     uses: chef/common-github-actions/.github/workflows/ci-main-pull-request-checks.yml@main
+#     with:
+#       language: 'Ruby'
+#       # outputfilename: 'scc-output.txt'
+#       visibility: ${{ github.event.repository.visibility }} # optional, defaults to public
+#       github-token: ${{ secrets.GITHUB_TOKEN }} # optional, and used only by back-level pipelines
+#       # alternatively, this is also passed in the next line as part of the secrets collection
+#     secrets: inherit
+# inputs:
+#   language:
+#     description: 'Primary language in the repository'
+#     required: true
+#     type: choice
+#     options: 
+#       - GoLang
+#       - Ruby
+#       - Rust
+#   outputfilename:
+#     description: 'Name of the SCC output file'
+#     required: false
+#     type: string
+#     default: 'scc-output.txt'
+
+name: main and release branch CI flow containing PR checks
 
 on:
   workflow_call:
     inputs:
-    #   message:
-    #     required: true
-    #     type: string
       language:
-        description: 'Primary language in the repository'
-        required: true
+        description: 'Primary language in the repository, for language-specific checks'
+        required: false
         type: string
+        default: 'Ruby'
       outputfilename:
-        description: 'Name of the SCC output file'
+        description: 'Name of the SCC output file artifact'
         required: false
         type: string
         default: 'scc-output.txt'
+      visibility:
+        description: 'Visibility of the repository'
+        required: false
+        type: string
+        default: 'public' # (private, public, or internal)
+      github-token:
+        description: 'GitHub token'
+        required: false
+        type: string
 
 jobs:
-#   reusable_echo:
-#     name: echo message back
-#     runs-on: ubuntu-latest
-#     steps:
-#       - name: echo
-#         run: |
-#           echo "Hello ${{ inputs.message }}"
+  reusable_echo:
+    name: echo message back
+    runs-on: ubuntu-latest
+    steps:
+      - name: echo
+        run: |
+          echo "The repository has ${{ env.visibility }} visibility"
+          # echo "Hello ${{ inputs.message }}"
 
   # sections to always run (language-independent)
   run-scc:
@@ -37,6 +83,7 @@ jobs:
   run-trufflehog:
     uses: chef/common-github-actions/.github/workflows/trufflehog.yml@main
    
+  # TODO: use the visibility of repo, so that we can GO_PRIVATE with secrets.GITHUB_TOKEN and set right runner for SQ on SONAR_TOKEN - public: ubuntu-latest-4-cores, private: ip-range-controlled
   run-sonarqube:
     uses: chef/common-github-actions/.github/workflows/ruby-sonarqube.yml@main
     secrets: inherit
