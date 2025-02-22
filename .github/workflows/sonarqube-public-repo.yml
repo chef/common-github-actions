@@ -12,6 +12,7 @@ jobs:
       run: |
         echo "Sonarqube scan for public repositories, running on ubuntu-latest-4-cores runner"
     
+  # IP-RANGE-CONTROLLED does not work... probably needs IP range refresh, cannot get throughto api.sonar
   sonarqube:
     runs-on: ip-range-controlled
     steps:
