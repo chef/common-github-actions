@@ -115,10 +115,10 @@ jobs:
     secrets: inherit
 
   # sections for language specific tests (gosec, etc.)
-  run-Ruby-language-specific-tests:
-    if: ${{ inputs.language == 'Ada' }}  # Check if "DEPLOY_ENV" is "production"
-    uses: chef/common-github-actions/.github/workflows/ruby-sonarqube.yml@main
-    needs: run-sonarqube
+  # run-Ruby-language-specific-tests:
+  #   if: ${{ inputs.language == 'Ada' }}  # Check if "DEPLOY_ENV" is "production"
+  #   uses: chef/common-github-actions/.github/workflows/ruby-sonarqube.yml@main
+  #   needs: run-sonarqube
 
     # https://docs.github.com/en/actions/sharing-automations/reusing-workflows#passing-inputs-and-secrets-to-a-reusable-workflow
   
