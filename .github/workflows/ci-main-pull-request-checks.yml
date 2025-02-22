@@ -68,29 +68,34 @@ env:
   PIPELINE_VERSION: '1.0.0'
 
 jobs:
-  echo_version:
-    name: echo version of pipeline
+  echo_inputs:
+    name: 'Echo version of pipeline and inputs'
     runs-on: ubuntu-latest
     steps:
-      - name: echo
+      - name: echo version of pipeline and inputs
         run: |
-          echo "hello ${{ inputs.visibility }} "
+          echo "Language set to ${{ inputs.language }} "
+          echo "Language set to ${{ inputs.outputfilename }} "
+          echo "Language set to ${{ inputs.visibility }} "
+          echo "Language set to ${{ inputs.github-token }} "
           echo "$REPO_VISIBILITY"
           echo $REPO_VISIBILITY
           echo REPO_VISIBILITY
           echo "pipeline version $PIPELINE_VERSION"
-          echo ${{ secrets.GITHUB_TOKEN }}
-          $REPO_VISIBILITY
-
+          echo "The job_id is: $GITHUB_JOB"   
+        # echo ${{ secrets.GITHUB_TOKEN }} DO NOT DO THIS
+          
   # sections to always run (language-independent)
   run-scc:
     name: source code complexity scan    
     uses: chef/common-github-actions/.github/workflows/scc.yml@main
     with:
       outputfilename: ${{ inputs.outputfilename }}
+    needs: echo_inputs
 
   run-trufflehog:
     uses: chef/common-github-actions/.github/workflows/trufflehog.yml@main
+    needs: echo_inputs
    
   # TODO: use the visibility of repo, so that we can GO_PRIVATE with secrets.GITHUB_TOKEN and set right runner for SQ on SONAR_TOKEN - public: ubuntu-latest-4-cores, private: ip-range-controlled
   run-sonarqube:

@@ -20,6 +20,8 @@ jobs:
         # TODO: use the GH_TOKEN --org=progress --token=ghp_xxxxx
       continue-on-error: false
 
+    # TODO: if this is run on ad hoc workflow, we will scan all branches (need to pass in selected branch)
+
     # TODO: store the output somewhere
     # - name: Upload test coverage artifact
     #   uses: actions/upload-artifact@v4
