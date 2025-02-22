@@ -70,7 +70,7 @@ jobs:
     steps:
       - name: echo
         run: |
-          echo "The repository has ${{ env.visibility }} visibility"
+          echo "$visibility"
           # echo "Hello ${{ inputs.message }}"
 
   # sections to always run (language-independent)
