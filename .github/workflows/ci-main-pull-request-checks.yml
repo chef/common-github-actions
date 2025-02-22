@@ -71,7 +71,12 @@ jobs:
       - name: echo
         run: |
           echo "hello ${{ inputs.visibility }} "
+          echo "world $REPO_VISIBILITY"
           echo $REPO_VISIBILITY
+    env:
+      REPO_VISIBILITY: ${{ inputs.visibility }}
+      # GITHUB_TOKEN: ${{ inputs.github-token }}
+
   # echo "Hello ${{ inputs.message }}"
 
   # sections to always run (language-independent)
