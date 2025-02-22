@@ -47,7 +47,7 @@ on:
         description: 'Primary language in the repository, for language-specific checks'
         required: false
         type: string
-        default: 'Ruby'
+        default: 'Go'
       outputfilename:
         description: 'Name of the SCC output file artifact'
         required: false
@@ -65,6 +65,7 @@ on:
 
 env:
   REPO_VISIBILITY: ${{ inputs.visibility }}
+  REPO2: ${{ github.event.repository.visibility }}
   PIPELINE_VERSION: '1.0.0'
 
 jobs:
@@ -75,11 +76,10 @@ jobs:
       - name: echo version of pipeline and inputs
         run: |
           echo "Language set to ${{ inputs.language }} "
-          echo "Language set to ${{ inputs.outputfilename }} "
-          echo "Language set to ${{ inputs.visibility }} "
-          echo "Language set to ${{ inputs.github-token }} "
+          echo "SCC output filename set to ${{ inputs.outputfilename }} "
+          echo "Visibility set to ${{ inputs.visibility }} "
           echo "$REPO_VISIBILITY"
-          echo $REPO_VISIBILITY
+          echo "repo2 $REPO2"
           echo REPO_VISIBILITY
           echo "pipeline version $PIPELINE_VERSION"
           echo "The job_id is: $GITHUB_JOB"   
