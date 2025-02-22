@@ -70,8 +70,9 @@ jobs:
     steps:
       - name: echo
         run: |
-          echo "$visibility"
-          # echo "Hello ${{ inputs.message }}"
+          echo "hello ${{ inputs.visibility }} "
+          echo $REPO_VISIBILITY
+  # echo "Hello ${{ inputs.message }}"
 
   # sections to always run (language-independent)
   run-scc:
@@ -86,12 +87,14 @@ jobs:
   # TODO: use the visibility of repo, so that we can GO_PRIVATE with secrets.GITHUB_TOKEN and set right runner for SQ on SONAR_TOKEN - public: ubuntu-latest-4-cores, private: ip-range-controlled
   run-sonarqube:
     uses: chef/common-github-actions/.github/workflows/ruby-sonarqube.yml@main
+    needs: run-trufflehog
     secrets: inherit
     
   # sections for language specific tests (gosec, etc.)
   run-Ruby-language-specific-tests:
     if: ${{ inputs.language == 'Ada' }}  # Check if "DEPLOY_ENV" is "production"
     uses: chef/common-github-actions/.github/workflows/ruby-sonarqube.yml@main
+    needs: run-sonarqube
 
     # https://docs.github.com/en/actions/sharing-automations/reusing-workflows#passing-inputs-and-secrets-to-a-reusable-workflow
   
