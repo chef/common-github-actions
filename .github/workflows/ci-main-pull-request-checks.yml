@@ -83,7 +83,7 @@ jobs:
           echo "pipeline version $PIPELINE_VERSION"
           echo "Language set to ${{ inputs.language }} "
           echo "SCC output filename set to ${{ inputs.outputfilename }} "
-          echo "Visibility set to $REPO_VISIBILITY [ ${{ inputs.visibility }} ]"}]"
+          echo "Visibility set to $REPO_VISIBILITY [ ${{ inputs.visibility }} ]"
           echo "Skip trufflehog set to ${{ inputs.skip-trufflehog }}"
           echo "Skip SonarQube set to ${{ inputs.skip-sonarqube }}"
         # echo "The job_id is: $GITHUB_JOB"   
