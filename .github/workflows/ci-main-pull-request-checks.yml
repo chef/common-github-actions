@@ -103,12 +103,17 @@ jobs:
     needs: echo_inputs
    
   # TODO: use the visibility of repo, so that we can GO_PRIVATE with secrets.GITHUB_TOKEN and set right runner for SQ on SONAR_TOKEN - public: ubuntu-latest-4-cores, private: ip-range-controlled
-  run-sonarqube:
-    if: ${{ inputs.skip-sonarqube == false }}
-    uses: chef/common-github-actions/.github/workflows/ruby-sonarqube.yml@main
+  run-sonarqube-public-repo:
+    if: ${{ inputs.skip-sonarqube == false }} && ${{ inputs.visibility == 'public' }}
+    uses: chef/common-github-actions/.github/workflows/sonarqube-public-repo.yml@main
     needs: run-trufflehog
     secrets: inherit
-    
+  run-sonarqube-private-internal-repo:
+    if: ${{ inputs.skip-sonarqube == false }} && ( ${{ inputs.visibility == 'internal' }}  || ${{ inputs.visibility == 'private' }} )
+    uses: chef/common-github-actions/.github/workflows/sonarqube-private-internal-repo.yml@main
+    needs: run-trufflehog
+    secrets: inherit
+
   # sections for language specific tests (gosec, etc.)
   run-Ruby-language-specific-tests:
     if: ${{ inputs.language == 'Ada' }}  # Check if "DEPLOY_ENV" is "production"
