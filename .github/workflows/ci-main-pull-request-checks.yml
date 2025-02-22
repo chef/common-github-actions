@@ -65,20 +65,22 @@ on:
 
 env:
   REPO_VISIBILITY: ${{ inputs.visibility }}
+  PIPELINE_VERSION: '1.0.0'
 
 jobs:
-  reusable_echo:
-    name: echo message back
+  echo_version:
+    name: echo version of pipeline
     runs-on: ubuntu-latest
     steps:
       - name: echo
         run: |
           echo "hello ${{ inputs.visibility }} "
-          echo "world $REPO_VISIBILITY"
+          echo "$REPO_VISIBILITY"
           echo $REPO_VISIBILITY
-      # GITHUB_TOKEN: ${{ inputs.github-token }}
-
-  # echo "Hello ${{ inputs.message }}"
+          echo REPO_VISIBILITY
+          echo "pipeline version $PIPELINE_VERSION"
+          echo ${{ secrets.GITHUB_TOKEN }}
+          $REPO_VISIBILITY
 
   # sections to always run (language-independent)
   run-scc:
