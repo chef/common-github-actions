@@ -98,13 +98,13 @@ jobs:
     needs: echo_inputs
 
   run-trufflehog:
-    if: ${{ inputs.skip-trufflehog != false }}
+    if: ${{ inputs.skip-trufflehog == false }}
     uses: chef/common-github-actions/.github/workflows/trufflehog.yml@main
     needs: echo_inputs
    
   # TODO: use the visibility of repo, so that we can GO_PRIVATE with secrets.GITHUB_TOKEN and set right runner for SQ on SONAR_TOKEN - public: ubuntu-latest-4-cores, private: ip-range-controlled
   run-sonarqube:
-    if: ${{ inputs.skip-sonarqube != false }}
+    if: ${{ inputs.skip-sonarqube == false }}
     uses: chef/common-github-actions/.github/workflows/ruby-sonarqube.yml@main
     needs: run-trufflehog
     secrets: inherit
