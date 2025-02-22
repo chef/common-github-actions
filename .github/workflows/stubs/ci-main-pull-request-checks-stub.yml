@@ -13,7 +13,6 @@ on:
 
 env:  # set environment variables for the GA
   REPO_VISIBILITY: ${{ github.event.repository.visibility }}  # optional, defaults to public
-  # GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   
 jobs: 
   call-ci-main-pr-check-pipeline:
@@ -22,3 +21,5 @@ jobs:
     with:   # named inputs for the GA
       language: 'Ruby'
       visibility: ${{ env.REPO_VISIBILITY }} # optional, defaults to public
+      skip-trufflehog: false
+      skip-sonarqube: false

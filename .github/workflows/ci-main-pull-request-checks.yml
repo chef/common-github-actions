@@ -58,14 +58,19 @@ on:
         required: false
         type: string
         default: 'public' # (private, public, or internal)
-      # github-token:
-      #   description: 'GitHub token'
-      #   required: false
-      #   type: string
+      skip-trufflehog:
+        description: 'Skip trufflehog scan'
+        required: false
+        type: boolean
+        default: false
+      skip-sonarqube: 
+        description: 'Skip SonarQube scan'
+        required: false
+        type: boolean
+        default: false
 
 env:
-  REPO_VISIBILITY: ${{ inputs.visibility }}
-  REPO2: ${{ github.event.repository.visibility }}
+  REPO_VISIBILITY: ${{ github.event.repository.visibility }}
   PIPELINE_VERSION: '1.0.0'
 
 jobs:
@@ -75,14 +80,13 @@ jobs:
     steps:
       - name: echo version of pipeline and inputs
         run: |
+          echo "pipeline version $PIPELINE_VERSION"
           echo "Language set to ${{ inputs.language }} "
           echo "SCC output filename set to ${{ inputs.outputfilename }} "
-          echo "Visibility set to ${{ inputs.visibility }} "
-          echo "$REPO_VISIBILITY"
-          echo "repo2 $REPO2"
-          echo REPO_VISIBILITY
-          echo "pipeline version $PIPELINE_VERSION"
-          echo "The job_id is: $GITHUB_JOB"   
+          echo "Visibility set to $REPO_VISIBILITY [ ${{ inputs.visibility }} ]"}]"
+          echo "Skip trufflehog set to ${{ inputs.skip-trufflehog }}"
+          echo "Skip SonarQube set to ${{ inputs.skip-sonarqube }}"
+        # echo "The job_id is: $GITHUB_JOB"   
         # echo ${{ secrets.GITHUB_TOKEN }} DO NOT DO THIS
           
   # sections to always run (language-independent)
@@ -94,11 +98,13 @@ jobs:
     needs: echo_inputs
 
   run-trufflehog:
+    if: ${{ inputs.skip-trufflehog != false }}
     uses: chef/common-github-actions/.github/workflows/trufflehog.yml@main
     needs: echo_inputs
    
   # TODO: use the visibility of repo, so that we can GO_PRIVATE with secrets.GITHUB_TOKEN and set right runner for SQ on SONAR_TOKEN - public: ubuntu-latest-4-cores, private: ip-range-controlled
   run-sonarqube:
+    if: ${{ inputs.skip-sonarqube != false }}
     uses: chef/common-github-actions/.github/workflows/ruby-sonarqube.yml@main
     needs: run-trufflehog
     secrets: inherit
