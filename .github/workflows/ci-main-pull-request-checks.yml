@@ -63,6 +63,9 @@ on:
         required: false
         type: string
 
+env:
+  REPO_VISIBILITY: ${{ inputs.visibility }}
+
 jobs:
   reusable_echo:
     name: echo message back
@@ -73,8 +76,6 @@ jobs:
           echo "hello ${{ inputs.visibility }} "
           echo "world $REPO_VISIBILITY"
           echo $REPO_VISIBILITY
-    env:
-      REPO_VISIBILITY: ${{ inputs.visibility }}
       # GITHUB_TOKEN: ${{ inputs.github-token }}
 
   # echo "Hello ${{ inputs.message }}"
