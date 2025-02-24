@@ -19,5 +19,4 @@ jobs:
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          extra_args: --json
         continue-on-error: false
