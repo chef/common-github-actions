@@ -1,4 +1,4 @@
-name: trufflehog secret scan
+name: Trufflehog secret scan
 
 on:
   workflow_dispatch:
