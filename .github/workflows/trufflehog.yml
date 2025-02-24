@@ -1,24 +1,27 @@
 name: Trufflehog secret scan
 
 on:
-  workflow_call:
+  workflow_dispatch:
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  trufflehog:
+  TruffleHog:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-    - name: Secret Scanning
-      uses: trufflesecurity/trufflehog@main
-      with:
-        path: ./
-        extra_args: --json
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: TruffleHog secret scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          continue-on-error: false
         # --only-verified --fail --github-actions --results=verified,unknown --branch dev
         # TODO: use the GH_TOKEN --org=progress --token=ghp_xxxxx
-      continue-on-error: false
+     
 
     # TODO: if this is run on ad hoc workflow, we will scan all branches (need to pass in selected branch)
 
