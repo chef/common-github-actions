@@ -4,6 +4,13 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [ main ]
+  workflow_call:
+    inputs:
+      skip-trufflehog:
+        description: 'Skip trufflehog scan'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   TruffleHog:
