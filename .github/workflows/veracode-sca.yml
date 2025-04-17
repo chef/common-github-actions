@@ -1,5 +1,6 @@
 # veracode-sca.yml
 # from https://github.com/marketplace/actions/veracode-dependency-scanning
+# configuration @ https://github.com/veracode/veracode-sca/tree/v2.1.10/
 name: Veracode SCA scan (srcclr)
 
 # Veracode SAST (needs binary)

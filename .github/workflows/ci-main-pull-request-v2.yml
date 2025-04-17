@@ -166,7 +166,13 @@ jobs:
     # TODO: get with Marc/Prajakta on this sequece for Ruby uses: chef/common-github-actions/.github/workflows/rubocop.yml@main
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true # runs 'bundle install' and caches installed gems automatically
+      # generate gemfile.lock (TODO: move this below to OWASP)
+      - run: bundle install
       - name: 'Bundler Audit'
         uses: andrewmcodes/bundler-audit-action@main
         env:
@@ -203,7 +209,7 @@ jobs:
       - name: OWASP Dependency check
         uses: dependency-check/Dependency-Check_Action@main
         with:
-          project: github.event.repository.name
+          project: $REPO_NAME
           path: '.'
           format: 'JSON'
           # out: 'reports' # this is the default, no need to specify unless you wish to override it
