@@ -115,7 +115,7 @@ jobs:
   run-scc:
     name: source code complexity scan    
     if: ${{ inputs.perform-complexity-checks == true }}
-    uses: chef/common-github-actions/.github/workflows/tools/scc.yml@main
+    uses: chef/common-github-actions/.github/workflows/scc.yml@main
     with:
       outputfilename: ${{ inputs.scc-output-filename }}
     needs: echo-inputs
@@ -133,7 +133,7 @@ jobs:
         # cargo clippy --all-targets --all-features -- -D warnings
       - name: Precompilation tests for Ruby
         if: ${{ inputs.language == 'Ruby' && inputs.perform-complexity-checks == true}}
-        uses: chef/common-github-actions/.github/workflows/tools/rubocop.yml@main
+        uses: chef/common-github-actions/.github/workflows/rubocop.yml@main
         # run: echo 'hello world'
       - name: Precompilation tests for Go
         if: ${{ inputs.language == 'Go' && inputs.perform-complexity-checks == true}}
@@ -184,17 +184,17 @@ jobs:
   # security scans
   run-trufflehog:
     if: ${{ inputs.perform-trufflehog-scan == true }}
-    uses: chef/common-github-actions/.github/workflows/tools/trufflehog.yml@main
+    uses: chef/common-github-actions/.github/workflows/trufflehog.yml@main
     needs: run-scc
 
   run-srcclr:
     if: ${{ inputs.perform-srcclr-scan == true }}
-    uses: chef/common-github-actions/.github/workflows/tools/srcclr.yml@main
+    uses: chef/common-github-actions/.github/workflows/srcclr.yml@main
     needs: run-scc
 
   run-veracode-sca:
     if: ${{ inputs.perform-veracode-sca-scan == true }}
-    uses: chef/common-github-actions/.github/workflows/tools/veracode-sca.yml@main
+    uses: chef/common-github-actions/.github/workflows/veracode-sca.yml@main
     needs: run-scc
     secrets: inherit
       
@@ -204,7 +204,7 @@ jobs:
   # for polaris, coverity, SRM (SBOM), and SCA (BlackDuck SCA) - Chef uses polaris and SBOM later in this script
   run-blackduck-sca:
     if: ${{ inputs.perform-blackduck-sca-scan == true }}
-    uses: chef/common-github-actions/.github/workflows/tools/blackduck-sca.yml@main
+    uses: chef/common-github-actions/.github/workflows/blackduck-sca.yml@main
     needs: run-scc
     secrets: inherit 
             
@@ -295,14 +295,14 @@ jobs:
     steps:
       - name: SonarQube scan for public repo
         if: ${{ inputs.visibility == 'public' }}
-        uses: chef/common-github-actions/.github/workflows/tools/sonarqube-public-repo.yml@main
+        uses: chef/common-github-actions/.github/workflows/sonarqube-public-repo.yml@main
         with: 
           unit-tests: ${{ inputs.unit-tests }}
           secrets: inherit
         
       - name: SonarQube scan for private and internal repos
         if: ${{ inputs.visibility == 'internal' || inputs.visibility == 'private' }}
-        uses: chef/common-github-actions/.github/workflows/tools/sonarqube-private-internal-repo.yml@main
+        uses: chef/common-github-actions/.github/workflows/sonarqube-private-internal-repo.yml@main
         with: 
           unit-tests: ${{ inputs.unit-tests }}
           secrets: inherit
@@ -317,13 +317,13 @@ jobs:
 
   run-blackduck-polaris:
     if: ${{ inputs.perform-blackduck-polaris == true }}
-    uses: chef/common-github-actions/.github/workflows/tools/blackduck-polaris.yml@main
+    uses: chef/common-github-actions/.github/workflows/blackduck-polaris.yml@main
     needs: ci-build
     secrets: inherit
 
   # generate bills-of-materials
   calculate-sbom:
     if: ${{ inputs.generate-sbom == true }}
-    uses: chef/common-github-actions/.github/workflows/tools/sbom.yml@main
+    uses: chef/common-github-actions/.github/workflows/sbom.yml@main
     needs: ci-build
     secrets: inherit
