@@ -1,0 +1,54 @@
+# blackduck-polaris.yml
+# Simple Blackduck Polaris scan GitHub Action (GA) which can be called from other GAs or workflows.
+# from https://documentation.blackduck.com/bundle/bridge/page/documentation/t_github-polaris-quickstart.html
+name: Blackduck Polaris scan
+
+name: CI-Polaris-Basic 
+on:
+  push:
+    branches: [ main, master, develop, stage, release ]
+  pull_request:
+    branches: [ main, master, develop, stage, release ]
+  workflow_dispatch:
+  
+jobs:
+  build:
+    runs-on: [ ubuntu-latest ]
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+      - name: Polaris Scan
+        uses: blackduck-inc/black-duck-security-scan@v2.1.0
+        with:
+          ### SCANNING: Required fields
+          polaris_server_url: ${{ vars.POLARIS_SERVER_URL }}
+          polaris_access_token: ${{ secrets.POLARIS_ACCESS_TOKEN }}
+          polaris_assessment_types: "SCA,SAST"
+          
+          ### SCANNING: Optional fields
+          # polaris_application_name: ${{ github.event.repository.name }}
+          # polaris_project_name: ${{ github.event.repository.name }}
+          
+          ### PULL REQUEST COMMENTS: Uncomment below to enable
+          # polaris_prComment_enabled: true 
+          # github_token: ${{ secrets.GH_TOKEN }} # Required when PR comments is enabled
+          
+          ### Mark build status if policy violating issues are found
+          # mark_build_status: 'success'
+          
+          ### Uncomment below configuration to add custom logic based on return status
+          - name: cmdLine
+          id: cmdLine
+          run: |
+          EXIT_CODE=${{ steps.black-duck-security-scan.outputs.status }}
+          echo "Black Duck Security Scan exit status - $EXIT_CODE"
+
+# from GeorgeR. (original)
+# uses: blackduck-inc/black-duck-security-scan@v2.0.0
+#     needs: echo_inputs
+#     secrets: inherit
+#     with: 
+#       polaris_server_url: https://polaris.blackduck.com
+#       polaris_access_token: ${{ secrets.POLARIS_ACCESS_TOKEN }}
+#       polaris_assessment_types: SAST
+#     # polaris_project_name: ${{ github.event.repository.name }}

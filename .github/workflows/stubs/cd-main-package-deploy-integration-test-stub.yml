@@ -1,0 +1,31 @@
+# stub to call common GitHub Action (GA) as part of Continuous Integration (CD) Pull Request process checks for main branch
+# inputs are described in the <org>/common-github-actions/<GA.yml> with same name as this stub
+
+# TODO: 1. Build the release
+# TODO: 1. Unit test the release
+# TODO: 1. Package (on success)
+# TODO: 1. Push release package to artifactory, Ruby Gems, and stage for hosted services, etc. (on success)
+# TODO: 1. Create AWS environment for integration testing or attach to existing integrationtest environment
+# TODO: 1. Deploy packaged release to AWS environment (on success)
+# TODO: 1. Run integration tests (on success) and report to QMetry
+
+name: cd-main-package-deploy-integration-test
+
+on: 
+  # pull_request:
+  #   branches: [ main, release/** ]
+  # push:
+  #   branches: [ main, release/** ]
+
+  workflow_dispatch:
+
+jobs: 
+  call-ci-main-ruby-package-deploy-integration-test:
+    uses: chef/common-github-actions/.github/workflows/ci-main-ruby-package-deploy-integration-test.yml@main
+    secrets: inherit
+    with:   # named inputs for the GA
+      language: 'Ruby'
+      visibility: ${{ github.event.repository.visibility }} # optional, defaults to public
+      skip-trufflehog: false
+      skip-sonarqube: false
+

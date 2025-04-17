@@ -3,7 +3,7 @@ name: TruffleHog Secret Scan
 on:
   workflow_dispatch:
   pull_request:
-    #todo - add required branches like release**, CHEF-18 etc..
+    #todo - add required branches like release**, CHEF-18 etc.. - actually add these in the repo starting event (snce inpsec is different from onfra 19)
     branches: [ main ]
 
 jobs:

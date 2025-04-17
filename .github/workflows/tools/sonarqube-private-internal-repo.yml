@@ -1,0 +1,51 @@
+# sonarqube-private-internal-repo.yml
+name: SonarQube scan (internal or private repo)
+
+on:
+  workflow_call:
+    inputs:
+      skip-unit-tests:
+        description: 'Skip unit tests'
+        required: false
+        type: boolean
+        default: false
+    
+jobs:
+  echo_inputs:
+    name: 'Echo pipeline stage'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Echo inputs
+      run: |
+        echo "Sonarqube scan for PRIVATE and INTERNAL repositories, running on ip-range-controlled runner"
+        echo "Skip unit tests set to ${{ inputs.skip-unit-tests }}"
+     
+  unit-tests:
+    runs-on: ubuntu-latest
+    if: ${{ inputs.skip-unit-tests == false }}
+    steps:
+    - name: Run unit tests
+      run: | 
+        echo "Running unit tests..."
+              
+    # - name: Upload test coverage artifact
+    #   uses: actions/upload-artifact@v4
+    #   with:
+    #     # Name of the artifact to upload.
+    #     name: test-coverage.out
+    #     # A file, directory or wildcard pattern that describes what to upload
+    #     path: test/unittest/coverage.out
+
+  sonarqube:
+    runs-on: ubuntu-latest-4-cores
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: SonarQube Scan
+      # if: always()
+      uses: sonarsource/sonarqube-scan-action@v5.0.0
+      continue-on-error: true
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}

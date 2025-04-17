@@ -1,0 +1,329 @@
+# WORK IN PROCESS
+# MERGE INTO ci-main-pull-request-checks.yml WHEN DONE TESTING
+# https://docs.github.com/en/actions/sharing-automations/reusing-workflows#passing-inputs-and-secrets-to-a-reusable-workflow
+  
+name: main and release branch CI flow containing PR checks
+
+on:
+  workflow_call:
+    inputs:
+      language:
+        description: 'Primary language in the repository, for language-specific checks'
+        required: false
+        type: string
+        default: 'Go'
+      visibility:
+        description: 'Visibility of the repository'
+        required: false
+        type: string
+        default: 'public' # (private, public, or internal)
+      perform-complexity-checks: 
+        description: 'Perform complexity checks with SCC'
+        required: false
+        type: boolean
+        default: true
+      scc-output-filename:
+        description: 'Name of the SCC complexity output file artifact'
+        required: false
+        type: string
+        default: 'scc-output.txt'
+      perform-trufflehog-scan:
+        description: 'Perform trufflehog scan'
+        required: false
+        type: boolean
+        default: true
+      perform-srcclr-scan:
+        description: 'Perform source clear scan'
+        required: false
+        type: boolean
+        default: true
+      perform-veracode-sca-scan:
+        description: 'Perform Veracode SCA scan'
+        required: false
+        type: boolean
+        default: true
+      perform-blackduck-sca-scan:
+        description: 'Perform BlackDuck SCA scan'
+        required: false
+        type: boolean
+        default: true
+      build:
+        description: 'CI Build (language-specific)'
+        required: false
+        type: boolean
+        default: true
+      unit-tests:
+        description: 'Run unit tests (language-specific)'
+        required: false
+        type: boolean
+        default: true
+      perform-sonarqube-sca-scan: 
+        description: 'Perform basic SonarQube scan'
+        required: false
+        type: boolean
+        default: true
+      perform-blackduck-coverity:
+        description: 'Perform BlackDuck coverity scan'
+        required: false
+        type: boolean
+        default: false
+      perform-blackduck-polaris:
+        description: 'Perform BlackDuck polaris scan'
+        required: false
+        type: boolean
+        default: true
+      generate-sbom:
+        description: 'Generate software bill-of-materials (SPDX SBOM)'
+        required: false
+        type: boolean
+        default: true
+    
+env:
+  REPO_VISIBILITY: ${{ github.event.repository.visibility }}
+  REPO_NAME: ${{ github.event.repository.name }}
+  PIPELINE_VERSION: '1.0.0'
+
+jobs:
+  echo-inputs:
+    name: 'Echo version of pipeline and inputs'
+    runs-on: ubuntu-latest
+    steps:
+      - name: echo version of pipeline and inputs
+        run: |
+          echo "pipeline version $PIPELINE_VERSION"
+          echo "Language set to ${{ inputs.language }} "
+          echo "SCC output filename set to ${{ inputs.scc-output-filename }} "
+          echo "Visibility set to $REPO_VISIBILITY [ ${{ inputs.visibility }} ]"
+          echo "Skip trufflehog set to ${{ inputs.skip-trufflehog }}"
+          echo "Skip SonarQube set to ${{ inputs.skip-sonarqube }}"
+          echo "Skip unit tests set to ${{ inputs.skip-unit-tests }}"
+          echo "Skip source clear set to ${{ inputs.skip-srcclr }}"
+          echo "Skip Veracode SCA set to ${{ inputs.skip-veracode }}"
+          echo "Skip Blackduck SCA set to ${{ inputs.skip-blackduck-sca }}"
+          echo "Skip Blackduck coverity set to ${{ inputs.skip-blackduck-coverity }}"
+          echo "Skip Blackduck polaris set to ${{ inputs.skip-blackduck-polaris }}"
+        # echo "The job_id is: $GITHUB_JOB"   
+        # echo ${{ secrets.GITHUB_TOKEN }} DO NOT DO THIS
+          
+  ################################################################################################################
+  #
+  #    pre-compilation steps
+  #
+  ################################################################################################################
+  
+  # generate complexity metrics
+  run-scc:
+    name: source code complexity scan    
+    if: ${{ inputs.perform-complexity-checks == true }}
+    uses: chef/common-github-actions/.github/workflows/tools/scc.yml@main
+    with:
+      outputfilename: ${{ inputs.scc-output-filename }}
+    needs: echo-inputs
+
+  # language specific tests (gosec, rubocop, linters, etc.)
+  language-specific-precompilation-checks:
+    runs-on: ubuntu-latest
+    needs: run-scc
+    name: 'Language-specific pre-compilation steps'  
+    steps:
+      - name: Precompilation tests for Rust 
+        if: ${{ inputs.language == 'Rust' && inputs.perform-complexity-checks == true }}
+        run: echo 'crate linter'
+        # https://github.com/rust-lang/rust-clippy
+        # cargo clippy --all-targets --all-features -- -D warnings
+      - name: Precompilation tests for Ruby
+        if: ${{ inputs.language == 'Ruby' && inputs.perform-complexity-checks == true}}
+        uses: chef/common-github-actions/.github/workflows/tools/rubocop.yml@main
+        # run: echo 'hello world'
+      - name: Precompilation tests for Go
+        if: ${{ inputs.language == 'Go' && inputs.perform-complexity-checks == true}}
+        run: echo 'hello world'
+        # https://github.com/marketplace/actions/gosec-security-checker      
+          # go install github.com/securego/gosec/v2/cmd/gosec@latest
+          # GHA at https://github.com/securego/gosec
+          # gosec ./... >> ./bin/gosec.out
+        # https://go.googlesource.com/vuln - govulncheck
+        # go install golang.org/x/vuln/cmd/govulncheck@latest
+        # govulncheck ./... >> ./bin/security/govuln.out        
+        # go install honnef.co/go/tools/cmd/staticcheck@latest
+        # staticcheck ./... >> ./bin/staticcheck.out
+
+  # language-agnostic secrity check tools (OWASP dep-check)
+  language-agnostic-precompilation-checks:
+    # https://github.com/marketplace/actions/dependency-check & https://owasp.org/www-project-dependency-check/ 
+    #     and flags at https://jeremylong.github.io/DependencyCheck/dependency-check-cli/arguments.html
+    if: ${{ inputs.perform-complexity-checks == true }}
+    runs-on: ubuntu-latest
+    needs: language-specific-precompilation-checks
+    name: 'Language-agnostic pre-compilation steps'  
+    steps:
+      - name: OWASP Dependency check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: github.event.repository.name
+          path: '.'
+          format: 'JSON'
+          out: 'reports' # this is the default, no need to specify unless you wish to override it
+          args: >
+            --enableRetired
+            --prettyPrint
+      - name: Upload Test results
+        uses: actions/upload-artifact@v4
+        with:
+           name: Depcheck report
+           path: ${{github.workspace}}/reports
+    # TODO: add flag --failOnCVSS 7
+    # TODO: integrate with SonarQube
+              
+  ################################################################################################################
+  #
+  #    Security source code SCA scans
+  #
+  ################################################################################################################
+  
+  # security scans
+  run-trufflehog:
+    if: ${{ inputs.perform-trufflehog-scan == true }}
+    uses: chef/common-github-actions/.github/workflows/tools/trufflehog.yml@main
+    needs: run-scc
+
+  run-srcclr:
+    if: ${{ inputs.perform-srcclr-scan == true }}
+    uses: chef/common-github-actions/.github/workflows/tools/srcclr.yml@main
+    needs: run-scc
+
+  run-veracode-sca:
+    if: ${{ inputs.perform-veracode-sca-scan == true }}
+    uses: chef/common-github-actions/.github/workflows/tools/veracode-sca.yml@main
+    needs: run-scc
+    secrets: inherit
+      
+  # BLACKDUCK TOOLS
+  # updated to https://documentation.blackduck.com/bundle/bridge/page/documentation/c_download.html#polaris-download
+  # https://github.com/marketplace/actions/black-duck-security-scan
+  # for polaris, coverity, SRM (SBOM), and SCA (BlackDuck SCA) - Chef uses polaris and SBOM later in this script
+  run-blackduck-sca:
+    if: ${{ inputs.perform-blackduck-sca-scan == true }}
+    uses: chef/common-github-actions/.github/workflows/tools/blackduck-sca.yml@main
+    needs: run-scc
+    secrets: inherit 
+            
+  ################################################################################################################
+  #
+  #    Build and packaging steps
+  #
+  ################################################################################################################
+  
+  ci-build:
+    if : ${{ inputs.build == true }}
+    runs-on: ubuntu-latest
+    needs: language-agnostic-precompilation-checks
+    name: 'CI build and compilation steps'  
+    steps:
+      - name: Build for Rust binary
+        if: ${{ inputs.language == 'Rust' }}
+        run: echo 'hello world'
+        # cargo build --release --target-dir ./bin
+      - name: Build for Ruby binary
+        if: ${{ inputs.language == 'Ruby' }}
+        run: echo 'hello world'
+        # bundle install --path vendor/bundle
+        # bundle exec rake build
+      - name: Build for Go binary
+        if: ${{ inputs.language == 'Go' }}
+        run: echo 'hello world'
+        # go build -o ./bin/chef-api ./cmd/chef-api/main.go
+
+  ci-package-binary:
+    if: ${{ inputs.build == true && success() }}
+    runs-on: ubuntu-latest
+    needs: ci-build
+    name: 'CI package binary steps'  
+    steps:
+      - name: Package for Rust binary
+        if: ${{ inputs.language == 'Rust' }}
+        run: echo 'hello world'
+        # cargo package --target-dir ./bin
+      - name: Package for Ruby binary
+        if: ${{ inputs.language == 'Ruby' }}
+        run: echo 'hello world'
+        # bundle exec rake package
+      - name: Package for Go binary
+        if: ${{ inputs.language == 'Go' }}
+        run: echo 'hello world'
+        # go build -o ./bin/chef-api ./cmd/chef-api/main.go
+          
+  ################################################################################################################
+  #
+  #    Unit tests and code quality checks
+  #
+  ################################################################################################################
+  
+  ci-unit-test:
+    if: ${{ inputs.unit-tests == true && success() }}
+    runs-on: ubuntu-latest
+    needs: ci-package-binary
+    name: 'CI unit tests'
+    steps:
+      - name: Build for Rust binary
+        if: ${{ inputs.language == 'Rust' }}
+        run: echo 'hello world'
+        # cargo test --target-dir ./bin 
+      - name: Build for Ruby binary
+        if: ${{ inputs.language == 'Ruby' }}
+        run: echo 'hello world'
+        # bundle exec rake test
+        # bundle exec rake test:unit
+        # bundle exec rake test:integration
+        # bundle exec rake test:unit:rubocop
+      - name: Build for Go binary
+        if: ${{ inputs.language == 'Go' }}
+        run: echo 'hello world'
+        # go test -v ./... > ./bin/test.out
+         
+  ################################################################################################################
+  #
+  #    Security DAST tests and scans
+  #
+  ################################################################################################################
+  
+  security-dast-tests:
+    if: ${{ inputs.perform-sonarqube-sca-scan == true && success() }}
+    runs-on: ubuntu-latest
+    needs: ci-build
+    name: 'Security DAST tests and scans'
+    steps:
+      - name: SonarQube scan for public repo
+        if: ${{ inputs.visibility == 'public' }}
+        uses: chef/common-github-actions/.github/workflows/tools/sonarqube-public-repo.yml@main
+        with: 
+          unit-tests: ${{ inputs.unit-tests }}
+          secrets: inherit
+        
+      - name: SonarQube scan for private and internal repos
+        if: ${{ inputs.visibility == 'internal' || inputs.visibility == 'private' }}
+        uses: chef/common-github-actions/.github/workflows/tools/sonarqube-private-internal-repo.yml@main
+        with: 
+          unit-tests: ${{ inputs.unit-tests }}
+          secrets: inherit
+        # TODO: use the visibility of repo, so that we can GO_PRIVATE with secrets.GITHUB_TOKEN and set right runner for SQ on SONAR_TOKEN - public: ubuntu-latest-4-cores, private: ip-range-controlled
+            
+  # older tool no longer used in Progress
+  # run-blackduck-coverity:
+  #   if: ${{ inputs.perform-blackduck-coverity == true }}
+  #   uses: chef/common-github-actions/.github/workflows/tools/blackduck-coverity.yml@main
+  #   needs: echo_inputs
+  #   secrets: inherit
+
+  run-blackduck-polaris:
+    if: ${{ inputs.perform-blackduck-polaris == true }}
+    uses: chef/common-github-actions/.github/workflows/tools/blackduck-polaris.yml@main
+    needs: ci-build
+    secrets: inherit
+
+  # generate bills-of-materials
+  calculate-sbom:
+    if: ${{ inputs.generate-sbom == true }}
+    uses: chef/common-github-actions/.github/workflows/tools/sbom.yml@main
+    needs: ci-build
+    secrets: inherit

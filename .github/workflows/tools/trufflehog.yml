@@ -1,3 +1,5 @@
+# trufflehog.yml
+# from https://github.com/trufflesecurity/trufflehog
 name: Trufflehog secret scan
 
 on:

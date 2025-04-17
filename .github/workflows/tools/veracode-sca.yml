@@ -1,0 +1,31 @@
+# veracode-sca.yml
+# from https://github.com/marketplace/actions/veracode-dependency-scanning
+name: Veracode SCA scan (srcclr)
+
+# Veracode SAST (needs binary)
+    # https://github.com/marketplace/actions/veracode-upload-and-scan
+    # https://github.com/marketplace/actions/veracode-pipeline-scan
+    # https://docs.veracode.com/r/Install_the_Veracode_CLI
+    # https://docs.veracode.com/r/Generating_a_Software_Bill_of_Materials_SBOM_for_Upload_Scans#:~:text=You%20can%20use%20the%20Veracode,CycloneDX%20JSON%20or%20SPDX%20format.
+  
+on:
+  workflow_call:
+        
+jobs:
+  veracode-sca-task:
+    runs-on: ubuntu-latest
+    name: Scan repository with Veracode SCA
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Run Veracode SCA
+        env:
+          SRCCLR_API_TOKEN: ${{ secrets.SRCCLR_API_TOKEN }}
+        uses: veracode/veracode-sca@v2.1.10
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          create-issues: false   
+
+# TODO: upload the report to the repo

@@ -1,0 +1,62 @@
+# ad hoc continuous delivery/deployment workflow for ruby package
+name: main and release branch CD workflow for ruby package
+
+on:
+  workflow_call:
+    inputs:
+      language:
+        description: 'Primary language in the repository, for language-specific checks'
+        required: false
+        type: string
+        default: 'Go'
+      visibility:
+        description: 'Visibility of the repository'
+        required: false
+        type: string
+        default: 'public' # (private, public, or internal)
+      skip-unit-tests:
+        description: 'Skip unit tests'
+        required: false
+        type: boolean
+        default: false
+    
+env:
+  REPO_VISIBILITY: ${{ github.event.repository.visibility }}
+  PIPELINE_VERSION: '1.0.0'
+
+jobs:
+  echo_inputs:
+    name: 'Echo version of pipeline and inputs'
+    runs-on: ubuntu-latest
+    steps:
+      - name: echo version of pipeline and inputs
+        run: |
+          echo "pipeline version $PIPELINE_VERSION"
+          echo "Language set to ${{ inputs.language }} "
+          echo "SCC output filename set to ${{ inputs.outputfilename }} "
+          echo "Visibility set to $REPO_VISIBILITY [ ${{ inputs.visibility }} ]"
+          echo "Skip trufflehog set to ${{ inputs.skip-trufflehog }}"
+          echo "Skip SonarQube set to ${{ inputs.skip-sonarqube }}"
+          echo "Skip unit tests set to ${{ inputs.skip-unit-tests }}"
+         
+# build binaries and executables
+
+# package the binaries and executables
+
+  # Code signing (can generate MD5 SHA, but also need signature - not GPG but provisioned by Progress EVCode)
+    # https://github.com/mtrojnar/osslsigncode?tab=readme-ov-file 
+
+  # scan the binaries for vulnerabilities using intel CVE bin tool
+  intel-cve-scan:
+    if: ${{ inputs.skip-intel-cve-scan == false }}
+    uses: chef/common-github-actions/.github/workflows/tools/intel-cve-bin.yml@main
+    needs: echo_inputs
+    secrets: inherit
+
+
+# deploy to integration test environment
+
+# run integration tests
+
+# Documentation generation 
+#   # Publish OpenAPI specs (for docs) to   https://github.com/progress-platform-services/open-api-specifications/tree/main/chef

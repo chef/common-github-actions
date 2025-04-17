@@ -1,0 +1,141 @@
+# sbom.yml
+# This workflow is designed to download the Software Bill of Materials (SBOM) from GitHub's Dependency Graph API
+name: Download SBOM from Insights and Convert to CSV
+
+# see Sonu's https://progresssoftware.atlassian.net/browse/CHEF-17029
+
+# other SBOM tools include:
+# CycloneDX, then sbomqualityscore (https://github.com/interlynk-io/sbomqs) - https://github.com/marketplace/actions/cyclonedx-gomod-generate-sbom
+  # CLI combines SBOMs https://github.com/CycloneDX/cyclonedx-cli , docs at https://cyclonedx.org/capabilities/sbom/
+  # https://github.com/ozonru/cyclonedx-go
+# MSFT SBOM, then sbomqualityscore (https://github.com/interlynk-io/sbomqs) - https://github.com/microsoft/sbom-tool/blob/main/docs/setting-up-github-actions.md 
+# Grype - https://github.com/marketplace/actions/anchore-container-scan, https://github.com/anchore/grype
+# open Spdx-sbom-generator - https://github.com/opensbom-generator/spdx-sbom-generator 
+# https://github.com/srcclr/srcclr_sbom_gen 
+# https://github.com/openclarity/kubeclarity?tab=readme-ov-file#installation 
+
+on:
+  workflow_call:
+
+jobs:
+  download-and-convert-github-sbom-to-csv:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set Timestamp and Unique Filename
+      run: |
+        FILE_PREFIX=$(echo "${{ github.repository }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
+        echo "FILE_PREFIX=${FILE_PREFIX}" >> $GITHUB_ENV
+
+    - name: Download SBOM from GitHub Dependency Graph API
+      run: |
+        curl -L \
+          -H "Accept: application/vnd.github+json" \
+          -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          -H "X-GitHub-Api-Version: 2022-11-28" \
+          https://api.github.com/repos/${{ github.repository }}/dependency-graph/sbom \
+          -o "${FILE_PREFIX}-sbom.json"
+
+    - name: Verify SBOM JSON File
+      run: |
+        ls -l "${FILE_PREFIX}-sbom.json"
+
+    - name: Preview SBOM JSON Content
+      run: |
+        head -n 20 "${FILE_PREFIX}-sbom.json"
+
+    - name: Convert SBOM to CSV using jq
+      run: |
+        echo "name,SPDXID,versionInfo,downloadLocation,externalRefs,license,source_code_url,vendor" > "${FILE_PREFIX}-sbom.csv"
+        jq -r '
+          .sbom.packages[] | [
+            .name,
+            .SPDXID,
+            .versionInfo,
+            .downloadLocation,
+            ( .externalRefs[]? | .referenceLocator ),
+            "None", "None", "None"
+          ] | @csv' "${FILE_PREFIX}-sbom.json" >> "${FILE_PREFIX}-sbom.csv"
+
+    - name: Preview SBOM CSV Content
+      run: |
+        head -n 20 "${FILE_PREFIX}-sbom.csv"
+
+    - name: Enrich SBOM CSV with RubyGems Data
+      run: |
+        TEMP_CSV="${FILE_PREFIX}-sbom-temp.csv"
+        echo "name,SPDXID,versionInfo,downloadLocation,externalRefs,license,source_code_url,vendor" > "$TEMP_CSV"
+        tail -n +2 "${FILE_PREFIX}-sbom.csv" | while IFS=, read -r name SPDXID versionInfo downloadLocation externalRefs license source_code_url vendor; do
+          # Debug each row
+          echo "Processing: $name, $SPDXID, $versionInfo, $downloadLocation, $externalRefs, $license, $source_code_url, $vendor"
+          if [[ "$externalRefs" == *"pkg:gem"* ]]; then
+            echo "Processing RubyGem: $name"
+            gem_name=$(echo "$name" | tr -d '"')
+            version=$(echo "$versionInfo" | tr -d '"')
+            # Check if the version contains a version constraint (e.g., ~>, >=, <=)
+            if [[ "$versionInfo" =~ [\~\>\<\=\ ] ]]; then
+              echo "Skipping call to rubygems.org for version constraint: $versionInfo"
+            else
+              # Proceed with making the call to rubygems.org
+              echo "Making call to rubygems.org for fixed version: $versionInfo"
+              # Your logic to call rubygems.org
+              api_url="https://rubygems.org/api/v2/rubygems/${gem_name}/versions/${version}.json"
+              response=$(curl -s "$api_url")
+              echo "Response: $response"
+              new_license=$(echo "$response" | jq -r '.licenses[0] // "None"')
+              echo "License: $new_license"
+              new_source_code_url=$(echo "$response" | jq -r '.source_code_uri // "None"')
+              new_vendor=$(echo "$response" | jq -r '.authors // "None"')
+            fi
+          else
+            new_license="None"
+            new_source_code_url="None"
+            new_vendor="None"
+          fi
+          echo "$name,$SPDXID,$versionInfo,$downloadLocation,$externalRefs,$new_license,$new_source_code_url,$new_vendor" >> "$TEMP_CSV"
+        done
+        mv "$TEMP_CSV" "${FILE_PREFIX}-sbom.csv"
+
+    - name: Verify SBOM CSV File
+      run: |
+        ls -l "${FILE_PREFIX}-sbom.csv"
+
+    - name: Upload SBOM JSON as Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: sbom-json
+        path: ${{ env.FILE_PREFIX }}-sbom.json
+
+    - name: Upload SBOM CSV as Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: sbom-csv
+        path: ${{ env.FILE_PREFIX }}-sbom.csv
+
+  generate-msft-sbom:
+    name: Generate SBOM using Microsoft SBOM Tool
+    runs-on: ubuntu-latest
+    steps:
+      - name: echo
+        run: |
+          echo "Hello world"
+    # msftsbom.exe generate -b ./bin -bc . -pn chef-api -pv 0.1.0 -ps "Progress Chef" -nsb "https://chef.io" -V Verbosereusable_echo:
+
+  generate-license-scout-sbom:
+    name: Generate SBOM using Chef license scout Tool
+    runs-on: ubuntu-latest
+    steps:
+      - name: echo
+        run: |
+          echo "Hello world"
+
+  generate-blackduck-polaris-sbom:
+    name: Generate SBOM using Blackduck Polaris Tool
+    runs-on: ubuntu-latest
+    steps:
+      - name: echo
+        run: |
+          echo "Hello world"

@@ -1,0 +1,58 @@
+# blackduck-sca.yml
+# Basic Blackduck SCA example
+# from https://documentation.blackduck.com/bundle/bridge/page/documentation/c_github-blackduck.html 
+name: Blackduck SCA scan
+
+name: CI-BlackDuck-SCA-Basic
+on:
+  push:
+    branches: [ main, master, develop, stage, release ]
+  pull_request:
+    branches: [ main, master, develop, stage, release ]
+
+  workflow_dispatch:
+    
+jobs:
+  build:
+    runs-on: [ ubuntu-latest ]
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+      - name: Black Duck SCA Scan
+        id: black-duck-sca-scan
+        uses: blackduck-inc/black-duck-security-scan@v2.1.1
+        
+        ### Configure DETECT environment variables
+        env:
+          DETECT_PROJECT_NAME: ${{ github.event.repository.name }}
+          
+        with:
+          ### SCANNING: Required fields
+          blackducksca_url: ${{ vars.BLACKDUCK_URL }}
+          blackducksca_token: ${{ secrets.BLACKDUCK_TOKEN }}
+         
+          ### SCANNING: Optional fields
+          # blackducksca_scan_failure_severities: 'BLOCKER,CRITICAL'
+          
+          ### FIX PULL REQUEST CREATION: Uncomment below to enable
+          # blackducksca_fixpr_enabled: true
+          # github_token: ${{ secrets.GITHUB_TOKEN }} # Required when Fix PRs is enabled
+          
+          ### PULL REQUEST COMMENTS: Uncomment below to enable
+          # blackducksca_prcomment_enabled: true 
+          # github_token: ${{ secrets.GITHUB_TOKEN }} # Required when PR comments is enabled
+
+          ### SARIF report generation and upload to GitHub Adavanced Security: Uncomment below to enable
+          # blackducksca_reports_sarif_create: true # Create Black Duck SCA SARIF report and upload it as artifact
+          # blackducksca_upload_sarif_report: true  # Upload Black Duck SCA SARIF report in GitHub Advanced Security tab
+          # github_token: ${{ secrets.GITHUB_TOKEN }} # Required when blackducksca_upload_sarif_report is set as true
+          
+          ### Mark build status if policy violating issues are found
+          # mark_build_status: 'success'
+          
+    ### Uncomment below configuration to add custom logic based on return status
+    # - name: cmdLine
+    #   id: cmdLine
+    #   run: |
+    #     EXIT_CODE=${{ steps.black-duck-security-scan.outputs.status }}
+    #     echo "Black Duck Security Scan exit status - $EXIT_CODE"

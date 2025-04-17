@@ -1,13 +1,10 @@
-name: source code complexity scan
+# scc.yml
 # from https://github.com/boyter/scc
+name: source code complexity scan
     
 on:
   workflow_call:
     inputs:
-    #   language:
-    #     description: 'Primary language in the repository'
-    #     required: true
-    #     type: string
       outputfilename:
         description: 'Name of the SCC output file'
         required: false
@@ -18,21 +15,17 @@ jobs:
   scc:
     runs-on: ubuntu-latest
     name: 'Complexity and SLOC'
-    # (after - name:) if: ${{ inputs.language == 'Go' }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      # - name: Checkout
+      #   uses: actions/checkout@v4
 
       - name: Generate complexity metrics (using Adapt-API action)
         id: scc
         uses: Adapt-API/scc-docker-action@master
         with:
-          args: -o ${{ inputs.outputfilename }}
-          # --by-file -i js,go,html,css,rb 
-          
-        #   - name: Echo output to correct file
-        #     run: echo -n "${{ steps.scc.outputs.scc }}" >> ${{ inputs.outputfilename }}
-         #     #   echo -n "${{ fromJson(steps.scc.outputs.scc)[0].Code }}"       
+          args: -o ${{ inputs.outputfilename }} -f json --by-file --sort lines,code,comments,blank --ignore-duplicates --ignore-vcs 
+          # flags like -i js,go,html,css,rb at https://github.com/boyter/scc?tab=readme-ov-file#usage
+              
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

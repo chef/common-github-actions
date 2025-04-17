@@ -1,0 +1,83 @@
+name: Build, Generate Metrics and Test Go CLIs with go-releaser
+on: 
+  workflow_call:
+    inputs:
+      application-name:
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  APPLICATION_NAME: ${{ inputs.application-name }}
+  API_VERSION: ${{ github.ref_name }}
+  BUILDTYPE: 'CLI'
+  SCCOUTPUTFILE: 'scc.out'
+  BUILDLANGUAGE: 'GoLang'
+  DOCKERFILE_PATH: './Dockerfile'
+
+jobs:
+  # Build GoLang binaries per .goreleaser.yaml with go-releaser makes these artifacts in GitHub 
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      -
+        name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '>=1.21'
+      - run: go version
+    #   - name: Configure git for private modules linux
+    #     if: ${{ matrix.os == 'ubuntu-latest' }}
+    #     env:
+    #       GOPRIVATE: github.com/progress-platform-services/*
+    #     run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+      -
+        name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Unit Test and Sonar (SCA and unit test coverage)
+  unit-test:
+    name: 'Unit test and run Sonar scan'
+    runs-on: ubuntu-latest-4-cores
+    needs: goreleaser
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: 'Unit Test: Generate coverage.out and covreport.xml file'
+      run: go test -v -coverprofile="coverage.out" ./... 
+    - name: Copy file
+      run: cp coverage.out test/unittest/coverage.out
+      #    - name: cat the file
+      #      run: cat test/unittest/coverage.out
+    
+    # - name: SonarQube Scan
+    #   uses: sonarsource/sonarqube-scan-action@master
+    #   # https://github.com/marketplace/actions/official-sonarqube-scan
+    #   env:
+    #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    #     SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        
+    - name: Upload test coverage artifact
+      uses: actions/upload-artifact@v4
+      with:
+        # Name of the artifact to upload.
+        name: test-coverage.out
+        # A file, directory or wildcard pattern that describes what to upload
+        path: test/unittest/coverage.out
+ 
+ 
