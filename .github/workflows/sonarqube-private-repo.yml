@@ -6,16 +6,16 @@ on:
   workflow_call:
     
 jobs:
-  echo-inputs:
-    name: 'Echo inputs'
-    runs-on: ubuntu-latest
-    steps:
-    - name: Echo inputs
-      run: |
-        echo "Sonarqube scan for PRIVATE repositories, running on ubuntu-latest-4-cores runner"
-        echo "Sonar host URL ${{ vars.SONAR_HOST_URL}}"
+  # echo-inputs:
+  #   name: 'Echo inputs'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: Echo inputs
+  #     run: |
+  #       echo "Sonarqube scan for PRIVATE repositories, running on ubuntu-latest-4-cores runner"
+  #       echo "Sonar host URL ${{ secrets.SONAR_HOST_URL}}"
               
-  sonarqube:
+  SonarQube:
     runs-on: ubuntu-latest-4-cores
     steps:
     - uses: actions/checkout@v4
@@ -26,4 +26,4 @@ jobs:
       continue-on-error: true
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}

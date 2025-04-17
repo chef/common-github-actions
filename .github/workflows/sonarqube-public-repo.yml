@@ -6,17 +6,17 @@ on:
   workflow_call:
     
 jobs:
-  echo-inputs:
-    name: 'Echo inputs'
-    runs-on: ubuntu-latest
-    steps:
-    - name: Echo inputs
-      run: |
-        echo "Sonarqube scan for PUBLIC repositories, running on ubuntu-latest-4-cores runner"
-        echo "Sonar host URL ${{ secrets.SONAR_HOST_URL}}"
+  # echo-inputs:
+  #   name: 'Echo inputs'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: Echo inputs
+  #     run: |
+  #       echo "Sonarqube scan for PUBLIC repositories, running on ubuntu-latest-4-cores runner"
+  #       echo "Sonar host URL ${{ secrets.SONAR_HOST_URL}}"
   
   # IP-RANGE-CONTROLLED does not work... probably needs IP range refresh, cannot get throughto api.sonar
-  sonarqube:
+  SonarQube:
     runs-on: ip-range-controlled
     steps:
     - uses: actions/checkout@v4

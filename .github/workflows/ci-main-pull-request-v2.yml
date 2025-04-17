@@ -133,7 +133,7 @@ jobs:
   
   # check out action
   checkout:
-    name: 'Checkout repository'
+    name: 'Checkout'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -141,7 +141,6 @@ jobs:
 
   # generate complexity metrics
   run-scc:
-    name: source code complexity scan    
     if: ${{ inputs.perform-complexity-checks == true }}
     uses: chef/common-github-actions/.github/workflows/scc.yml@main
     with:
@@ -150,7 +149,7 @@ jobs:
 
   # language specific tests (gosec, rubocop, linters, etc.)
   rust-language-specific-precompilation-checks:
-    name: 'Rust language-specific pre-compilation steps'  
+    name: 'Rust-specific pre-compilation steps'  
     if: ${{ inputs.language == 'Rust' && inputs.perform-complexity-checks == true }}
     runs-on: ubuntu-latest
     needs: run-scc
@@ -161,17 +160,20 @@ jobs:
         # cargo clippy --all-targets --all-features -- -D warnings
 
   ruby-language-specific-precompilation-checks:
-    name: 'Ruby language-specific pre-compilation steps'  
+    name: 'Ruby-specific pre-compilation steps'  
     if: ${{ inputs.language == 'Ruby' && inputs.perform-complexity-checks == true }}
     needs: run-scc
     # TODO: get with Marc/Prajakta on this sequece for Ruby uses: chef/common-github-actions/.github/workflows/rubocop.yml@main
     runs-on: ubuntu-latest
     steps:
-      - name: Run Ruby linter
-        run: echo 'Ruby linter'
+      - uses: actions/checkout@v2
+      - name: 'Bundler Audit'
+        uses: andrewmcodes/bundler-audit-action@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
   go-language-specific-precompilation-checks:
-    name: 'Go language-specific pre-compilation steps'  
+    name: 'Go-specific pre-compilation steps'  
     if: ${{ inputs.language == 'Go' && inputs.perform-complexity-checks == true }}
     runs-on: ubuntu-latest
     needs: run-scc
@@ -196,21 +198,23 @@ jobs:
     runs-on: ubuntu-latest
     name: 'Language-agnostic pre-compilation steps'  
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: OWASP Dependency check
         uses: dependency-check/Dependency-Check_Action@main
         with:
           project: github.event.repository.name
           path: '.'
           format: 'JSON'
-          out: 'reports' # this is the default, no need to specify unless you wish to override it
+          # out: 'reports' # this is the default, no need to specify unless you wish to override it
           args: >
             --enableRetired
             --prettyPrint
       - name: Upload Test results
         uses: actions/upload-artifact@v4
         with:
-           name: Depcheck report
-           path: ${{github.workspace}}/reports
+          name: OWASP dependency check report
+          path: ${{github.workspace}}/reports
     # TODO: add flag --failOnCVSS 7
     # TODO: integrate with SonarQube
     # TODO: correct artifact upload names like Sonu's
@@ -322,7 +326,7 @@ jobs:
   
   ci-unit-test: # FROM CHEF-VAULT
     if: ${{ inputs.unit-tests == true && success() }}
-    name: 'Unit test coverage'
+    name: 'Unittest'
     strategy:
       fail-fast: false
       matrix:

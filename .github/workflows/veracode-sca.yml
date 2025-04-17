@@ -14,7 +14,7 @@ on:
 jobs:
   veracode-sca-task:
     runs-on: ubuntu-latest
-    name: Scan repository with Veracode SCA
+    name: Veracode SCA
 
     steps:
       - name: Checkout
