@@ -4,6 +4,9 @@ name: Download SBOM from Insights and Convert to CSV
 
 # see Sonu's https://progresssoftware.atlassian.net/browse/CHEF-17029
 
+# Blackduck SBOM is at SERVER: https://progresssoftware.app.blackduck.com/
+# example project https://progresssoftware.app.blackduck.com/api/risk-profile-dashboard?limit=25&offset=0
+
 # other SBOM tools include:
 # CycloneDX, then sbomqualityscore (https://github.com/interlynk-io/sbomqs) - https://github.com/marketplace/actions/cyclonedx-gomod-generate-sbom
   # CLI combines SBOMs https://github.com/CycloneDX/cyclonedx-cli , docs at https://cyclonedx.org/capabilities/sbom/

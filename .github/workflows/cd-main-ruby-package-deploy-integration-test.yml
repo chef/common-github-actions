@@ -49,7 +49,7 @@ jobs:
   # scan the binaries for vulnerabilities using intel CVE bin tool
   intel-cve-scan:
     if: ${{ inputs.skip-intel-cve-scan == false }}
-    uses: chef/common-github-actions/.github/workflows/tools/intel-cve-bin.yml@main
+    uses: chef/common-github-actions/.github/workflows/intel-cve-bin.yml@main
     needs: echo_inputs
     secrets: inherit
 

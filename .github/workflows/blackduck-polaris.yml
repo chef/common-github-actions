@@ -1,47 +1,57 @@
+# CI action for running a Blackduck Polaris scan GitHub Action (GA) which can be called from other GAs or workflows.
+#
 # blackduck-polaris.yml
-# Simple Blackduck Polaris scan GitHub Action (GA) which can be called from other GAs or workflows.
+# 
 # from https://documentation.blackduck.com/bundle/bridge/page/documentation/t_github-polaris-quickstart.html
+# parameters @ https://documentation.blackduck.com/bundle/bridge/page/documentation/c_github-polaris.html
 name: Blackduck Polaris scan
 
-name: CI-Polaris-Basic 
 on:
-  push:
-    branches: [ main, master, develop, stage, release ]
-  pull_request:
-    branches: [ main, master, develop, stage, release ]
-  workflow_dispatch:
-  
+  workflow_call:
+    secrets:
+      POLARIS_ACCESS_TOKEN: # required, but not used in this stub
+
 jobs:
   build:
     runs-on: [ ubuntu-latest ]
     steps:
-      - name: Checkout Source
-        uses: actions/checkout@v4
+      - name: Starting Black Duck Polaris scan
+        run: |
+          echo "POLARIS_SERVER_URL: ${{ vars.POLARIS_SERVER_URL }}"
+        # echo "POLARIS_ACCESS_TOKEN: ${{ secrets.POLARIS_ACCESS_TOKEN }}"
+      # - name: Checkout Source
+      #   uses: actions/checkout@v4
       - name: Polaris Scan
-        uses: blackduck-inc/black-duck-security-scan@v2.1.0
+        uses: blackduck-inc/black-duck-security-scan@v2.1.1
         with:
           ### SCANNING: Required fields
-          polaris_server_url: ${{ vars.POLARIS_SERVER_URL }}
+          polaris_server_url: ${{ vars.POLARIS_SERVER_URL }} # https://polaris.blackduck.com
           polaris_access_token: ${{ secrets.POLARIS_ACCESS_TOKEN }}
           polaris_assessment_types: "SCA,SAST"
           
           ### SCANNING: Optional fields
-          # polaris_application_name: ${{ github.event.repository.name }}
-          # polaris_project_name: ${{ github.event.repository.name }}
+          polaris_application_name: ${{ github.event.repository.name }}
+          polaris_project_name: "Chef-Vault" 
+          # ${{ github.event.repository.name }}
+          # from the blackduck page at https://polaris.blackduck.com/portfolio/portfolios/8b7ad6f7-6dcb-49ec-bded-bfc4f190d4f8/portfolio-items/fe369baf-11d2-4989-bcb7-045577856dcc/projects
           
           ### PULL REQUEST COMMENTS: Uncomment below to enable
           # polaris_prComment_enabled: true 
           # github_token: ${{ secrets.GH_TOKEN }} # Required when PR comments is enabled
           
+          ### SARIF report parameters
+          polaris_reports_sarif_create: true
+          polaris_upload_sarif_report: true
+
           ### Mark build status if policy violating issues are found
           # mark_build_status: 'success'
           
           ### Uncomment below configuration to add custom logic based on return status
-          - name: cmdLine
-          id: cmdLine
-          run: |
-          EXIT_CODE=${{ steps.black-duck-security-scan.outputs.status }}
-          echo "Black Duck Security Scan exit status - $EXIT_CODE"
+          # - name: cmdLine
+          # id: cmdLine
+          # run: |
+          # EXIT_CODE=${{ steps.black-duck-security-scan.outputs.status }}
+          # echo "Black Duck Security Scan exit status - $EXIT_CODE"
 
 # from GeorgeR. (original)
 # uses: blackduck-inc/black-duck-security-scan@v2.0.0
