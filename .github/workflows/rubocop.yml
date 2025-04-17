@@ -3,6 +3,7 @@
 # rubocop.yml
 #
 # from https://github.com/actions/starter-workflows/blob/main/code-scanning/rubocop.yml
+# there are many Rubocop linters, like https://github.com/marketplace/actions/rubocop-linter-action 
 
 # TODO: Use the chef cookstyle rules as an alternative
 # TODO: upload to SonarQube by setting sonar.ruby.rubocop.reportPaths
