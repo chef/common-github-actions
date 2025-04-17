@@ -19,7 +19,7 @@ on:
 # read our documentation at https://github.com/blackduck-inc/black-duck-security-scan
 
 jobs:
-  build:
+  Blackduck-Bridge:
     runs-on: ubuntu-latest
     permissions:
       contents: read

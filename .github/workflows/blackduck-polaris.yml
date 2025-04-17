@@ -12,7 +12,7 @@ on:
       POLARIS_ACCESS_TOKEN: # required, but not used in this stub
 
 jobs:
-  build:
+  Blackduck-Polaris:
     runs-on: [ ubuntu-latest ]
     steps:
       - name: Starting Black Duck Polaris scan

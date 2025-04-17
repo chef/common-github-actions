@@ -410,15 +410,15 @@ jobs:
   # #   needs: echo_inputs
   # #   secrets: inherit
 
-  # run-blackduck-polaris:
-  #   if: ${{ inputs.perform-blackduck-polaris == true }}
-  #   uses: chef/common-github-actions/.github/workflows/blackduck-polaris.yml@main
-  #   needs: ci-build
-  #   secrets: inherit
+  run-blackduck-polaris:
+    if: ${{ inputs.perform-blackduck-polaris == true }}
+    uses: chef/common-github-actions/.github/workflows/blackduck-polaris.yml@main
+    needs: ci-build
+    secrets: inherit
 
-  # # generate bills-of-materials
-  # calculate-sbom:
-  #   if: ${{ inputs.generate-sbom == true }}
-  #   uses: chef/common-github-actions/.github/workflows/sbom.yml@main
-  #   needs: ci-build
-  #   secrets: inherit
+  # generate bills-of-materials
+  calculate-sbom:
+    if: ${{ inputs.generate-sbom == true }}
+    uses: chef/common-github-actions/.github/workflows/sbom.yml@main
+    needs: ci-build
+    secrets: inherit

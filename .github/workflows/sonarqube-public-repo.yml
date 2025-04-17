@@ -13,7 +13,7 @@ jobs:
     - name: Echo inputs
       run: |
         echo "Sonarqube scan for PUBLIC repositories, running on ubuntu-latest-4-cores runner"
-        echo "Sonar host URL ${{ vars.SONAR_HOST_URL}}"
+        echo "Sonar host URL ${{ secrets.SONAR_HOST_URL}}"
   
   # IP-RANGE-CONTROLLED does not work... probably needs IP range refresh, cannot get throughto api.sonar
   sonarqube:
@@ -28,4 +28,4 @@ jobs:
       continue-on-error: true
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
