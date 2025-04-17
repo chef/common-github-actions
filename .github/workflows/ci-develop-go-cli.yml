@@ -1,15 +1,28 @@
 
-  # REPLACE THESE STEPS IN CI PIPELINE main-pull-request-checks.yml WITH https://github.com/progress-platform-services/chef-node-enrollment-api/blob/main/.github/workflows/verify.yml
-  #
-  #
-  #
-  #
-  
-  # # do these as repo or org variables (like secrets)
-  # # ECR_REGISTRY is set on login below to 448877188565.dkr.ecr.us-east-2.amazonaws.com
-  # ECR_REPOSITORY: 'arch-sample-service'
-  # CONTAINER_IMAGE_TAG: ${{ github.sha }}
-  # # do not need as this is in ECR_REPO ... CONTAINER_IMAGE_NAME: 'arch-sample-service'
+# REPLACE THESE STEPS IN CI PIPELINE main-pull-request-checks.yml WITH https://github.com/progress-platform-services/chef-node-enrollment-api/blob/main/.github/workflows/verify.yml
+#
+#
+#
+#
+name: Build Go CLIs on develop branch
+
+on:
+  workflow_call:
+
+    
+jobs:
+  reusable_echo:
+    name: echo message back
+    runs-on: ubuntu-latest
+    steps:
+      - name: echo
+        run: |
+          echo "Hello world"
+# # do these as repo or org variables (like secrets)
+# # ECR_REGISTRY is set on login below to 448877188565.dkr.ecr.us-east-2.amazonaws.com
+# ECR_REPOSITORY: 'arch-sample-service'
+# CONTAINER_IMAGE_TAG: ${{ github.sha }}
+# # do not need as this is in ECR_REPO ... CONTAINER_IMAGE_NAME: 'arch-sample-service'
 
 
   # # Build GoLang binary - publish binaries from /bin - CONVERT TO go-releaser
