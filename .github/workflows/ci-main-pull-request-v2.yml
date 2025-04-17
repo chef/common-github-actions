@@ -15,7 +15,7 @@
 # 
 # https://docs.github.com/en/actions/sharing-automations/reusing-workflows#passing-inputs-and-secrets-to-a-reusable-workflow
   
-name: main and release branch CI flow containing PR checks, v2
+name: CI flow containing PR checks for main & release, v2
 
 on:
   workflow_call:
