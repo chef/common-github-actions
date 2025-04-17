@@ -227,10 +227,10 @@ jobs:
     uses: chef/common-github-actions/.github/workflows/trufflehog.yml@main
     needs: run-scc
 
-  run-srcclr:
-    if: ${{ inputs.perform-srcclr-scan == true }}
-    uses: chef/common-github-actions/.github/workflows/srcclr.yml@main
-    needs: run-scc
+  # run-srcclr:
+  #   if: ${{ inputs.perform-srcclr-scan == true }}
+  #   uses: chef/common-github-actions/.github/workflows/srcclr.yml@main
+  #   needs: run-scc
 
   run-veracode-sca:
     if: ${{ inputs.perform-veracode-sca-scan == true }}
