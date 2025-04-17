@@ -1,8 +1,21 @@
 # WORK IN PROCESS
 # MERGE INTO ci-main-pull-request-checks.yml WHEN DONE TESTING
+# CI pipeline for all application types on main and release branches
+# use stubs/ci-main-pull-request-checks-stub.yml in your repo to call this common action using workflow_call
+#
+# performs the following actions:
+# 1. run source code complexity checks (SCC) using scc
+# 2. run language-specific pre-compilation checks (e.g., gosec, rubocop, etc.)
+# 3. run language-agnostic pre-compilation checks (e.g., OWASP dependency check)
+# 4. run security source code analysis (SCA) scans (e.g., trufflehog, srcclr, veracode, blackduck)
+# 5. run build and packaging steps (e.g., go build, cargo build, etc.)
+# 6. run unit tests (e.g., go test, cargo test, etc.)
+# 7. run security DAST tests and scans (e.g., SonarQube, BlackDuck coverity, BlackDuck polaris)
+# 8. generate software bill-of-materials (SBOM) using SPDX format
+# 
 # https://docs.github.com/en/actions/sharing-automations/reusing-workflows#passing-inputs-and-secrets-to-a-reusable-workflow
   
-name: main and release branch CI flow containing PR checks
+name: main and release branch CI flow containing PR checks, v2
 
 on:
   workflow_call:
@@ -111,6 +124,14 @@ jobs:
   #
   ################################################################################################################
   
+  # check out action
+  checkout:
+    name: 'Checkout repository'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
   # generate complexity metrics
   run-scc:
     name: source code complexity scan    
@@ -121,23 +142,31 @@ jobs:
     needs: echo-inputs
 
   # language specific tests (gosec, rubocop, linters, etc.)
-  language-specific-precompilation-checks:
+  rust-language-specific-precompilation-checks:
+    name: 'Rust language-specific pre-compilation steps'  
+    if: ${{ inputs.language == 'Rust' && inputs.perform-complexity-checks == true }}
     runs-on: ubuntu-latest
     needs: run-scc
-    name: 'Language-specific pre-compilation steps'  
     steps:
-      - name: Precompilation tests for Rust 
-        if: ${{ inputs.language == 'Rust' && inputs.perform-complexity-checks == true }}
+      - name: Run crate linter
         run: echo 'crate linter'
         # https://github.com/rust-lang/rust-clippy
         # cargo clippy --all-targets --all-features -- -D warnings
-      - name: Precompilation tests for Ruby
-        if: ${{ inputs.language == 'Ruby' && inputs.perform-complexity-checks == true}}
-        uses: chef/common-github-actions/.github/workflows/rubocop.yml@main
-        # run: echo 'hello world'
-      - name: Precompilation tests for Go
-        if: ${{ inputs.language == 'Go' && inputs.perform-complexity-checks == true}}
-        run: echo 'hello world'
+
+  ruby-language-specific-precompilation-checks:
+    name: 'Ruby language-specific pre-compilation steps'  
+    if: ${{ inputs.language == 'Ruby' && inputs.perform-complexity-checks == true }}
+    needs: run-scc
+    uses: chef/common-github-actions/.github/workflows/rubocop.yml@main
+      
+  go-language-specific-precompilation-checks:
+    name: 'Go language-specific pre-compilation steps'  
+    if: ${{ inputs.language == 'Go' && inputs.perform-complexity-checks == true }}
+    runs-on: ubuntu-latest
+    needs: run-scc
+    steps:
+      - name: Run go linter
+        run: echo 'go linter'
         # https://github.com/marketplace/actions/gosec-security-checker      
           # go install github.com/securego/gosec/v2/cmd/gosec@latest
           # GHA at https://github.com/securego/gosec
@@ -154,7 +183,6 @@ jobs:
     #     and flags at https://jeremylong.github.io/DependencyCheck/dependency-check-cli/arguments.html
     if: ${{ inputs.perform-complexity-checks == true }}
     runs-on: ubuntu-latest
-    needs: language-specific-precompilation-checks
     name: 'Language-agnostic pre-compilation steps'  
     steps:
       - name: OWASP Dependency check
@@ -181,149 +209,149 @@ jobs:
   #
   ################################################################################################################
   
-  # security scans
-  run-trufflehog:
-    if: ${{ inputs.perform-trufflehog-scan == true }}
-    uses: chef/common-github-actions/.github/workflows/trufflehog.yml@main
-    needs: run-scc
+  # # security scans
+  # run-trufflehog:
+  #   if: ${{ inputs.perform-trufflehog-scan == true }}
+  #   uses: chef/common-github-actions/.github/workflows/trufflehog.yml@main
+  #   needs: run-scc
 
-  run-srcclr:
-    if: ${{ inputs.perform-srcclr-scan == true }}
-    uses: chef/common-github-actions/.github/workflows/srcclr.yml@main
-    needs: run-scc
+  # run-srcclr:
+  #   if: ${{ inputs.perform-srcclr-scan == true }}
+  #   uses: chef/common-github-actions/.github/workflows/srcclr.yml@main
+  #   needs: run-scc
 
-  run-veracode-sca:
-    if: ${{ inputs.perform-veracode-sca-scan == true }}
-    uses: chef/common-github-actions/.github/workflows/veracode-sca.yml@main
-    needs: run-scc
-    secrets: inherit
+  # run-veracode-sca:
+  #   if: ${{ inputs.perform-veracode-sca-scan == true }}
+  #   uses: chef/common-github-actions/.github/workflows/veracode-sca.yml@main
+  #   needs: run-scc
+  #   secrets: inherit
       
-  # BLACKDUCK TOOLS
-  # updated to https://documentation.blackduck.com/bundle/bridge/page/documentation/c_download.html#polaris-download
-  # https://github.com/marketplace/actions/black-duck-security-scan
-  # for polaris, coverity, SRM (SBOM), and SCA (BlackDuck SCA) - Chef uses polaris and SBOM later in this script
-  run-blackduck-sca:
-    if: ${{ inputs.perform-blackduck-sca-scan == true }}
-    uses: chef/common-github-actions/.github/workflows/blackduck-sca.yml@main
-    needs: run-scc
-    secrets: inherit 
+  # # BLACKDUCK TOOLS
+  # # updated to https://documentation.blackduck.com/bundle/bridge/page/documentation/c_download.html#polaris-download
+  # # https://github.com/marketplace/actions/black-duck-security-scan
+  # # for polaris, coverity, SRM (SBOM), and SCA (BlackDuck SCA) - Chef uses polaris and SBOM later in this script
+  # run-blackduck-sca:
+  #   if: ${{ inputs.perform-blackduck-sca-scan == true }}
+  #   uses: chef/common-github-actions/.github/workflows/blackduck-sca.yml@main
+  #   needs: run-scc
+  #   secrets: inherit 
             
-  ################################################################################################################
-  #
-  #    Build and packaging steps
-  #
-  ################################################################################################################
+  # ################################################################################################################
+  # #
+  # #    Build and packaging steps
+  # #
+  # ################################################################################################################
   
-  ci-build:
-    if : ${{ inputs.build == true }}
-    runs-on: ubuntu-latest
-    needs: language-agnostic-precompilation-checks
-    name: 'CI build and compilation steps'  
-    steps:
-      - name: Build for Rust binary
-        if: ${{ inputs.language == 'Rust' }}
-        run: echo 'hello world'
-        # cargo build --release --target-dir ./bin
-      - name: Build for Ruby binary
-        if: ${{ inputs.language == 'Ruby' }}
-        run: echo 'hello world'
-        # bundle install --path vendor/bundle
-        # bundle exec rake build
-      - name: Build for Go binary
-        if: ${{ inputs.language == 'Go' }}
-        run: echo 'hello world'
-        # go build -o ./bin/chef-api ./cmd/chef-api/main.go
+  # ci-build:
+  #   if : ${{ inputs.build == true }}
+  #   runs-on: ubuntu-latest
+  #   needs: language-agnostic-precompilation-checks
+  #   name: 'CI build and compilation steps'  
+  #   steps:
+  #     - name: Build for Rust binary
+  #       if: ${{ inputs.language == 'Rust' }}
+  #       run: echo 'hello world'
+  #       # cargo build --release --target-dir ./bin
+  #     - name: Build for Ruby binary
+  #       if: ${{ inputs.language == 'Ruby' }}
+  #       run: echo 'hello world'
+  #       # bundle install --path vendor/bundle
+  #       # bundle exec rake build
+  #     - name: Build for Go binary
+  #       if: ${{ inputs.language == 'Go' }}
+  #       run: echo 'hello world'
+  #       # go build -o ./bin/chef-api ./cmd/chef-api/main.go
 
-  ci-package-binary:
-    if: ${{ inputs.build == true && success() }}
-    runs-on: ubuntu-latest
-    needs: ci-build
-    name: 'CI package binary steps'  
-    steps:
-      - name: Package for Rust binary
-        if: ${{ inputs.language == 'Rust' }}
-        run: echo 'hello world'
-        # cargo package --target-dir ./bin
-      - name: Package for Ruby binary
-        if: ${{ inputs.language == 'Ruby' }}
-        run: echo 'hello world'
-        # bundle exec rake package
-      - name: Package for Go binary
-        if: ${{ inputs.language == 'Go' }}
-        run: echo 'hello world'
-        # go build -o ./bin/chef-api ./cmd/chef-api/main.go
+  # ci-package-binary:
+  #   if: ${{ inputs.build == true && success() }}
+  #   runs-on: ubuntu-latest
+  #   needs: ci-build
+  #   name: 'CI package binary steps'  
+  #   steps:
+  #     - name: Package for Rust binary
+  #       if: ${{ inputs.language == 'Rust' }}
+  #       run: echo 'hello world'
+  #       # cargo package --target-dir ./bin
+  #     - name: Package for Ruby binary
+  #       if: ${{ inputs.language == 'Ruby' }}
+  #       run: echo 'hello world'
+  #       # bundle exec rake package
+  #     - name: Package for Go binary
+  #       if: ${{ inputs.language == 'Go' }}
+  #       run: echo 'hello world'
+  #       # go build -o ./bin/chef-api ./cmd/chef-api/main.go
           
-  ################################################################################################################
-  #
-  #    Unit tests and code quality checks
-  #
-  ################################################################################################################
+  # ################################################################################################################
+  # #
+  # #    Unit tests and code quality checks
+  # #
+  # ################################################################################################################
   
-  ci-unit-test:
-    if: ${{ inputs.unit-tests == true && success() }}
-    runs-on: ubuntu-latest
-    needs: ci-package-binary
-    name: 'CI unit tests'
-    steps:
-      - name: Build for Rust binary
-        if: ${{ inputs.language == 'Rust' }}
-        run: echo 'hello world'
-        # cargo test --target-dir ./bin 
-      - name: Build for Ruby binary
-        if: ${{ inputs.language == 'Ruby' }}
-        run: echo 'hello world'
-        # bundle exec rake test
-        # bundle exec rake test:unit
-        # bundle exec rake test:integration
-        # bundle exec rake test:unit:rubocop
-      - name: Build for Go binary
-        if: ${{ inputs.language == 'Go' }}
-        run: echo 'hello world'
-        # go test -v ./... > ./bin/test.out
+  # ci-unit-test:
+  #   if: ${{ inputs.unit-tests == true && success() }}
+  #   runs-on: ubuntu-latest
+  #   needs: ci-package-binary
+  #   name: 'CI unit tests'
+  #   steps:
+  #     - name: Build for Rust binary
+  #       if: ${{ inputs.language == 'Rust' }}
+  #       run: echo 'hello world'
+  #       # cargo test --target-dir ./bin 
+  #     - name: Build for Ruby binary
+  #       if: ${{ inputs.language == 'Ruby' }}
+  #       run: echo 'hello world'
+  #       # bundle exec rake test
+  #       # bundle exec rake test:unit
+  #       # bundle exec rake test:integration
+  #       # bundle exec rake test:unit:rubocop
+  #     - name: Build for Go binary
+  #       if: ${{ inputs.language == 'Go' }}
+  #       run: echo 'hello world'
+  #       # go test -v ./... > ./bin/test.out
          
-  ################################################################################################################
-  #
-  #    Security DAST tests and scans
-  #
-  ################################################################################################################
+  # ################################################################################################################
+  # #
+  # #    Security DAST tests and scans
+  # #
+  # ################################################################################################################
   
-  security-dast-tests:
-    if: ${{ inputs.perform-sonarqube-sca-scan == true && success() }}
-    runs-on: ubuntu-latest
-    needs: ci-build
-    name: 'Security DAST tests and scans'
-    steps:
-      - name: SonarQube scan for public repo
-        if: ${{ inputs.visibility == 'public' }}
-        uses: chef/common-github-actions/.github/workflows/sonarqube-public-repo.yml@main
-        with: 
-          unit-tests: ${{ inputs.unit-tests }}
-          secrets: inherit
+  # security-dast-tests:
+  #   if: ${{ inputs.perform-sonarqube-sca-scan == true && success() }}
+  #   runs-on: ubuntu-latest
+  #   needs: ci-build
+  #   name: 'Security DAST tests and scans'
+  #   steps:
+  #     - name: SonarQube scan for public repo
+  #       if: ${{ inputs.visibility == 'public' }}
+  #       uses: chef/common-github-actions/.github/workflows/sonarqube-public-repo.yml@main
+  #       with: 
+  #         unit-tests: ${{ inputs.unit-tests }}
+  #         secrets: inherit
         
-      - name: SonarQube scan for private and internal repos
-        if: ${{ inputs.visibility == 'internal' || inputs.visibility == 'private' }}
-        uses: chef/common-github-actions/.github/workflows/sonarqube-private-internal-repo.yml@main
-        with: 
-          unit-tests: ${{ inputs.unit-tests }}
-          secrets: inherit
-        # TODO: use the visibility of repo, so that we can GO_PRIVATE with secrets.GITHUB_TOKEN and set right runner for SQ on SONAR_TOKEN - public: ubuntu-latest-4-cores, private: ip-range-controlled
+  #     - name: SonarQube scan for private and internal repos
+  #       if: ${{ inputs.visibility == 'internal' || inputs.visibility == 'private' }}
+  #       uses: chef/common-github-actions/.github/workflows/sonarqube-private-internal-repo.yml@main
+  #       with: 
+  #         unit-tests: ${{ inputs.unit-tests }}
+  #         secrets: inherit
+  #       # TODO: use the visibility of repo, so that we can GO_PRIVATE with secrets.GITHUB_TOKEN and set right runner for SQ on SONAR_TOKEN - public: ubuntu-latest-4-cores, private: ip-range-controlled
             
-  # older tool no longer used in Progress
-  # run-blackduck-coverity:
-  #   if: ${{ inputs.perform-blackduck-coverity == true }}
-  #   uses: chef/common-github-actions/.github/workflows/tools/blackduck-coverity.yml@main
-  #   needs: echo_inputs
+  # # older tool no longer used in Progress
+  # # run-blackduck-coverity:
+  # #   if: ${{ inputs.perform-blackduck-coverity == true }}
+  # #   uses: chef/common-github-actions/.github/workflows/tools/blackduck-coverity.yml@main
+  # #   needs: echo_inputs
+  # #   secrets: inherit
+
+  # run-blackduck-polaris:
+  #   if: ${{ inputs.perform-blackduck-polaris == true }}
+  #   uses: chef/common-github-actions/.github/workflows/blackduck-polaris.yml@main
+  #   needs: ci-build
   #   secrets: inherit
 
-  run-blackduck-polaris:
-    if: ${{ inputs.perform-blackduck-polaris == true }}
-    uses: chef/common-github-actions/.github/workflows/blackduck-polaris.yml@main
-    needs: ci-build
-    secrets: inherit
-
-  # generate bills-of-materials
-  calculate-sbom:
-    if: ${{ inputs.generate-sbom == true }}
-    uses: chef/common-github-actions/.github/workflows/sbom.yml@main
-    needs: ci-build
-    secrets: inherit
+  # # generate bills-of-materials
+  # calculate-sbom:
+  #   if: ${{ inputs.generate-sbom == true }}
+  #   uses: chef/common-github-actions/.github/workflows/sbom.yml@main
+  #   needs: ci-build
+  #   secrets: inherit
