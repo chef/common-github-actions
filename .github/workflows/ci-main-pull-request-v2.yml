@@ -105,16 +105,23 @@ jobs:
         run: |
           echo "pipeline version $PIPELINE_VERSION"
           echo "Language set to ${{ inputs.language }} "
+          echo "Repository visibility set to $REPO_VISIBILITY [ ${{ inputs.visibility }} ]"
+          echo "*************************************************************"
+          echo "BUILD set to ${{ inputs.build }}"
+          echo "Unit tests set to ${{ inputs.unit-tests }}"
+          echo "*************************************************************"
+          echo "Perform complexity checks set to ${{ inputs.perform-complexity-checks }}"
           echo "SCC output filename set to ${{ inputs.scc-output-filename }} "
-          echo "Visibility set to $REPO_VISIBILITY [ ${{ inputs.visibility }} ]"
-          echo "Skip trufflehog set to ${{ inputs.skip-trufflehog }}"
-          echo "Skip SonarQube set to ${{ inputs.skip-sonarqube }}"
-          echo "Skip unit tests set to ${{ inputs.skip-unit-tests }}"
-          echo "Skip source clear set to ${{ inputs.skip-srcclr }}"
-          echo "Skip Veracode SCA set to ${{ inputs.skip-veracode }}"
-          echo "Skip Blackduck SCA set to ${{ inputs.skip-blackduck-sca }}"
-          echo "Skip Blackduck coverity set to ${{ inputs.skip-blackduck-coverity }}"
-          echo "Skip Blackduck polaris set to ${{ inputs.skip-blackduck-polaris }}"
+          echo "*************************************************************"
+          echo "Perform trufflehog scan set to ${{ inputs.perform-trufflehog-scan }}"
+          echo "Perform source clear scan set to ${{ inputs.perform-srcclr-scan }}"   
+          echo "Perform Veracode SCA scan set to ${{ inputs.perform-veracode-sca-scan }}"
+          echo "Perform BlackDuck SCA scan set to ${{ inputs.perform-blackduck-sca-scan }}"
+          echo "*************************************************************"
+          echo "Perform SonarQube scan set to ${{ inputs.perform-sonarqube-sca-scan }}"
+          echo "Perform BlackDuck coverity scan set to ${{ inputs.perform-blackduck-coverity }}"
+          echo "Perform BlackDuck polaris scan set to ${{ inputs.perform-blackduck-polaris }}"
+          echo "Generate SBOM set to ${{ inputs.generate-sbom }}"
         # echo "The job_id is: $GITHUB_JOB"   
         # echo ${{ secrets.GITHUB_TOKEN }} DO NOT DO THIS
           
@@ -157,7 +164,11 @@ jobs:
     name: 'Ruby language-specific pre-compilation steps'  
     if: ${{ inputs.language == 'Ruby' && inputs.perform-complexity-checks == true }}
     needs: run-scc
-    uses: chef/common-github-actions/.github/workflows/rubocop.yml@main
+    # TODO: get with Marc/Prajakta on this sequece for Ruby uses: chef/common-github-actions/.github/workflows/rubocop.yml@main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Ruby linter
+        run: echo 'Ruby linter'
       
   go-language-specific-precompilation-checks:
     name: 'Go language-specific pre-compilation steps'  
@@ -202,6 +213,7 @@ jobs:
            path: ${{github.workspace}}/reports
     # TODO: add flag --failOnCVSS 7
     # TODO: integrate with SonarQube
+    # TODO: correct artifact upload names like Sonu's
               
   ################################################################################################################
   #
@@ -210,31 +222,31 @@ jobs:
   ################################################################################################################
   
   # # security scans
-  # run-trufflehog:
-  #   if: ${{ inputs.perform-trufflehog-scan == true }}
-  #   uses: chef/common-github-actions/.github/workflows/trufflehog.yml@main
-  #   needs: run-scc
+  run-trufflehog:
+    if: ${{ inputs.perform-trufflehog-scan == true }}
+    uses: chef/common-github-actions/.github/workflows/trufflehog.yml@main
+    needs: run-scc
 
-  # run-srcclr:
-  #   if: ${{ inputs.perform-srcclr-scan == true }}
-  #   uses: chef/common-github-actions/.github/workflows/srcclr.yml@main
-  #   needs: run-scc
+  run-srcclr:
+    if: ${{ inputs.perform-srcclr-scan == true }}
+    uses: chef/common-github-actions/.github/workflows/srcclr.yml@main
+    needs: run-scc
 
-  # run-veracode-sca:
-  #   if: ${{ inputs.perform-veracode-sca-scan == true }}
-  #   uses: chef/common-github-actions/.github/workflows/veracode-sca.yml@main
-  #   needs: run-scc
-  #   secrets: inherit
+  run-veracode-sca:
+    if: ${{ inputs.perform-veracode-sca-scan == true }}
+    uses: chef/common-github-actions/.github/workflows/veracode-sca.yml@main
+    needs: run-scc
+    secrets: inherit
       
   # # BLACKDUCK TOOLS
   # # updated to https://documentation.blackduck.com/bundle/bridge/page/documentation/c_download.html#polaris-download
   # # https://github.com/marketplace/actions/black-duck-security-scan
   # # for polaris, coverity, SRM (SBOM), and SCA (BlackDuck SCA) - Chef uses polaris and SBOM later in this script
-  # run-blackduck-sca:
-  #   if: ${{ inputs.perform-blackduck-sca-scan == true }}
-  #   uses: chef/common-github-actions/.github/workflows/blackduck-sca.yml@main
-  #   needs: run-scc
-  #   secrets: inherit 
+  run-blackduck-sca:
+    if: ${{ inputs.perform-blackduck-sca-scan == true }}
+    uses: chef/common-github-actions/.github/workflows/blackduck-sca.yml@main
+    needs: run-scc
+    secrets: inherit 
             
   # ################################################################################################################
   # #
@@ -242,8 +254,14 @@ jobs:
   # #
   # ################################################################################################################
   
-  # ci-build:
-  #   if : ${{ inputs.build == true }}
+  ci-build:
+    if : ${{ inputs.build == true }}
+    needs: language-agnostic-precompilation-checks
+    name: 'CI build and compilation steps'
+    runs-on: ubuntu-latest
+    steps:
+      - name: BUILD
+        run: echo 'BUILD STEP'
   #   runs-on: ubuntu-latest
   #   needs: language-agnostic-precompilation-checks
   #   name: 'CI build and compilation steps'  
@@ -261,6 +279,21 @@ jobs:
   #       if: ${{ inputs.language == 'Go' }}
   #       run: echo 'hello world'
   #       # go build -o ./bin/chef-api ./cmd/chef-api/main.go
+
+  # - name: Set up Go
+    #   uses: actions/setup-go@v4
+    #   with:
+    #     go-version: 1.23.6
+    
+    # - name: Configure git for private modules
+    #   env:
+    #     GOPRIVATE: github.com/progress-platform-services/*
+    #   run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+    
+    # - name: Generate coverage files
+    #   run: go test -v -coverprofile="coverage.out" ./... 
+    # - name: Copy file
+    #   run: mkdir -p test/coverage; cp coverage.out test/coverage/coverage.out
 
   # ci-package-binary:
   #   if: ${{ inputs.build == true && success() }}
@@ -287,8 +320,31 @@ jobs:
   # #
   # ################################################################################################################
   
-  # ci-unit-test:
-  #   if: ${{ inputs.unit-tests == true && success() }}
+  ci-unit-test: # FROM CHEF-VAULT
+    if: ${{ inputs.unit-tests == true && success() }}
+    name: 'Unit test coverage'
+    strategy:
+      fail-fast: false
+      matrix:
+        os-version: [ubuntu-latest, ubuntu-22.04, macos-latest]   # ubuntu-22.04 was original chef-vault
+        ruby-version: ['3.4'] # '2.7', '3.1', 
+    runs-on: ${{ matrix.os-version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up ruby version
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby-version }}
+          bundler-cache: true
+      - name: run specs
+        run: bundle exec rake spec --trace
+      - name: Simplecov Report
+        uses: aki77/simplecov-report-action@v1  # TODO: archived action - replace with another simplecov 
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          failedThreshold: 90
+          resultPath: coverage/.last_run.json
+
   #   runs-on: ubuntu-latest
   #   needs: ci-package-binary
   #   name: 'CI unit tests'
@@ -304,10 +360,19 @@ jobs:
   #       # bundle exec rake test:unit
   #       # bundle exec rake test:integration
   #       # bundle exec rake test:unit:rubocop
+
   #     - name: Build for Go binary
   #       if: ${{ inputs.language == 'Go' }}
   #       run: echo 'hello world'
   #       # go test -v ./... > ./bin/test.out
+
+   # - name: Upload test coverage artifact
+    #   uses: actions/upload-artifact@v4
+    #   with:
+    #     # Name of the artifact to upload.
+    #     name: test-coverage.out
+    #     # A file, directory or wildcard pattern that describes what to upload
+    #     path: test/unittest/coverage.out
          
   # ################################################################################################################
   # #
@@ -315,26 +380,28 @@ jobs:
   # #
   # ################################################################################################################
   
-  # security-dast-tests:
-  #   if: ${{ inputs.perform-sonarqube-sca-scan == true && success() }}
-  #   runs-on: ubuntu-latest
-  #   needs: ci-build
-  #   name: 'Security DAST tests and scans'
-  #   steps:
-  #     - name: SonarQube scan for public repo
-  #       if: ${{ inputs.visibility == 'public' }}
-  #       uses: chef/common-github-actions/.github/workflows/sonarqube-public-repo.yml@main
-  #       with: 
-  #         unit-tests: ${{ inputs.unit-tests }}
-  #         secrets: inherit
-        
-  #     - name: SonarQube scan for private and internal repos
-  #       if: ${{ inputs.visibility == 'internal' || inputs.visibility == 'private' }}
-  #       uses: chef/common-github-actions/.github/workflows/sonarqube-private-internal-repo.yml@main
-  #       with: 
-  #         unit-tests: ${{ inputs.unit-tests }}
-  #         secrets: inherit
-  #       # TODO: use the visibility of repo, so that we can GO_PRIVATE with secrets.GITHUB_TOKEN and set right runner for SQ on SONAR_TOKEN - public: ubuntu-latest-4-cores, private: ip-range-controlled
+  security-dast-tests-sonar-public:
+    name: 'Security DAST tests and scans - Sonar on PUBLIC repo'
+    if: ${{ inputs.perform-sonarqube-sca-scan == true && success() && inputs.visibility == 'public'}}
+    needs: ci-build
+    uses: chef/common-github-actions/.github/workflows/sonarqube-public-repo.yml@main
+    secrets: inherit
+    
+  security-dast-tests-sonar-private:
+    name: 'Security DAST tests and scans - Sonar on PRIVATE repo'
+    if: ${{ inputs.perform-sonarqube-sca-scan == true && success() && inputs.visibility == 'private'}}
+    needs: ci-build
+    uses: chef/common-github-actions/.github/workflows/sonarqube-private-repo.yml@main
+    secrets: inherit
+  
+  security-dast-tests-sonar-internal:
+    name: 'Security DAST tests and scans - Sonar on INTERNAL repo'
+    if: ${{ inputs.perform-sonarqube-sca-scan == true && success() && inputs.visibility == 'internal'}}
+    needs: ci-build
+    uses: chef/common-github-actions/.github/workflows/sonarqube-internal-repo.yml@main
+    secrets: inherit
+
+        # TODO: use the visibility of repo, so that we can GO_PRIVATE with secrets.GITHUB_TOKEN and set right runner for SQ on SONAR_TOKEN - public: ubuntu-latest-4-cores, private: ip-range-controlled
             
   # # older tool no longer used in Progress
   # # run-blackduck-coverity:

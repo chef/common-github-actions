@@ -23,7 +23,7 @@ jobs:
         id: scc
         uses: Adapt-API/scc-docker-action@master
         with:
-          args: -o ${{ inputs.outputfilename }} -f json --by-file --sort lines,code,comments,blank --ignore-duplicates --ignore-vcs 
+          args: -o ${{ inputs.outputfilename }} -f json --by-file --sort lines,code,comments,blank  
           # flags like -i js,go,html,css,rb at https://github.com/boyter/scc?tab=readme-ov-file#usage
               
       - name: Upload artifact

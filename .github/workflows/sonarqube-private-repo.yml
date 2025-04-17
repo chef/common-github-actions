@@ -1,5 +1,5 @@
-# sonarqube-public-repo.yml
-name: SonarQube scan for public repositories
+# sonarqube-private-repo.yml
+name: SonarQube scan for private repositories
 # configuration @ https://github.com/marketplace/actions/official-sonarqube-scan
 
 on:
@@ -12,17 +12,15 @@ jobs:
     steps:
     - name: Echo inputs
       run: |
-        echo "Sonarqube scan for PUBLIC repositories, running on ubuntu-latest-4-cores runner"
+        echo "Sonarqube scan for PRIVATE repositories, running on ubuntu-latest-4-cores runner"
         echo "Sonar host URL ${{ vars.SONAR_HOST_URL}}"
-  
-  # IP-RANGE-CONTROLLED does not work... probably needs IP range refresh, cannot get throughto api.sonar
+              
   sonarqube:
-    runs-on: ip-range-controlled
+    runs-on: ubuntu-latest-4-cores
     steps:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    
     - name: SonarQube Scan
       uses: sonarsource/sonarqube-scan-action@v5.1.0
       continue-on-error: true
