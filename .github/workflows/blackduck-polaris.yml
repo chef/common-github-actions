@@ -30,7 +30,7 @@ jobs:
           polaris_assessment_types: "SCA,SAST"
           
           ### SCANNING: Optional fields
-          polaris_application_name: ${{ github.event.repository.name }}
+          polaris_application_name: "Chef-Courier" # ${{ github.event.repository.name }}
           polaris_project_name: "Chef-Vault" 
           # ${{ github.event.repository.name }}
           # from the blackduck page at https://polaris.blackduck.com/portfolio/portfolios/8b7ad6f7-6dcb-49ec-bded-bfc4f190d4f8/portfolio-items/fe369baf-11d2-4989-bcb7-045577856dcc/projects
