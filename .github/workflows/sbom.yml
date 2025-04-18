@@ -176,7 +176,7 @@ jobs:
     #   run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
     - name: create folder
-      run: mkdir ./bin
+      run: mkdir -p ./bin
     
     - name: Generate SBOM
       run: |
