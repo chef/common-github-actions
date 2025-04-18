@@ -146,8 +146,10 @@ jobs:
           srm_apikey: ${{ secrets.BLACKDUCK_SBOM_API_KEY }}  # SRM_API_KEY
           srm_assessment_types: "SCA,SAST"
           ### SCANNING: Optional fields from https://documentation.blackduck.com/bundle/bridge/page/documentation/c_github-srm.html
-          srm_project_name: ${{ github.event.repository.name }}
-          #### srm_auto_create_project: true
+          # srm_project_name: ${{ github.event.repository.name }} # chef-vault
+          srm_project_id: c7954ee4-348d-4c2f-b259-d577e1df40dc
+
+          #### srm_auto_create_project: true  # Whether SRM should automatically create a project with the given project-name if it does not yet exist.	false	No[2]
           # srm_project_id: ${{ vars.PROJECT_ID }}
           # srm_branch_name: ${{ vars.BRANCH_NAME }}
           # srm_branch_parent: ${{ vars.BRANCH_PARENT }}
@@ -155,9 +157,6 @@ jobs:
           # detect_execution_path: ${{ vars.DETECT_EXECUTION_PATH }}
           # coverity_execution_path: ${{ vars.COVERITY_EXECUTION_PATH }}    
           # project_directory: ${{ vars.PROJECT_DIRECTORY }}
-
-          # auto-create-project	Whether SRM should automatically create a project with the given project-name if it does not yet exist.	false	No[2]
-
 
 ######################################################
 # original from https://github.com/progress-platform-services/common-github-actions/blob/main/.github/workflows/examples/ci-all-sbom-main.yml
