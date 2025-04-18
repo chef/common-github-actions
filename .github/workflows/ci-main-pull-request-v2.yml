@@ -223,7 +223,7 @@ jobs:
           path: ${{github.workspace}}/reports
     # TODO: add flag --failOnCVSS 7
     # TODO: integrate with SonarQube
-    # TODO: correct artifact upload names like Sonu's
+    # TODO: correct artifact upload names like Sonu's in sbom.yml
               
   ################################################################################################################
   #

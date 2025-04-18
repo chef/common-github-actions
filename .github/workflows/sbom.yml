@@ -1,11 +1,15 @@
+# This workflow is designed to download the Software Bill of Materials (SBOM) from two sources
+# - Export SBOM using GitHub's Dependency Graph API as CSV and JSON
+# - Import into Blackduck SCM (new legal tool)
+#
+# two other runs are supported minimally:
+# - generate SBOM using Microsoft SBOM Tool
+# - generate SBOM using Chef license scout Tool
+#
 # sbom.yml
-# This workflow is designed to download the Software Bill of Materials (SBOM) from GitHub's Dependency Graph API
 name: Download SBOM from Insights and Convert to CSV
-
-# see Sonu's https://progresssoftware.atlassian.net/browse/CHEF-17029
-
-# Blackduck SBOM is at SERVER: https://progresssoftware.app.blackduck.com/
-# example project https://progresssoftware.app.blackduck.com/api/risk-profile-dashboard?limit=25&offset=0
+# logic for GH SBOM borrowed from Sonu's https://progresssoftware.atlassian.net/browse/CHEF-17029 and specific file
+# https://github.com/inspec/inspec-rabbitmq-resources/blob/3504270b55efb606ac97497b2f2ee33edb23911e/.github/workflows/sbom-gh-insights.yml
 
 # other SBOM tools include:
 # CycloneDX, then sbomqualityscore (https://github.com/interlynk-io/sbomqs) - https://github.com/marketplace/actions/cyclonedx-gomod-generate-sbom
@@ -21,14 +25,15 @@ on:
   workflow_call:
 
 jobs:
-  download-and-convert-github-sbom-to-csv:
+  export-github-SBOM:
+    name: Export SBOM from GitHub Dependency Graph API
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Set Timestamp and Unique Filename
+    - name: Generate Filename Prefix
       run: |
         FILE_PREFIX=$(echo "${{ github.repository }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
         echo "FILE_PREFIX=${FILE_PREFIX}" >> $GITHUB_ENV
@@ -42,9 +47,9 @@ jobs:
           https://api.github.com/repos/${{ github.repository }}/dependency-graph/sbom \
           -o "${FILE_PREFIX}-sbom.json"
 
-    - name: Verify SBOM JSON File
-      run: |
-        ls -l "${FILE_PREFIX}-sbom.json"
+    # - name: Verify SBOM JSON File
+    #   run: |
+    #     ls -l "${FILE_PREFIX}-sbom.json"
 
     - name: Preview SBOM JSON Content
       run: |
@@ -67,7 +72,7 @@ jobs:
       run: |
         head -n 20 "${FILE_PREFIX}-sbom.csv"
 
-    - name: Enrich SBOM CSV with RubyGems Data
+    - name: Enrich SBOM CSV from RubyGems
       run: |
         TEMP_CSV="${FILE_PREFIX}-sbom-temp.csv"
         echo "name,SPDXID,versionInfo,downloadLocation,externalRefs,license,source_code_url,vendor" > "$TEMP_CSV"
@@ -106,39 +111,120 @@ jobs:
       run: |
         ls -l "${FILE_PREFIX}-sbom.csv"
 
-    - name: Upload SBOM JSON as Artifact
+    - name: Upload JSON artifact
       uses: actions/upload-artifact@v4
       with:
-        name: sbom-json
-        path: ${{ env.FILE_PREFIX }}-sbom.json
+        name: ${{ github.event.repository.name }}-${{ env.FILE_PREFIX }}-GitHub-sbom.json
+        path: ${{ github.event.repository.name }}-${{ env.FILE_PREFIX }}-GitHub-sbom.json
 
     - name: Upload SBOM CSV as Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: sbom-csv
-        path: ${{ env.FILE_PREFIX }}-sbom.csv
+        name: ${{ github.event.repository.name }}-${{ env.FILE_PREFIX }}-GitHub-sbom.csv
+        path: ${{ github.event.repository.name }}-${{ env.FILE_PREFIX }}-GitHub-sbom.csv
 
-  generate-msft-sbom:
-    name: Generate SBOM using Microsoft SBOM Tool
-    runs-on: ubuntu-latest
-    steps:
-      - name: echo
-        run: |
-          echo "Hello world"
-    # msftsbom.exe generate -b ./bin -bc . -pn chef-api -pv 0.1.0 -ps "Progress Chef" -nsb "https://chef.io" -V Verbosereusable_echo:
-
-  generate-license-scout-sbom:
-    name: Generate SBOM using Chef license scout Tool
-    runs-on: ubuntu-latest
-    steps:
-      - name: echo
-        run: |
-          echo "Hello world"
-
+# example project https://progresssoftware.app.blackduck.com/api/risk-profile-dashboard?limit=25&offset=0
+# server URL https://progresssoftware.app.blackduck.com/api/projects/c7954ee4-348d-4c2f-b259-d577e1df40dc
+#
+# Blackduck SBOM is at SERVER: https://progresssoftware.app.blackduck.com/ - org variable!
+# API token in repo - https://github.com/chef/chef-vault/settings/secrets/actions
   generate-blackduck-polaris-sbom:
     name: Generate SBOM using Blackduck Polaris Tool
     runs-on: ubuntu-latest
     steps:
-      - name: echo
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Starting Black Duck Bridge scan
         run: |
-          echo "Hello world"
+          echo "BLACKDUCK_SBOM_URL: ${{ secrets.BLACKDUCK_SBOM_URL }}"
+          echo "BLACKDUCK_SBOM_API_KEY: ${{ secrets.BLACKDUCK_SBOM_API_KEY }}"
+      - name: BlackDuck SBOM scan
+        uses: blackduck-inc/black-duck-security-scan@v2.1.1
+        with:
+          ### ---------- SRM SCANNING: REQUIRED FIELDS ----------
+          srm_url: ${{ secrets.BLACKDUCK_SBOM_URL }}  # SRM_URL
+          srm_apikey: ${{ secrets.BLACKDUCK_SBOM_API_KEY }}  # SRM_API_KEY
+          srm_assessment_types: "SCA,SAST"
+
+######################################################
+# original from https://github.com/progress-platform-services/common-github-actions/blob/main/.github/workflows/examples/ci-all-sbom-main.yml
+
+  generate-msft-sbom:
+    name: Generate MSFT SBOM
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: 1.24.2
+        check-latest: true
+    # - name: Configure git for private modules
+    #   env:
+    #     GOPRIVATE: github.com/progress-platform-services/*
+    #   run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+
+    - name: create folder
+      run: mkdir ./bin
+    
+    - name: Generate SBOM
+      run: |
+        curl -Lo $RUNNER_TEMP/sbom-tool https://github.com/microsoft/sbom-tool/releases/latest/download/sbom-tool-linux-x64
+        chmod +x $RUNNER_TEMP/sbom-tool
+        $RUNNER_TEMP/sbom-tool generate -b ./bin -bc . -pn chef-360 -pv 1.0.0 -ps "Progress Chef" -nsb https://https://www.progress.com/ -V Verbose
+    # msftsbom.exe generate -b ./bin -bc . -pn chef-api -pv 0.1.0 -ps "Progress Chef" -nsb "https://chef.io" -V Verbose
+   
+    - name: Upload MSFTSBOM Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ github.event.repository.name }}-MSFT-manifest.spdx.json
+        path: ./bin/_manifest/spdx_2.2/manifest.spdx.json
+      
+  license_scout:
+    # Usage: C:/Ruby32-x64/bin/license_scout (options)
+    # -c, --config-files CONFIG_FILES  Comma-separated list of local (or remote) YAML configuration file(s) evaluated in order specified (priority goes to last file)
+    # -d, --directories DIRECTORIES    Comma-separated list of directories to scan
+    #     --format FORMAT              When exporting a Dependency Manifest, export to this format (valid options: 'csv')
+    #     --include-sub-directories    Include all sub-directories of 'directories' in the analysis
+    # -l, --log-level LEVEL            Set the log level (valid options: 'debug', 'info', 'warn', 'error', or 'fatal')
+    #     --only-show-failures         Only print results for dependencies with licenses that failed checks  
+    # -h, --help                       Show this message
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.24.2
+          check-latest: true
+      # - name: Configure git for private modules
+      #   env:
+      #     GOPRIVATE: github.com/progress-platform-services/*
+      #   run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+
+      - name: set up license_scout
+        uses: ruby/setup-ruby@v1
+        with:
+            ruby-version: '3.4'
+      - name: install license_scout
+        run: |
+          gem install license_scout
+          mkdir -p ./bin/license-scout
+      - name: generate license_scout with fallback
+        if: ${{ hashFiles('./.license_scout.yml') != '' }}    
+        run: license_scout -l debug --format 'csv' -c ./.license_scout.yml > ./bin/license-scout/license-scout.txt 2>&1
+      #license_scout -l info --format csv > ./bin/license-scout/license-scout.txt       
+      - name: generate license_scout without fallback file
+        if: ${{ hashFiles('./.license_scout.yml') == '' }}
+        run: license_scout > ./bin/license-scout/license-scout.txt 
+
+      - name: Upload the Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.repository.name }}-license-scout.txt
+          path: ./bin/license-scout/license-scout.txt
