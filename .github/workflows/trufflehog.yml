@@ -1,21 +1,12 @@
 # trufflehog.yml
-# from https://github.com/trufflesecurity/trufflehog
+# from https://github.com/trufflesecurity/trufflehog & https://github.com/trufflesecurity/trufflehog/pkgs/container/trufflehog
 name: Trufflehog secret scan
 
 on:
-  workflow_dispatch:
-  pull_request:
-    branches: [ main ]
   workflow_call:
-    inputs:
-      skip-trufflehog:
-        description: 'Skip trufflehog scan'
-        required: false
-        type: boolean
-        default: false
 
 jobs:
-  TruffleHog:
+  Trufflehog:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -27,19 +18,19 @@ jobs:
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
+        #  extra_args: --results=verified,unknown
         continue-on-error: false
         # --only-verified --fail --github-actions --results=verified,unknown --branch dev
         # TODO: use the GH_TOKEN --org=progress --token=ghp_xxxxx
-     
 
     # TODO: if this is run on ad hoc workflow, we will scan all branches (need to pass in selected branch)
 
     # TODO: store the output somewhere
+    # may have to run it as command line:
+      #    trufflehog --json <target_directory> > results/trufflehog_output.json
+
     # - name: Upload test coverage artifact
     #   uses: actions/upload-artifact@v4
     #   with:
-    #     # Name of the artifact to upload.
-    #     # Optional. Default is 'artifact'
-    #     name: test-coverage.out
-    #     # A file, directory or wildcard pattern that describes what to upload
-    #     path: test/unittest/coverage.out
+    #     name: trufflehog-output.json
+    #     path: results/trufflehog_output.json

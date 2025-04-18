@@ -45,15 +45,15 @@ jobs:
           -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
           -H "X-GitHub-Api-Version: 2022-11-28" \
           https://api.github.com/repos/${{ github.repository }}/dependency-graph/sbom \
-          -o "${FILE_PREFIX}-sbom.json"
+          -o "${FILE_PREFIX}-GitHub-sbom.json"
 
-    # - name: Verify SBOM JSON File
-    #   run: |
-    #     ls -l "${FILE_PREFIX}-sbom.json"
+    - name: Verify SBOM JSON File
+      run: |
+        ls -l "${FILE_PREFIX}-GitHub-sbom.json"
 
     - name: Preview SBOM JSON Content
       run: |
-        head -n 20 "${FILE_PREFIX}-sbom.json"
+        head -n 20 "${FILE_PREFIX}-GitHub-sbom.json"
 
     - name: Convert SBOM to CSV using jq
       run: |
@@ -66,11 +66,11 @@ jobs:
             .downloadLocation,
             ( .externalRefs[]? | .referenceLocator ),
             "None", "None", "None"
-          ] | @csv' "${FILE_PREFIX}-sbom.json" >> "${FILE_PREFIX}-sbom.csv"
+          ] | @csv' "${FILE_PREFIX}-GitHub-sbom.json" >> "${FILE_PREFIX}-GitHub-sbom.csv"
 
     - name: Preview SBOM CSV Content
       run: |
-        head -n 20 "${FILE_PREFIX}-sbom.csv"
+        head -n 20 "${FILE_PREFIX}-GitHub-sbom.csv"
 
     - name: Enrich SBOM CSV from RubyGems
       run: |
@@ -105,23 +105,23 @@ jobs:
           fi
           echo "$name,$SPDXID,$versionInfo,$downloadLocation,$externalRefs,$new_license,$new_source_code_url,$new_vendor" >> "$TEMP_CSV"
         done
-        mv "$TEMP_CSV" "${FILE_PREFIX}-sbom.csv"
+        mv "$TEMP_CSV" "${FILE_PREFIX}-GitHub-sbom.csv"
 
     - name: Verify SBOM CSV File
       run: |
-        ls -l "${FILE_PREFIX}-sbom.csv"
+        ls -l "${FILE_PREFIX}-GitHub-sbom.csv"
 
     - name: Upload JSON artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ github.event.repository.name }}-${{ env.FILE_PREFIX }}-GitHub-sbom.json
-        path: ${{ github.event.repository.name }}-${{ env.FILE_PREFIX }}-GitHub-sbom.json
+        name: ${{ env.FILE_PREFIX }}-GitHub-sbom.json
+        path: ${{ env.FILE_PREFIX }}-GitHub-sbom.json
 
     - name: Upload SBOM CSV as Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ github.event.repository.name }}-${{ env.FILE_PREFIX }}-GitHub-sbom.csv
-        path: ${{ github.event.repository.name }}-${{ env.FILE_PREFIX }}-GitHub-sbom.csv
+        name: ${{ env.FILE_PREFIX }}-GitHub-sbom.csv
+        path: ${{ env.FILE_PREFIX }}-GitHub-sbom.csv
 
 # example project https://progresssoftware.app.blackduck.com/api/risk-profile-dashboard?limit=25&offset=0
 # server URL https://progresssoftware.app.blackduck.com/api/projects/c7954ee4-348d-4c2f-b259-d577e1df40dc
@@ -145,6 +145,15 @@ jobs:
           srm_url: ${{ secrets.BLACKDUCK_SBOM_URL }}  # SRM_URL
           srm_apikey: ${{ secrets.BLACKDUCK_SBOM_API_KEY }}  # SRM_API_KEY
           srm_assessment_types: "SCA,SAST"
+          ### SCANNING: Optional fields
+          # srm_project_name: ${{ vars.PROJECT_NAME }}
+          # srm_project_id: ${{ vars.PROJECT_ID }}
+          # srm_branch_name: ${{ vars.BRANCH_NAME }}
+          # srm_branch_parent: ${{ vars.BRANCH_PARENT }}
+          # srm_waitForScan: false   # Used to support the async mode 
+          # detect_execution_path: ${{ vars.DETECT_EXECUTION_PATH }}
+          # coverity_execution_path: ${{ vars.COVERITY_EXECUTION_PATH }}    
+          # project_directory: ${{ vars.PROJECT_DIRECTORY }}
 
 ######################################################
 # original from https://github.com/progress-platform-services/common-github-actions/blob/main/.github/workflows/examples/ci-all-sbom-main.yml
