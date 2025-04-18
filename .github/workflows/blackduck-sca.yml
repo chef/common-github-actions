@@ -20,7 +20,7 @@ jobs:
       #   uses: actions/checkout@v4
       - name: Starting Black Duck SCA scan
         run: |
-          echo "BLACKDUCK_URL: ${{ vars.BLACKDUCK_URL }}"
+          echo "BLACKDUCK_URL: ${{ secrets.BLACKDUCK_URL }}"
       - name: Black Duck SCA Scan
         id: black-duck-sca-scan
         uses: blackduck-inc/black-duck-security-scan@v2.1.1
@@ -31,7 +31,7 @@ jobs:
           
         with:
           ### SCANNING: Required fields
-          blackducksca_url: ${{ vars.BLACKDUCK_URL }}
+          blackducksca_url: ${{ secrets.BLACKDUCK_URL }}
           blackducksca_token: ${{ secrets.BLACKDUCKSCA_ACCESS_TOKEN }}
          
           ### SCANNING: Optional fields
