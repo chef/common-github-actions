@@ -21,7 +21,7 @@ on:
 
 jobs: 
   call-ci-main-ruby-package-deploy-integration-test:
-    uses: chef/common-github-actions/.github/workflows/ci-main-ruby-package-deploy-integration-test.yml@main
+    uses: chef/common-github-actions/.github/workflows/ci-main-ruby-package-deploy-int-test.yml@main
     secrets: inherit
     with:   # named inputs for the GA
       language: 'Ruby'

@@ -6,12 +6,6 @@ name: SonarQube scan for internal repositories
 
 on:
   workflow_call:
-    # inputs:
-    #   skip-unit-tests:
-    #     description: 'Skip unit tests'
-    #     required: false
-    #     type: boolean
-    #     default: false
     
 jobs:
   # echo-inputs:
@@ -41,8 +35,9 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: 1.23.6
-
+        go-version: 1.24.2
+        check-latest: true
+   
     - name: Configure git for private modules
       env:
         GOPRIVATE: github.com/progress-platform-services/*

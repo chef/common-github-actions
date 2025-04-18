@@ -14,7 +14,9 @@
 # 8. generate software bill-of-materials (SBOM) using SPDX format
 # 
 # https://docs.github.com/en/actions/sharing-automations/reusing-workflows#passing-inputs-and-secrets-to-a-reusable-workflow
-  
+#
+# version 2
+
 name: CI flow containing PR checks for main & release, v2
 
 on:
@@ -362,7 +364,13 @@ jobs:
   #     - name: Build for Rust binary
   #       if: ${{ inputs.language == 'Rust' }}
   #       run: echo 'hello world'
-  #       # cargo test --target-dir ./bin 
+  #       # cargo test --target-dir ./bin OR
+  # - name: Run cargo-tarpaulin
+  # shell: bash
+  # run: |
+  #   RUN_MODE=local cargo tarpaulin --ignore-tests --all-features --release --out Lcov
+  #   sonar-scanner -Dcommunity.rust.lcov.reportPaths=lcov.info -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+
   #     - name: Build for Ruby binary
   #       if: ${{ inputs.language == 'Ruby' }}
   #       run: echo 'hello world'
