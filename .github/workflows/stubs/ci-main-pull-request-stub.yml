@@ -15,8 +15,8 @@ on:
 
   workflow_dispatch:
 
-  env:
-    STUB_VERSION: "1.0.0" # TODO: update this to the version of the stub
+env:
+  STUB_VERSION: "1.0.0" # TODO: update this to the version of the stub
 
 jobs: 
   echo_inputs:
@@ -45,7 +45,7 @@ jobs:
       unit-tests: false
       
       perform-sonarqube-sca-scan: true
-      perform-sonar-build: 
+      perform-sonar-build: false
       # build-profile: 'default' # TODO: implement this flag - chef360 container build flags, etc
       report-unit-test-coverage: true
 

@@ -93,7 +93,7 @@ on:
         type: boolean
         default: true
       report-to-atlassian-dashboard: 
-        description: 'Report Sonar test coverage and other metrics to Atlassian dashboard (Irfan's QA dashboard)'
+        description: 'Report Sonar test coverage and other metrics to Atlassian dashboard (Irfans QA dashboard)'
         required: false
         type: boolean
         default: true     
