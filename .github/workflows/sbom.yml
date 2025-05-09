@@ -125,6 +125,7 @@ jobs:
 
 # example project https://progresssoftware.app.blackduck.com/api/risk-profile-dashboard?limit=25&offset=0
 # server URL https://progresssoftware.app.blackduck.com/api/projects/c7954ee4-348d-4c2f-b259-d577e1df40dc
+# and https://progresssoftware.app.blackduck.com/api/risk-profile-dashboard?limit=25&offset=0
 #
 # Blackduck SBOM is at SERVER: https://progresssoftware.app.blackduck.com/ - org variable!
 # API token in repo - https://github.com/chef/chef-vault/settings/secrets/actions

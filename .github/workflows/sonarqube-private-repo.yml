@@ -4,24 +4,85 @@ name: SonarQube scan for private repositories
 
 on:
   workflow_call:
-    
+    # all secrets are inherited from the calling workflow, typically SONAR_TOKEN, SONAR_HOST_URL
+    inputs:
+      perform-build: 
+        required: false
+        type: boolean
+      build-profile:  # TODO: implmenet this flag - chef360 container build flags, etc
+        required: false
+        type: string
+      language: 
+        required: false
+        type: string
+      report-unit-test-coverage: 
+        required: false
+        type: boolean
+      report-to-atlassian-dashboard: 
+        required: false
+        type: boolean
+      quality-product-name:
+        required: false
+        type: string
+      quality-sonar-app-name:
+        required: false
+        type: string
+      quality-testing-type:
+        required: false
+        type: string
+      quality-service-name:
+        required: false
+        type: string
+      quality-junit-report:
+        required: false
+        type: string
+      visibility: # TODO: simplify the sonar step by bringing in the other variants (private, public, internal) from the calling workflow
+        required: false
+        type: string
+      go-private-modules:
+        required: false
+        type: string
+      udf1:
+        required: false
+        type: string
+      udf2:
+        required: false
+        type: string
+      udf3:
+        required: false
+        type: string
+
 jobs:
-  # echo-inputs:
-  #   name: 'Echo inputs'
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #   - name: Echo inputs
-  #     run: |
-  #       echo "Sonarqube scan for PRIVATE repositories, running on ubuntu-latest-4-cores runner"
-  #       echo "Sonar host URL ${{ secrets.SONAR_HOST_URL}}"
-              
+  echo-inputs:
+    name: 'Echo inputs'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Echo inputs
+      run: |
+        echo "Sonarqube scan for PRIVATE repositories, running on ubuntu-latest-4-cores runner"
+        echo "Perform build set to ${{ inputs.perform-build }}"
+        echo "Build profile set to ${{ inputs.build-profile }}"
+        echo "Language set to ${{ inputs.language }} "
+        echo "Visibility set to ${{ inputs.visibility }} [ ${{ github.event.repository.visibility }} ]"
+        echo "Perform unit test coverage set to ${{ inputs.report-unit-test-coverage }}"
+        echo "Report to Atlassian dashboard set to ${{ inputs.report-to-atlassian-dashboard }}"
+        echo "Quality product name set to ${{ inputs.quality-product-name }}" 
+        echo "Quality sonar application name set to ${{ inputs.quality-sonar-app-name }}"
+        echo "Quality testing type set to ${{ inputs.quality-testing-type }}"
+        echo "Quality service name set to ${{ inputs.quality-service-name }}"
+        echo "Quality JUnit report set to ${{ inputs.quality-junit-report }}"
+        echo "Go private modules set to ${{ inputs.go-private-modules }}" 
+      
   SonarQube:
     runs-on: ubuntu-latest-4-cores
     steps:
-    - uses: actions/checkout@v4
+    - name:
+      if: ${{ inputs.visibility == 'private' }}
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
     - name: SonarQube Scan
+      if: ${{ inputs.visibility == 'private' }}
       uses: sonarsource/sonarqube-scan-action@v5.1.0
       continue-on-error: true
       env:

@@ -22,11 +22,6 @@ name: CI flow containing PR checks for main & release, v2
 on:
   workflow_call:
     inputs:
-      language:
-        description: 'Primary language in the repository, for language-specific checks'
-        required: false
-        type: string
-        default: 'Go'
       visibility:
         description: 'Visibility of the repository'
         required: false
@@ -67,6 +62,11 @@ on:
         required: false
         type: boolean
         default: true
+      language:
+        description: 'Primary language in the repository, for language-specific 3rd party dep checks, builds, and unit testing'
+        required: false
+        type: string
+        default: 'Go' # (Go, Ruby, Rust)
       unit-tests:
         description: 'Run unit tests (language-specific)'
         required: false
@@ -77,6 +77,51 @@ on:
         required: false
         type: boolean
         default: true
+      perform-sonar-build: 
+        description: 'Perform the build (in specified language and profile)'
+        required: false
+        type: boolean
+        default: true
+      build-profile: 
+        description: 'Build profile for SonarQube - application specific path'
+        required: false
+        type: string
+        default: 'default'
+      report-unit-test-coverage: 
+        description: 'Perform unit tests and report coverage to SonarQube'
+        required: false
+        type: boolean
+        default: true
+      report-to-atlassian-dashboard: 
+        description: 'Report Sonar test coverage and other metrics to Atlassian dashboard (Irfan's QA dashboard)'
+        required: false
+        type: boolean
+        default: true     
+      quality-product-name:
+        description: 'Product name for quality reporting (Chef360, Courier, Inspec)'
+        required: false
+        type: string
+        default: 'Chef360'
+      quality-sonar-app-name:
+        description: 'Sonar application name for quality reporting'
+        required: false
+        type: string
+        default: 'YourSonarAppName'
+      quality-testing-type:
+        description: 'Testing type for quality reporting (Unit, Integration, e2e, api, Performance, Security)'
+        required: false
+        type: string
+        default: 'Integration'
+      quality-service-name:
+        description: 'Service or repository name for quality reporting'
+        required: false
+        type: string
+        default: 'YourServiceOrRepoName'
+      quality-junit-report:
+        description: 'Path to JUnit report for quality reporting'
+        required: false
+        type: string
+        default: 'path/to/junit/report'
       perform-blackduck-coverity:
         description: 'Perform BlackDuck coverity scan'
         required: false
@@ -92,6 +137,26 @@ on:
         required: false
         type: boolean
         default: true
+      go-private-modules:
+        description: 'GOPRIVATE for Go private modules'
+        required: false
+        type: string
+        default: 'github.com/progress-platform-services/*'
+      udf1:
+        description: 'User defined flag 1'
+        required: false
+        type: string
+        default: 'default'
+      udf2:
+        description: 'User defined flag 2'
+        required: false
+        type: string
+        default: 'default'
+      udf3:
+        description: 'User defined flag 3'
+        required: false
+        type: string
+        default: 'default'
     
 env:
   REPO_VISIBILITY: ${{ github.event.repository.visibility }}

@@ -4,6 +4,10 @@
 # 
 # from https://documentation.blackduck.com/bundle/bridge/page/documentation/t_github-polaris-quickstart.html
 # parameters @ https://documentation.blackduck.com/bundle/bridge/page/documentation/c_github-polaris.html
+#
+# internal confluence https://progresssoftware.atlassian.net/wiki/spaces/TCE/pages/1010336076/Polaris#Examples
+# TODO: update internal page with final action
+# chehf-vault at https://polaris.blackduck.com/portfolio/portfolios/8b7ad6f7-6dcb-49ec-bded-bfc4f190d4f8/portfolio-items/fe369baf-11d2-4989-bcb7-045577856dcc/projects/2460eabd-d033-48a1-a378-6cadd49be6d1/tests/sast?branchId=a6d2c02a-05f8-4557-bfa1-c40e9337ee5d
 name: Blackduck Polaris scan
 
 on:

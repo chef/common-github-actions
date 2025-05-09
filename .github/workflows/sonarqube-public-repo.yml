@@ -1,31 +1,134 @@
 # sonarqube-public-repo.yml
+#
+# from internal GA page - https://progresssoftware.atlassian.net/wiki/spaces/TCE/pages/641925121/SonarQube+-+Github+Actions
+# gets Akeyless secret to permit firewall traffic from GA to SonarQube
 name: SonarQube scan for public repositories
 # configuration @ https://github.com/marketplace/actions/official-sonarqube-scan
 
 on:
   workflow_call:
-    
+    # all secrets are inherited from the calling workflow, typically SONAR_TOKEN, SONAR_HOST_URL, AKEYLESS_JWT_ID
+    inputs:
+      perform-build: 
+        required: false
+        type: boolean
+      build-profile:  # TODO: implmenet this flag - chef360 container build flags, etc
+        required: false
+        type: string
+      language: 
+        required: false
+        type: string
+      report-unit-test-coverage: 
+        required: false
+        type: boolean
+      report-to-atlassian-dashboard: 
+        required: false
+        type: boolean
+      quality-product-name:
+        required: false
+        type: string
+      quality-sonar-app-name:
+        required: false
+        type: string
+      quality-testing-type:
+        required: false
+        type: string
+      quality-service-name:
+        required: false
+        type: string
+      quality-junit-report:
+        required: false
+        type: string
+      visibility: # TODO: simplify the sonar step by bringing in the other variants (private, public, internal) from the calling workflow
+        required: false
+        type: string
+      go-private-modules:
+        required: false
+        type: string
+      udf1:
+        required: false
+        type: string
+      udf2:
+        required: false
+        type: string
+      udf3:
+        required: false
+        type: string
+
 jobs:
-  # echo-inputs:
-  #   name: 'Echo inputs'
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #   - name: Echo inputs
-  #     run: |
-  #       echo "Sonarqube scan for PUBLIC repositories, running on ubuntu-latest-4-cores runner"
-  #       echo "Sonar host URL ${{ secrets.SONAR_HOST_URL}}"
-  
-  # IP-RANGE-CONTROLLED does not work... probably needs IP range refresh, cannot get throughto api.sonar
-  SonarQube:
-    runs-on: ip-range-controlled
+  echo-inputs:
+    name: 'Echo inputs'
+    runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - name: Echo inputs
+      run: |
+        echo "Sonarqube scan for PUBLIC repositories, running on ubuntu-latest-4-cores runner"
+        echo "Perform build set to ${{ inputs.perform-build }}"
+        echo "Build profile set to ${{ inputs.build-profile }}"
+        echo "Language set to ${{ inputs.language }} "
+        echo "Visibility set to ${{ inputs.visibility }} [ ${{ github.event.repository.visibility }} ]"
+        echo "Perform unit test coverage set to ${{ inputs.report-unit-test-coverage }}"
+        echo "Report to Atlassian dashboard set to ${{ inputs.report-to-atlassian-dashboard }}"
+        echo "Quality product name set to ${{ inputs.quality-product-name }}" 
+        echo "Quality sonar application name set to ${{ inputs.quality-sonar-app-name }}"
+        echo "Quality testing type set to ${{ inputs.quality-testing-type }}"
+        echo "Quality service name set to ${{ inputs.quality-service-name }}"
+        echo "Quality JUnit report set to ${{ inputs.quality-junit-report }}"
+        echo "Go private modules set to ${{ inputs.go-private-modules }}"    
+
+  SonarQube:
+    name: 'SonarQube Scan'
+    runs-on: ubuntu-latest
+    permissions: # Must change the job token permissions to use JWT auth
+      id-token: write
+      contents: read
+    
+    steps:
+    - name:
+      if: ${{ inputs.visibility == 'public' }}
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    
+
+    - name: Prepare Secrets and Login into Azure
+      if: ${{ inputs.visibility == 'public' }}
+      id: get-aad-secret
+      uses: prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/azure-login@latest
+      with:
+        akeyless-access-id: '${{ secrets.AKEYLESS_JWT_ID }}'
+
+    - name: Add runner IP to Firewall List
+      if: ${{ inputs.visibility == 'public' }}
+      uses: prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/update-firewall-rule@latest
+      with:
+        action-to-execute: add
+
+    # - name: SonarQube Check (from confluence page, old version)
+    #   id: sonarqube
+    #   uses: SonarSource/sonarqube-scan-action@v2.0.1
+    #   env:
+    #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    #     SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
     - name: SonarQube Scan
+      if: ${{ inputs.visibility == 'public' }}
       uses: sonarsource/sonarqube-scan-action@v5.1.0
       continue-on-error: true
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+  # IP-RANGE-CONTROLLED no longer works... probably needs IP range refresh, cannot get throughto api.sonar
+  # SonarQube:
+  #   runs-on: ip-range-controlled
+  #   steps:
+  #   - uses: actions/checkout@v4
+  #     with:
+  #       fetch-depth: 0
+    
+  #   - name: SonarQube Scan
+  #     uses: sonarsource/sonarqube-scan-action@v5.1.0
+  #     continue-on-error: true
+  #     env:
+  #       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  #       SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
