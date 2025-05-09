@@ -99,12 +99,38 @@ jobs:
         GOPRIVATE: ${{ inputs.go-private-modules }}   # github.com/progress-platform-services/*
       run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
+      #TODO: language specific unit tests (also needs paramterization)
+    # GoLang Unit tests
     - name: Generate unit test coverage files
       if: ${{ inputs.perform-build == true && inputs.report-unit-test-coverage == true && inputs.language == 'Go' && inputs.visibility == 'internal'}}
       run: |
         go test -v -coverprofile="coverage.out" ./... 
         mkdir -p test/coverage
-        cp coverage.out test/coverage/coverage.out          
+        cp coverage.out test/coverage/coverage.out 
+    # Ruby Unit tests
+    - name: Generate unit test coverage files
+      if: ${{ inputs.perform-build == true && inputs.report-unit-test-coverage == true && inputs.language == 'Ruby' && inputs.visibility == 'internal'}}
+      run: |
+        mkdir -p test/coverage
+        cp coverage/.resultset.json test/coverage/.resultset.json
+        coverage-test:
+    # name: Coverage from chef-vault
+    # runs-on: ubuntu-22.04
+    # steps:
+    #   - uses: actions/checkout@v2
+    #   - name: Set up ruby 3.1
+    #     uses: ruby/setup-ruby@v1
+    #     with:
+    #       ruby-version: 3.1
+    #       bundler-cache: true
+    #   - name: run specs
+    #     run: bundle exec rake spec --trace
+    #   - name: Simplecov Report
+    #     uses: aki77/simplecov-report-action@v1
+    #     with:
+    #       token: ${{ secrets.GITHUB_TOKEN }}
+    #       failedThreshold: 90
+    #       resultPath: coverage/.last_run.json
 
     - name: SonarQube Scan
       if: ${{ inputs.perform-build == true && inputs.report-unit-test-coverage == true && inputs.visibility == 'internal' }}

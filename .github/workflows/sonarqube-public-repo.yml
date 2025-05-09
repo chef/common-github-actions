@@ -84,7 +84,7 @@ jobs:
       contents: read
     
     steps:
-    - name:
+    - name: Checkout code
       if: ${{ inputs.visibility == 'public' }}
       uses: actions/checkout@v4
       with:
