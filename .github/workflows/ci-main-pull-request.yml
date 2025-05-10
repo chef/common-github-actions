@@ -41,16 +41,16 @@ on:
         required: false
         type: boolean
         default: true
-      perform-srcclr-scan:
-        description: 'Perform source clear scan'
-        required: false
-        type: boolean
-        default: true
-      perform-veracode-sca-scan:
-        description: 'Perform Veracode SCA scan'
-        required: false
-        type: boolean
-        default: true
+      # perform-srcclr-scan:
+      #   description: 'Perform source clear scan'
+      #   required: false
+      #   type: boolean
+      #   default: true
+      # perform-veracode-sca-scan:
+      #   description: 'Perform Veracode SCA scan'
+      #   required: false
+      #   type: boolean
+      #   default: true
       perform-blackduck-sca-scan:
         description: 'Perform BlackDuck SCA scan'
         required: false
@@ -121,11 +121,11 @@ on:
         required: false
         type: string
         default: 'path/to/junit/report'
-      perform-blackduck-coverity:
-        description: 'Perform BlackDuck coverity scan'
-        required: false
-        type: boolean
-        default: false
+      # perform-blackduck-coverity:
+      #   description: 'Perform BlackDuck coverity scan'
+      #   required: false
+      #   type: boolean
+      #   default: false
       perform-blackduck-polaris:
         description: 'Perform BlackDuck polaris scan'
         required: false
