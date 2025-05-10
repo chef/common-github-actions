@@ -76,7 +76,7 @@ jobs:
   SonarQube:
     runs-on: ubuntu-latest-4-cores
     steps:
-    - name:
+    - name: Checkout
       if: ${{ inputs.visibility == 'private' }}
       uses: actions/checkout@v4
       with:

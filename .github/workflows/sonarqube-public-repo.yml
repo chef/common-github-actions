@@ -93,13 +93,13 @@ jobs:
     - name: Prepare Secrets and Login into Azure
       if: ${{ inputs.visibility == 'public' }}
       id: get-aad-secret
-      uses: prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/azure-login@latest
+      uses: prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/azure-login@0.81
       with:
         akeyless-access-id: '${{ secrets.AKEYLESS_JWT_ID }}'
 
     - name: Add runner IP to Firewall List
       if: ${{ inputs.visibility == 'public' }}
-      uses: prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/update-firewall-rule@latest
+      uses: prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/update-firewall-rule@0.81
       with:
         action-to-execute: add
 
