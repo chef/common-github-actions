@@ -226,30 +226,45 @@ jobs:
           echo "Generate SBOM set to ${{ inputs.generate-sbom }}"
         # echo "The job_id is: $GITHUB_JOB"   
         # echo ${{ secrets.GITHUB_TOKEN }} DO NOT DO THIS
+
+  checkout:
+    name: 'Checkout repository'
+    runs-on: ubuntu-latest
+    steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 'Source code complexity checks'
-        if: ${{ inputs.perform-complexity-checks == true }}
-        uses: chef/common-github-actions/.github/workflows/scc.yml@main
-        with:
-          outputfilename: ${{ inputs.scc-output-filename }}
+  scc:
+    name: 'Source code complexity checks'
+    if: ${{ inputs.perform-complexity-checks == true }}
+    uses: chef/common-github-actions/.github/workflows/scc.yml@main
+    with:
+      outputfilename: ${{ inputs.scc-output-filename }}
 
-      # language specific tests (gosec, rubocop, linters, etc.)
-      - name: 'Rust-specific pre-compilation steps and linting'  
-        if: ${{ inputs.language == 'Rust' && inputs.perform-complexity-checks == true }}
-        run: echo 'crate linter'
-        # https://github.com/rust-lang/rust-clippy
-        # cargo clippy --all-targets --all-features -- -D warnings
-      - name: 'Ruby-specific pre-compilation steps and linting'  
-        if: ${{ inputs.language == 'Ruby' && inputs.perform-complexity-checks == true }}
+# TODO: make three separate flows, by language with all steps (as oposed to one file per step with language-branching in each)
+# language specific tests (gosec, rubocop, linters, etc.)
+  rust-language-checks:
+    name: 'Rust-specific pre-compilation steps and linting'  
+    if: ${{ inputs.language == 'Rust' && inputs.perform-complexity-checks == true }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'crate linter'
+# https://github.com/rust-lang/rust-clippy
+# cargo clippy --all-targets --all-features -- -D warnings
+
+  ruby-language-checks:
+    name: 'Ruby-specific pre-compilation steps and linting'  
+    if: ${{ inputs.language == 'Ruby' && inputs.perform-complexity-checks == true }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up ruby version
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.4'
           bundler-cache: true # runs 'bundle install' and caches installed gems automatically
-      # generate gemfile.lock (TODO: move this below to OWASP)
+# generate gemfile.lock (TODO: move this below to OWASP)
       - run: bundle install
       - name: 'Bundler Audit'
         if: ${{ inputs.language == 'Ruby' && inputs.perform-complexity-checks == true }}
@@ -257,30 +272,38 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # TODO: get with Marc/Prajakta on this sequence for Ruby uses: chef/common-github-actions/.github/workflows/rubocop.yml@main
-      - name: 'Go-specific pre-compilation steps and linting'  
-        if: ${{ inputs.language == 'Go' && inputs.perform-complexity-checks == true }}
-        run: |
+
+  go-language-checks:
+    name: 'Go-specific pre-compilation steps and linting'  
+    if: ${{ inputs.language == 'Go' && inputs.perform-complexity-checks == true }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
           echo 'go linter'
-        # TODO: https://github.com/marketplace/actions/gosec-security-checker      
-          # go install github.com/securego/gosec/v2/cmd/gosec@latest
-          # GHA at https://github.com/securego/gosec
-          # gosec ./... >> ./bin/gosec.out
-        # https://go.googlesource.com/vuln - govulncheck
-        # go install golang.org/x/vuln/cmd/govulncheck@latest
-        # govulncheck ./... >> ./bin/security/govuln.out        
-        # go install honnef.co/go/tools/cmd/staticcheck@latest
-        # staticcheck ./... >> ./bin/staticcheck.out
+    # TODO: https://github.com/marketplace/actions/gosec-security-checker      
+      # go install github.com/securego/gosec/v2/cmd/gosec@latest
+      # GHA at https://github.com/securego/gosec
+      # gosec ./... >> ./bin/gosec.out
+    # https://go.googlesource.com/vuln - govulncheck
+    # go install golang.org/x/vuln/cmd/govulncheck@latest
+    # govulncheck ./... >> ./bin/security/govuln.out        
+    # go install honnef.co/go/tools/cmd/staticcheck@latest
+    # staticcheck ./... >> ./bin/staticcheck.out
 
   # language-agnostic secrity check tools (OWASP dep-check)
   # https://github.com/marketplace/actions/dependency-check & https://owasp.org/www-project-dependency-check/ 
   #     and flags at https://jeremylong.github.io/DependencyCheck/dependency-check-cli/arguments.html
+  language-agnostic-checks:
+    name: 'OWASP dependency checks'  
+    runs-on: ubuntu-latest
+    steps:
       - name: 'Language-agnostic pre-compilation steps (OWASP dependency check)'  
         uses: dependency-check/Dependency-Check_Action@main
         with:
           project: $REPO_NAME
           path: '.'
           format: 'JSON'
-          # out: 'reports' # this is the default, no need to specify unless you wish to override it
+  # out: 'reports' # this is the default, no need to specify unless you wish to override it
           args: >
             --enableRetired
             --prettyPrint
@@ -449,28 +472,28 @@ jobs:
   # #
   # ################################################################################################################
   
-  Sonar-SAST-public:
-    name: 'PUBLIC Sonar SAST scan'
-    needs: ci-build
-    if: ${{ inputs.perform-sonarqube-sca-scan == true && success() && inputs.visibility == 'public'}}
-    uses: chef/common-github-actions/.github/workflows/sonarqube-public-repo.yml@main
-    secrets: inherit
-    with:
-      perform-build: ${{ inputs.perform-sonar-build }}
-      build-profile: ${{ inputs.build-profile }}
-      language: ${{ inputs.language }}
-      report-unit-test-coverage: ${{ inputs.report-unit-test-coverage }}
-      report-to-atlassian-dashboard: ${{ inputs.report-to-atlassian-dashboard }}
-      quality-product-name: ${{ inputs.quality-product-name }}
-      quality-sonar-app-name: ${{ inputs.quality-sonar-app-name }}
-      quality-testing-type: ${{ inputs.quality-testing-type }}
-      quality-service-name: ${{ inputs.quality-service-name }}
-      quality-junit-report: ${{ inputs.quality-junit-report }}
-      visibility: ${{ inputs.visibility }}
-      go-private-modules: ${{ inputs.go-private-modules }}
-      udf1: ${{ inputs.udf1 }}
-      udf2: ${{ inputs.udf2 }}
-      udf3: ${{ inputs.udf3 }}
+  # Sonar-SAST-public:
+  #   name: 'PUBLIC Sonar SAST scan'
+  #   needs: ci-build
+  #   if: ${{ inputs.perform-sonarqube-sca-scan == true && success() && inputs.visibility == 'public'}}
+  #   uses: chef/common-github-actions/.github/workflows/sonarqube-public-repo.yml@main
+  #   secrets: inherit
+  #   with:
+  #     perform-build: ${{ inputs.perform-sonar-build }}
+  #     build-profile: ${{ inputs.build-profile }}
+  #     language: ${{ inputs.language }}
+  #     report-unit-test-coverage: ${{ inputs.report-unit-test-coverage }}
+  #     report-to-atlassian-dashboard: ${{ inputs.report-to-atlassian-dashboard }}
+  #     quality-product-name: ${{ inputs.quality-product-name }}
+  #     quality-sonar-app-name: ${{ inputs.quality-sonar-app-name }}
+  #     quality-testing-type: ${{ inputs.quality-testing-type }}
+  #     quality-service-name: ${{ inputs.quality-service-name }}
+  #     quality-junit-report: ${{ inputs.quality-junit-report }}
+  #     visibility: ${{ inputs.visibility }}
+  #     go-private-modules: ${{ inputs.go-private-modules }}
+  #     udf1: ${{ inputs.udf1 }}
+  #     udf2: ${{ inputs.udf2 }}
+  #     udf3: ${{ inputs.udf3 }}
         
   # Sonar-SAST-private:
   #   name: 'PRIVATE Sonar scan'
@@ -582,15 +605,15 @@ jobs:
   # TODO: add flag for any params needed
 
   #### TODO: add flags here!!! MSFT, license scout, GH export, etc...
-  generate-sbom:
-    name: 'Generating SBOM'
-    if: ${{ inputs.generate-sbom == true }}
-    uses: chef/common-github-actions/.github/workflows/sbom.yml@main
-    needs: ci-build
-    secrets: inherit
-    with:
-      export-github-sbom: ${{ inputs.export-github-sbom }}
-      generate-blackduck-polaris-sbom: ${{ inputs.generate-blackduck-polaris-sbom }}
-      generate-msft-sbom: ${{ inputs.generate-msft-sbom }}
-      license_scout: ${{ inputs.license_scout }}
-      go-private-modules: ${{ inputs.go-private-modules }}
+  # generate-sbom:
+  #   name: 'Generating SBOM'
+  #   if: ${{ inputs.generate-sbom == true }}
+  #   uses: chef/common-github-actions/.github/workflows/sbom.yml@main
+  #   needs: ci-build
+  #   secrets: inherit
+  #   with:
+  #     export-github-sbom: ${{ inputs.export-github-sbom }}
+  #     generate-blackduck-polaris-sbom: ${{ inputs.generate-blackduck-polaris-sbom }}
+  #     generate-msft-sbom: ${{ inputs.generate-msft-sbom }}
+  #     license_scout: ${{ inputs.license_scout }}
+  #     go-private-modules: ${{ inputs.go-private-modules }}
