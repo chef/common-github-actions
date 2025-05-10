@@ -133,7 +133,7 @@ jobs:
 # PRODUCT_NAME = [Chef360 | Courier | Inspec] @main removed
     - name: Run SonarQube report generation
       if: ${{ inputs.report-to-atlassian-dashboard == true && inputs.visibility == 'internal' }}
-      uses: Progress-I360/github-action-reporting/sonarqube
+      uses: Progress-I360/github-action-reporting/sonarqube@main
       with:
         PRODUCT_NAME: ${{ inputs.quality-product-name }}
         SONAR_APP_NAME: ${{ inputs.quality-sonar-app-name }}
