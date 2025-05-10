@@ -131,13 +131,13 @@ jobs:
         
 #TODO: Test adding Irfan's quality reporting stage inline here after sonar run (https://github.com/Progress-I360/github-action-reporting)
 # PRODUCT_NAME = [Chef360 | Courier | Inspec] @main removed
-    - name: Run SonarQube report generation
-      if: ${{ inputs.report-to-atlassian-dashboard == true && inputs.visibility == 'internal' }}
-      uses: Progress-I360/github-action-reporting/sonarqube@main
-      with:
-        PRODUCT_NAME: ${{ inputs.quality-product-name }}
-        SONAR_APP_NAME: ${{ inputs.quality-sonar-app-name }}
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    # - name: Run SonarQube report generation
+    #   if: ${{ inputs.report-to-atlassian-dashboard == true && inputs.visibility == 'internal' }}
+    #   uses: Progress-I360/github-action-reporting/sonarqube@main
+    #   with:
+    #     PRODUCT_NAME: ${{ inputs.quality-product-name }}
+    #     SONAR_APP_NAME: ${{ inputs.quality-sonar-app-name }}
+    #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       # TESTING_TYPE = [Unit | Integration | e2e | api | Performance | Security]
       # ENVIRONMENT = [DEV | STAGE | PROD] (optional)
