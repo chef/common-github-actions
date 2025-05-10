@@ -582,6 +582,7 @@ jobs:
 
   #### TODO: add flags here!!! MSFT, license scout, GH export, etc...
   generate-sbom:
+    name: 'Generating SBOM'
     if: ${{ inputs.generate-sbom == true }}
     uses: chef/common-github-actions/.github/workflows/sbom.yml@main
     needs: ci-build
