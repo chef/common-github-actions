@@ -84,39 +84,50 @@ jobs:
     
     steps:
     - name: Checkout code
-      if: ${{ inputs.visibility == 'public' }}
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
+# from Confluence, with @latest version of the action
+    # - name: Prepare Secrets and Login into Azure
+    #   id: get-aad-secret
+    #   uses: 'prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/azure-login@latest'
+    #   with:
+    #     akeyless-access-id: '${{ secrets.AKEYLESS_JWT_ID }}'
+
+    # Use @{ver} to select the version of the action. "latest" tag is also available for latest version.
     - name: Prepare Secrets and Login into Azure
-      if: ${{ inputs.visibility == 'public' }}
       id: get-aad-secret
-      uses: 'prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/azure-login@0.81'
+      uses: prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/azure-login@0.8
       with:
         akeyless-access-id: '${{ secrets.AKEYLESS_JWT_ID }}'
 
     - name: Add runner IP to Firewall List
-      if: ${{ inputs.visibility == 'public' }}
-      uses: 'prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/update-firewall-rule@0.81'
+      uses: prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/update-firewall-rule@0.8
       with:
         action-to-execute: add
+#    uses: 'prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/update-firewall-rule@0.81'
+  
+    # - name: Remove Storage Firewall Rule
+    #   if: always()
+    #   uses: prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/update-firewall-rule@develop
+    #   with:
+    #       action-to-execute: remove
 
-    # - name: SonarQube Check (from confluence page, old version)
-    #   id: sonarqube
-    #   uses: SonarSource/sonarqube-scan-action@v2.0.1
-    #   env:
-    #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-    #     SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
+    # - name: logout
+    #   if: always()
+    #   shell: bash
+    #   run: |
+    #       az logout
+      
     - name: SonarQube Scan
       if: ${{ inputs.visibility == 'public' }}
       uses: sonarsource/sonarqube-scan-action@v5.1.0
+      # Confluence uses old version: SonarSource/sonarqube-scan-action@v2.0.1
       continue-on-error: true
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
         
 #TODO: Test adding Irfan's quality reporting stage inline here after sonar run (https://github.com/Progress-I360/github-action-reporting)
 # PRODUCT_NAME = [Chef360 | Courier | Inspec]
