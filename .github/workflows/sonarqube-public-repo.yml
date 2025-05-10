@@ -98,14 +98,15 @@ jobs:
     # Use @{ver} to select the version of the action. "latest" tag is also available for latest version.
     - name: Prepare Secrets and Login into Azure
       id: get-aad-secret
-      uses: prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/azure-login@0.8
+      uses: 'prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/azure-login@0.8'
       with:
         akeyless-access-id: '${{ secrets.AKEYLESS_JWT_ID }}'
 
-    - name: Add runner IP to Firewall List
-      uses: prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/update-firewall-rule@0.8
-      with:
-        action-to-execute: add
+    # - name: Add runner IP to Firewall List
+    #   uses: prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/update-firewall-rule@0.8
+    #   with:
+    #     action-to-execute: add
+    
 #    uses: 'prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/update-firewall-rule@0.81'
   
     # - name: Remove Storage Firewall Rule
