@@ -456,67 +456,67 @@ jobs:
     uses: chef/common-github-actions/.github/workflows/sonarqube-public-repo.yml@main
     secrets: inherit
     with:
-      perform-build: $${ inputs.perform-sonar-build }
-      build-profile: $${ inputs.build-profile }
-      language: ${ inputs.language }
-      report-unit-test-coverage: ${ inputs.report-unit-test-coverage }
-      report-to-atlassian-dashboard: ${ inputs.report-to-atlassian-dashboard }
-      quality-product-name: $${ inputs.quality-product-name }
-      quality-sonar-app-name: $${ inputs.quality-sonar-app-name }
-      quality-testing-type: $${ inputs.quality-testing-type }
-      quality-service-name: $${ inputs.quality-service-name }
-      quality-junit-report: $${ inputs.quality-junit-report }
-      visibility: $${ inputs.visibility }
-      go-private-modules: $${ inputs.go-private-modules }
-      udf1: $${ inputs.udf1 }
-      udf2: $${ inputs.udf2 }
-      udf3: $${ inputs.udf3 }
+      perform-build: ${{ inputs.perform-sonar-build }}
+      build-profile: ${{ inputs.build-profile }}
+      language: ${{ inputs.language }}
+      report-unit-test-coverage: ${{ inputs.report-unit-test-coverage }}
+      report-to-atlassian-dashboard: ${{ inputs.report-to-atlassian-dashboard }}
+      quality-product-name: ${{ inputs.quality-product-name }}
+      quality-sonar-app-name: ${{ inputs.quality-sonar-app-name }}
+      quality-testing-type: ${{ inputs.quality-testing-type }}
+      quality-service-name: ${{ inputs.quality-service-name }}
+      quality-junit-report: ${{ inputs.quality-junit-report }}
+      visibility: ${{ inputs.visibility }}
+      go-private-modules: ${{ inputs.go-private-modules }}
+      udf1: ${{ inputs.udf1 }}
+      udf2: ${{ inputs.udf2 }}
+      udf3: ${{ inputs.udf3 }}
         
-  Sonar-SAST-private:
-    name: 'PRIVATE Sonar scan'
-    if: ${{ inputs.perform-sonarqube-sca-scan == true && success() && inputs.visibility == 'private'}}
-    needs: ci-build
-    uses: chef/common-github-actions/.github/workflows/sonarqube-private-repo.yml@main
-    secrets: inherit
-    with:
-      perform-build: $${ inputs.perform-sonar-build }
-      build-profile: $${ inputs.build-profile }
-      language: ${ inputs.language }
-      report-unit-test-coverage: ${ inputs.report-unit-test-coverage }
-      report-to-atlassian-dashboard: ${ inputs.report-to-atlassian-dashboard }
-      quality-product-name: $${ inputs.quality-product-name }
-      quality-sonar-app-name: $${ inputs.quality-sonar-app-name }
-      quality-testing-type: $${ inputs.quality-testing-type }
-      quality-service-name: $${ inputs.quality-service-name }
-      quality-junit-report: $${ inputs.quality-junit-report }
-      visibility: $${ inputs.visibility }
-      go-private-modules: $${ inputs.go-private-modules }
-      udf1: $${ inputs.udf1 }
-      udf2: $${ inputs.udf2 }
-      udf3: $${ inputs.udf3 }
+  # Sonar-SAST-private:
+  #   name: 'PRIVATE Sonar scan'
+  #   if: ${{ inputs.perform-sonarqube-sca-scan == true && success() && inputs.visibility == 'private'}}
+  #   needs: ci-build
+  #   uses: chef/common-github-actions/.github/workflows/sonarqube-private-repo.yml@main
+  #   secrets: inherit
+  #   with:
+  #     perform-build: $${ inputs.perform-sonar-build }
+  #     build-profile: $${ inputs.build-profile }
+  #     language: ${ inputs.language }
+  #     report-unit-test-coverage: ${ inputs.report-unit-test-coverage }
+  #     report-to-atlassian-dashboard: ${ inputs.report-to-atlassian-dashboard }
+  #     quality-product-name: $${ inputs.quality-product-name }
+  #     quality-sonar-app-name: $${ inputs.quality-sonar-app-name }
+  #     quality-testing-type: $${ inputs.quality-testing-type }
+  #     quality-service-name: $${ inputs.quality-service-name }
+  #     quality-junit-report: $${ inputs.quality-junit-report }
+  #     visibility: $${ inputs.visibility }
+  #     go-private-modules: $${ inputs.go-private-modules }
+  #     udf1: $${ inputs.udf1 }
+  #     udf2: $${ inputs.udf2 }
+  #     udf3: $${ inputs.udf3 }
   
-  Sonar-SAST-internal:
-    name: 'INTERNAL Sonar scan'
-    if: ${{ inputs.perform-sonarqube-sca-scan == true && success() && inputs.visibility == 'internal'}}
-    needs: ci-build
-    uses: chef/common-github-actions/.github/workflows/sonarqube-internal-repo.yml@main
-    secrets: inherit
-    with:
-      perform-build: $${ inputs.perform-sonar-build }
-      build-profile: $${ inputs.build-profile }
-      language: ${ inputs.language }
-      report-unit-test-coverage: ${ inputs.report-unit-test-coverage }
-      report-to-atlassian-dashboard: ${ inputs.report-to-atlassian-dashboard }
-      quality-product-name: $${ inputs.quality-product-name }
-      quality-sonar-app-name: $${ inputs.quality-sonar-app-name }
-      quality-testing-type: $${ inputs.quality-testing-type }
-      quality-service-name: $${ inputs.quality-service-name }
-      quality-junit-report: $${ inputs.quality-junit-report }
-      visibility: $${ inputs.visibility }
-      go-private-modules: $${ inputs.go-private-modules }
-      udf1: $${ inputs.udf1 }
-      udf2: $${ inputs.udf2 }
-      udf3: $${ inputs.udf3 }
+  # Sonar-SAST-internal:
+  #   name: 'INTERNAL Sonar scan'
+  #   if: ${{ inputs.perform-sonarqube-sca-scan == true && success() && inputs.visibility == 'internal'}}
+  #   needs: ci-build
+  #   uses: chef/common-github-actions/.github/workflows/sonarqube-internal-repo.yml@main
+  #   secrets: inherit
+  #   with:
+  #     perform-build: $${ inputs.perform-sonar-build }
+  #     build-profile: $${ inputs.build-profile }
+  #     language: ${ inputs.language }
+  #     report-unit-test-coverage: ${ inputs.report-unit-test-coverage }
+  #     report-to-atlassian-dashboard: ${ inputs.report-to-atlassian-dashboard }
+  #     quality-product-name: $${ inputs.quality-product-name }
+  #     quality-sonar-app-name: $${ inputs.quality-sonar-app-name }
+  #     quality-testing-type: $${ inputs.quality-testing-type }
+  #     quality-service-name: $${ inputs.quality-service-name }
+  #     quality-junit-report: $${ inputs.quality-junit-report }
+  #     visibility: $${ inputs.visibility }
+  #     go-private-modules: $${ inputs.go-private-modules }
+  #     udf1: $${ inputs.udf1 }
+  #     udf2: $${ inputs.udf2 }
+  #     udf3: $${ inputs.udf3 }
       
   # # older tool no longer used in Progress
   # # run-blackduck-coverity:
@@ -526,6 +526,7 @@ jobs:
   # #   secrets: inherit
 
   run-blackduck-polaris:
+    name: 'BlackDuck polaris scan'
     if: ${{ inputs.perform-blackduck-polaris == true }}
     uses: chef/common-github-actions/.github/workflows/blackduck-polaris.yml@main
     needs: ci-build
@@ -537,14 +538,14 @@ jobs:
   # #
   # ################################################################################################################
     
-  package-binary:
-    name: 'Creating packaged binaries'
-    runs-on: ubuntu-latest
-    needs: ci-build
-    steps:
-      - name: 'Create packaged binaries'
-        if: ${{ success() && inputs.package-binaries == true }}
-        run: echo "Creating packaged binaries"
+  # package-binary:
+  #   name: 'Creating packaged binaries'
+  #   runs-on: ubuntu-latest
+  #   needs: ci-build
+  #   steps:
+  #     - name: 'Create packaged binaries'
+  #       if: ${{ success() && inputs.package-binaries == true }}
+  #       run: echo "Creating packaged binaries"
   # TODO: add flag for any params needed
 
   # ################################################################################################################
@@ -553,14 +554,14 @@ jobs:
   # #
   # ################################################################################################################
        
-  habitat-build:
-    name: 'Creating Habitat packages'
-    runs-on: ubuntu-latest
-    needs: package-binary
-    steps:
-      - name: 'Create Habitat packages'
-        if: ${{ success() && inputs.habitat-build == true }}
-        run: echo "Creating Habitat packages"
+  # habitat-build:
+  #   name: 'Creating Habitat packages'
+  #   runs-on: ubuntu-latest
+  #   needs: package-binary
+  #   steps:
+  #     - name: 'Create Habitat packages'
+  #       if: ${{ success() && inputs.habitat-build == true }}
+  #       run: echo "Creating Habitat packages"
   # TODO: add flag for any params needed
 
   # ################################################################################################################
@@ -570,14 +571,14 @@ jobs:
   # #
   # ################################################################################################################
 
-  publish:
-    name: 'Publishing packages'
-    runs-on: ubuntu-latest
-    needs: habitat-build
-    steps:
-      - name: 'Publishing packages'
-        if: ${{ success() && inputs.publish-packages == true }}
-        run: echo "Publishing packages"
+  # publish:
+  #   name: 'Publishing packages'
+  #   runs-on: ubuntu-latest
+  #   needs: habitat-build
+  #   steps:
+  #     - name: 'Publishing packages'
+  #       if: ${{ success() && inputs.publish-packages == true }}
+  #       run: echo "Publishing packages"
   # TODO: add flag for any params needed
 
   #### TODO: add flags here!!! MSFT, license scout, GH export, etc...
