@@ -558,12 +558,11 @@ jobs:
   #   needs: ci-build
   #   secrets: inherit
     
-  # ################################################################################################################
-  # #
-  # #    TODO: Add packaging steps – rpm, deb, MSI, dpkg + signing + SHA)
-  # #
-  # ################################################################################################################
-    
+  ################################################################################################################
+  #
+  #    TODO: Add packaging steps – rpm, deb, MSI, dpkg + signing + SHA)
+  #
+  ################################################################################################################
   package-binary:
     name: 'Creating packaged binaries'
     runs-on: ubuntu-latest
@@ -574,12 +573,11 @@ jobs:
         run: echo "Creating packaged binaries"
   # TODO: add flag for any params needed
 
-  # ################################################################################################################
-  # #
-  # #    TODO: Add habitat build steps from plan.sh for various packages/platforms/machine archs, publish to Builder
-  # #
-  # ################################################################################################################
-       
+  ################################################################################################################
+  #
+  #    TODO: Add habitat build steps from plan.sh for various packages/platforms/machine archs, publish to Builder
+  #
+  ################################################################################################################  
   habitat-build:
     name: 'Creating Habitat packages'
     runs-on: ubuntu-latest
@@ -590,13 +588,12 @@ jobs:
         run: echo "Creating Habitat packages"
   # TODO: add flag for any params needed
 
-  # ################################################################################################################
-  # #
-  # #    TODO: Add binary publishing steps – container from Dockerfile to ECR, go-releaser binary to releases page, 
-  # #       omnibus to artifactory, gems, choco, homebrew, other app stores
-  # #
-  # ################################################################################################################
-
+  ################################################################################################################
+  #
+  #    TODO: Add binary publishing steps – container from Dockerfile to ECR, go-releaser binary to releases page, 
+  #       omnibus to artifactory, gems, choco, homebrew, other app stores
+  #
+  ################################################################################################################
   publish:
     name: 'Publishing packages'
     runs-on: ubuntu-latest
@@ -607,7 +604,11 @@ jobs:
         run: echo "Publishing packages"
   # TODO: add flag for any params needed
 
-  #### TODO: add flags here!!! MSFT, license scout, GH export, etc...
+  ################################################################################################################
+  #
+  #    Create software bill-of-materials (SBOM) using SPDX format
+  #
+  ################################################################################################################
   generate-sbom:
     name: 'Generating SBOM'
     if: ${{ inputs.generate-sbom == true }}
