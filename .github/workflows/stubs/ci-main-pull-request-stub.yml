@@ -59,9 +59,18 @@ jobs:
       perform-blackduck-coverity: false
       perform-blackduck-polaris: false
 
-      generate-sbom: true
+      go-private-modules: 'github.com/progress-platform-services/*'
 
-      # go-private-modules: 'github.com/progress-platform-services/*'
+      package-binaries: true
+      habitat-build: true
+      publish-packages: true
+
+      generate-sbom: true
+      export-github-sbom: true
+      generate-blackduck-polaris-sbom: true
+      generate-msft-sbom: true
+      license_scout: true
+      
       # udf1: 'default' # user defined flag 1
       # udf2: 'default' # user defined flag 2 
       # udf3: 'default' # user defined flag 3

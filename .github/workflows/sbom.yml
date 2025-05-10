@@ -21,13 +21,39 @@ name: Download SBOM from Insights and Convert to CSV
 # https://github.com/srcclr/srcclr_sbom_gen 
 # https://github.com/openclarity/kubeclarity?tab=readme-ov-file#installation 
 
+# inherit secrets from the calling workflow including BLACKDUCK_SBOM_URL, BLACKDUCK_SBOM_API_KEY
 on:
   workflow_call:
+    inputs:
+      export-github-sbom:
+        description: 'Export SBOM from GitHub Dependency Graph API' 
+        required: false
+        type: boolean
+      generate-blackduck-polaris-sbom:
+        description: 'Generate SBOM using Blackduck Polaris Tool'
+        required: false
+        type: boolean
+      generate-msft-sbom:
+        description: 'Generate SBOM using Microsoft SBOM Tool'
+        required: false
+        type: boolean
+      license_scout:
+        description: 'Generate SBOM using Chef license scout Tool'
+        required: false
+        type: boolean
+      go-private-modules:
+        required: false
+        type: string
+
+env:
+  # Set the default SBOM filename prefix
+  FILE_PREFIX: $(echo "${{ github.repository }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
 
 jobs:
   export-github-SBOM:
     name: Export SBOM from GitHub Dependency Graph API
     runs-on: ubuntu-latest
+    if : ${{ inputs.export-github-sbom == 'true' }}
 
     steps:
     - name: Checkout Code
@@ -47,10 +73,10 @@ jobs:
           https://api.github.com/repos/${{ github.repository }}/dependency-graph/sbom \
           -o "${FILE_PREFIX}-GitHub-sbom.json"
 
+    # TODO: remove the ls -l and preview steps
     - name: Verify SBOM JSON File
       run: |
         ls -l "${FILE_PREFIX}-GitHub-sbom.json"
-
     - name: Preview SBOM JSON Content
       run: |
         head -n 20 "${FILE_PREFIX}-GitHub-sbom.json"
@@ -68,6 +94,7 @@ jobs:
             "None", "None", "None"
           ] | @csv' "${FILE_PREFIX}-GitHub-sbom.json" >> "${FILE_PREFIX}-GitHub-sbom.csv"
 
+    # TODO: remove preview step
     - name: Preview SBOM CSV Content
       run: |
         head -n 20 "${FILE_PREFIX}-GitHub-sbom.csv"
@@ -132,6 +159,7 @@ jobs:
   generate-blackduck-polaris-sbom:
     name: Generate SBOM using Blackduck Polaris Tool
     runs-on: ubuntu-latest
+    if: ${{ inputs.generate-blackduck-polaris-sbom == 'true' }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -145,6 +173,7 @@ jobs:
           ### ---------- SRM SCANNING: REQUIRED FIELDS ----------
           srm_url: ${{ secrets.BLACKDUCK_SBOM_URL }}  # SRM_URL
           srm_apikey: ${{ secrets.BLACKDUCK_SBOM_API_KEY }}  # SRM_API_KEY
+          # TODO: this may be just SAST
           srm_assessment_types: "SCA,SAST"
           ### SCANNING: Optional fields from https://documentation.blackduck.com/bundle/bridge/page/documentation/c_github-srm.html
           # srm_project_name: ${{ github.event.repository.name }} # chef-vault
@@ -165,18 +194,21 @@ jobs:
   generate-msft-sbom:
     name: Generate MSFT SBOM
     runs-on: ubuntu-latest
+    if: ${{ inputs.generate-msft-sbom == 'true' }}
     timeout-minutes: 5
     steps:
     - uses: actions/checkout@v4
-
+# TODO: cache the sbom-tool binary
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: 1.24.2
-        check-latest: true
+        go-version: 'stable'
+#        go-version: 1.24.2
+#        check-latest: true
     # - name: Configure git for private modules
     #   env:
     #     GOPRIVATE: github.com/progress-platform-services/*
+    #       use ${{ inputs.go-private-modules }}
     #   run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
     - name: create folder
@@ -205,18 +237,22 @@ jobs:
     #     --only-show-failures         Only print results for dependencies with licenses that failed checks  
     # -h, --help                       Show this message
     runs-on: ubuntu-latest
+    if: ${{ inputs.license_scout == 'true' }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
-          go-version: 1.24.2
-          check-latest: true
+          go-version: 'stable'
+#        go-version: 1.24.2
+#        check-latest: true
+        
       # - name: Configure git for private modules
       #   env:
       #     GOPRIVATE: github.com/progress-platform-services/*
+      #       use ${{ inputs.go-private-modules }}
       #   run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - name: set up license_scout
@@ -228,6 +264,7 @@ jobs:
           gem install license_scout
           mkdir -p ./bin/license-scout
       - name: generate license_scout with fallback
+# TODO: download license_scout.yml from the repo
         if: ${{ hashFiles('./.license_scout.yml') != '' }}    
         run: license_scout -l debug --format 'csv' -c ./.license_scout.yml > ./bin/license-scout/license-scout.txt 2>&1
       #license_scout -l info --format csv > ./bin/license-scout/license-scout.txt       
