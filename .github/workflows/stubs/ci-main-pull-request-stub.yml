@@ -36,8 +36,8 @@ jobs:
       perform-complexity-checks: true
       # scc-output-filename: 'scc-output.txt'
       perform-trufflehog-scan: true
-      perform-srcclr-scan: false
-      perform-veracode-sca-scan: false
+      # perform-srcclr-scan: false
+      # perform-veracode-sca-scan: false
       perform-blackduck-sca-scan: false
       
       build: false

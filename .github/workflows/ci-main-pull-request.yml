@@ -259,6 +259,10 @@ jobs:
     if: ${{ inputs.language == 'Ruby' && inputs.perform-complexity-checks == true }}
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Set up ruby version
         uses: ruby/setup-ruby@v1
         with:
@@ -290,7 +294,6 @@ jobs:
     # go install honnef.co/go/tools/cmd/staticcheck@latest
     # staticcheck ./... >> ./bin/staticcheck.out
 
-  # language-agnostic secrity check tools (OWASP dep-check)
   # https://github.com/marketplace/actions/dependency-check & https://owasp.org/www-project-dependency-check/ 
   #     and flags at https://jeremylong.github.io/DependencyCheck/dependency-check-cli/arguments.html
   language-agnostic-checks:
@@ -472,28 +475,28 @@ jobs:
   # #
   # ################################################################################################################
   
-  # Sonar-SAST-public:
-  #   name: 'PUBLIC Sonar SAST scan'
-  #   needs: ci-build
-  #   if: ${{ inputs.perform-sonarqube-sca-scan == true && success() && inputs.visibility == 'public'}}
-  #   uses: chef/common-github-actions/.github/workflows/sonarqube-public-repo.yml@main
-  #   secrets: inherit
-  #   with:
-  #     perform-build: ${{ inputs.perform-sonar-build }}
-  #     build-profile: ${{ inputs.build-profile }}
-  #     language: ${{ inputs.language }}
-  #     report-unit-test-coverage: ${{ inputs.report-unit-test-coverage }}
-  #     report-to-atlassian-dashboard: ${{ inputs.report-to-atlassian-dashboard }}
-  #     quality-product-name: ${{ inputs.quality-product-name }}
-  #     quality-sonar-app-name: ${{ inputs.quality-sonar-app-name }}
-  #     quality-testing-type: ${{ inputs.quality-testing-type }}
-  #     quality-service-name: ${{ inputs.quality-service-name }}
-  #     quality-junit-report: ${{ inputs.quality-junit-report }}
-  #     visibility: ${{ inputs.visibility }}
-  #     go-private-modules: ${{ inputs.go-private-modules }}
-  #     udf1: ${{ inputs.udf1 }}
-  #     udf2: ${{ inputs.udf2 }}
-  #     udf3: ${{ inputs.udf3 }}
+  Sonar-SAST-public:
+    name: 'PUBLIC Sonar SAST scan'
+    needs: ci-build
+    if: ${{ inputs.perform-sonarqube-sca-scan == true && success() && inputs.visibility == 'public'}}
+    uses: chef/common-github-actions/.github/workflows/sonarqube-public-repo.yml@main
+    secrets: inherit
+    with:
+      perform-build: ${{ inputs.perform-sonar-build }}
+      build-profile: ${{ inputs.build-profile }}
+      language: ${{ inputs.language }}
+      report-unit-test-coverage: ${{ inputs.report-unit-test-coverage }}
+      report-to-atlassian-dashboard: ${{ inputs.report-to-atlassian-dashboard }}
+      quality-product-name: ${{ inputs.quality-product-name }}
+      quality-sonar-app-name: ${{ inputs.quality-sonar-app-name }}
+      quality-testing-type: ${{ inputs.quality-testing-type }}
+      quality-service-name: ${{ inputs.quality-service-name }}
+      quality-junit-report: ${{ inputs.quality-junit-report }}
+      visibility: ${{ inputs.visibility }}
+      go-private-modules: ${{ inputs.go-private-modules }}
+      udf1: ${{ inputs.udf1 }}
+      udf2: ${{ inputs.udf2 }}
+      udf3: ${{ inputs.udf3 }}
         
   # Sonar-SAST-private:
   #   name: 'PRIVATE Sonar scan'
@@ -561,14 +564,14 @@ jobs:
   # #
   # ################################################################################################################
     
-  # package-binary:
-  #   name: 'Creating packaged binaries'
-  #   runs-on: ubuntu-latest
-  #   needs: ci-build
-  #   steps:
-  #     - name: 'Create packaged binaries'
-  #       if: ${{ success() && inputs.package-binaries == true }}
-  #       run: echo "Creating packaged binaries"
+  package-binary:
+    name: 'Creating packaged binaries'
+    runs-on: ubuntu-latest
+    needs: ci-build
+    steps:
+      - name: 'Create packaged binaries'
+        if: ${{ success() && inputs.package-binaries == true }}
+        run: echo "Creating packaged binaries"
   # TODO: add flag for any params needed
 
   # ################################################################################################################
