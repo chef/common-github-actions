@@ -53,8 +53,7 @@ jobs:
   export-github-SBOM:
     name: Export SBOM from GitHub Dependency Graph API
     runs-on: ubuntu-latest
-    if : ${{ inputs.export-github-sbom == 'true' }}
-
+    if : ${{ inputs.export-github-sbom == true }}
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
@@ -159,7 +158,7 @@ jobs:
   generate-blackduck-polaris-sbom:
     name: Generate SBOM using Blackduck Polaris Tool
     runs-on: ubuntu-latest
-    if: ${{ inputs.generate-blackduck-polaris-sbom == 'true' }}
+    if: ${{ inputs.generate-blackduck-polaris-sbom == true }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -194,7 +193,7 @@ jobs:
   generate-msft-sbom:
     name: Generate MSFT SBOM
     runs-on: ubuntu-latest
-    if: ${{ inputs.generate-msft-sbom == 'true' }}
+    if: ${{ inputs.generate-msft-sbom == true }}
     timeout-minutes: 5
     steps:
     - uses: actions/checkout@v4
@@ -237,7 +236,7 @@ jobs:
     #     --only-show-failures         Only print results for dependencies with licenses that failed checks  
     # -h, --help                       Show this message
     runs-on: ubuntu-latest
-    if: ${{ inputs.license_scout == 'true' }}
+    if: ${{ inputs.license_scout == true }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
