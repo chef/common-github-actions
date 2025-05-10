@@ -588,8 +588,8 @@ jobs:
     needs: ci-build
     secrets: inherit
     with:
-      export-github-sbom: $${ inputs.export-github-sbom }
-      generate-blackduck-polaris-sbom: $${ inputs.generate-blackduck-polaris-sbom }
-      generate-msft-sbom: $${ inputs.generate-msft-sbom }
-      license_scout: $${ inputs.license_scout }
+      export-github-sbom: ${{ inputs.export-github-sbom }}
+      generate-blackduck-polaris-sbom: ${{ inputs.generate-blackduck-polaris-sbom }}
+      generate-msft-sbom: ${{ inputs.generate-msft-sbom }}
+      license_scout: ${{ inputs.license_scout }}
       go-private-modules: ${{ inputs.go-private-modules }}
