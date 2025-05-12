@@ -107,6 +107,12 @@ jobs:
       uses: chef/common-github-actions/.github/actions/update-firewall-rule@main
       with:
         action-to-execute: add
+
+    - name: wait
+      shell: bash
+      run: |
+        echo "##[warning]Waiting for 30 seconds to allow the firewall rule to take effect"
+        sleep 30
       
     - name: SonarQube Scan
       if: ${{ inputs.visibility == 'public' }}
