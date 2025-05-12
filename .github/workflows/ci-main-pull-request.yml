@@ -481,6 +481,9 @@ jobs:
     if: ${{ inputs.perform-sonarqube-sca-scan == true && success() && inputs.visibility == 'public'}}
     uses: chef/common-github-actions/.github/workflows/sonarqube-public-repo.yml@main
     secrets: inherit
+    permissions: # Must change the job token permissions to use JWT auth
+      id-token: write
+      contents: read
     with:
       perform-build: ${{ inputs.perform-sonar-build }}
       build-profile: ${{ inputs.build-profile }}
