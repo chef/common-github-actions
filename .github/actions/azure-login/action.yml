@@ -1,0 +1,56 @@
+name: azure-login
+description: Setup access to Progress Azure.
+inputs:
+  akeyless-access-id:
+    description: "The access id for your auth method."
+    required: true
+outputs:
+    TenantId: 
+       description: "Azure Tenant Id"
+       value: ${{ steps.aad-secret.outputs.tenant-id }}
+    AppId: 
+       description: "Azure AppId"
+       value: ${{ steps.aad-secret.outputs.app-id }}
+    SecretText: 
+       description: "Azure SecretText"
+       value: ${{ steps.aad-secret.outputs.secret-text }}
+runs:
+  using: composite
+  steps:
+    - name: Import Secrets
+      id: import-akeyless-authentication-secrets
+      uses: LanceMcCarthy/akeyless-action@v3
+      with:
+        access-id: ${{ inputs.akeyless-access-id }}
+        static-secrets: |
+           {
+             "/DevOps/SonarQube/ApiKeyID": "API_AKEYLESS_ID",
+             "/DevOps/SonarQube/ApiKeyValue": "API_AKEYLESS_KEY",
+             "/DevOps/SonarQube/AzureSubscriptionID": "AZURE_SUBSCRIPTION_ID"
+           }
+        export-secrets-to-environment: false
+
+    - name: Get AAD Secret
+      id: aad-secret
+      uses: LanceMcCarthy/akeyless-aad-secret@v1
+      with:
+        akeyless-secret-path: '/DevOps/SonarQube/DevOps_SonarQube-Secret'
+        akeyless-access-id: '${{ steps.import-akeyless-authentication-secrets.outputs.API_AKEYLESS_ID }}'
+        akeyless-access-key: '${{ steps.import-akeyless-authentication-secrets.outputs.API_AKEYLESS_KEY }}'
+
+    - name: Verify Output
+      shell: pwsh
+      run: |
+        echo "${{ steps.aad-secret.outputs.app-id }}"
+        echo "${{ steps.aad-secret.outputs.tenant-id }}"
+        echo "${{ steps.aad-secret.outputs.secret-text }}"
+
+    #From time to time the Azure login step fails because the credentials have not been yet propagated 
+    - name: Sleep for 30 seconds
+      run: Start-Sleep -s 30
+      shell: pwsh
+
+    - name: Azure Login
+      uses: Azure/login@v1
+      with:
+       creds: '{"clientId":"${{ steps.aad-secret.outputs.app-id }}","clientSecret":"${{ steps.aad-secret.outputs.secret-text }}","subscriptionId":"${{ steps.import-akeyless-authentication-secrets.outputs.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ steps.aad-secret.outputs.tenant-id }}"}'

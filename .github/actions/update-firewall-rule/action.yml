@@ -1,0 +1,17 @@
+name: Update Storage Firewall Rule
+description: Update Firewall Rule by adding or removing runner ip.
+inputs:
+  action-to-execute:
+    description: "Defines what action to be executed - add or remove."
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: ${{ inputs.action-to-execute }} Firewall Rule
+      shell: bash
+      run: |
+        AgentPublicIp=$(curl ipconfig.io)
+        echo "##[warning]Adding $AgentPublicIp To Storage Account Firewall, Please Wait..."
+        az network nsg rule update -n HTTPS_CI --nsg-name vmsonarqubeprod001-nsg -g rg-prgssonarqube-prod-001 --add sourceAddressPrefixes $AgentPublicIp
+        sleep 30
