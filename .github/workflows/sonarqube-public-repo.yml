@@ -100,7 +100,7 @@ jobs:
     - name: Prepare Secrets and Login into Azure
       id: get-aad-secret
 # uses: 'prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/azure-login@0.8'
-      uses: '.github/actions/azure-login'
+      uses: 'chef/common-github-actions/.github/actions/azure-login'
       with:
         akeyless-access-id: '${{ secrets.AKEYLESS_JWT_ID }}'
 
