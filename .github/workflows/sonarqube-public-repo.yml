@@ -77,8 +77,7 @@ jobs:
         echo "Go private modules set to ${{ inputs.go-private-modules }}"    
 
   SonarQube:
-    runs-on: ubuntu-latest-4-cores
-# ubuntu-latest
+    runs-on: ubuntu-latest
     permissions: # Must change the job token permissions to use JWT auth
       id-token: write
       contents: read
@@ -103,25 +102,11 @@ jobs:
       uses: 'chef/common-github-actions/.github/actions/azure-login@main'
       with:
         akeyless-access-id: '${{ secrets.AKEYLESS_JWT_ID }}'
-
-    # - name: Add runner IP to Firewall List
-    #   uses: prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/update-firewall-rule@0.8
-    #   with:
-    #     action-to-execute: add
-
-#    uses: 'prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/update-firewall-rule@0.81'
-  
-    # - name: Remove Storage Firewall Rule
-    #   if: always()
-    #   uses: prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/update-firewall-rule@develop
-    #   with:
-    #       action-to-execute: remove
-
-    # - name: logout
-    #   if: always()
-    #   shell: bash
-    #   run: |
-    #       az logout
+      
+    - name: Add runner IP to Firewall List
+      uses: chef/common-github-actions/.github/actions/update-firewall-rule@main
+      with:
+        action-to-execute: add
       
     - name: SonarQube Scan
       if: ${{ inputs.visibility == 'public' }}
@@ -132,6 +117,19 @@ jobs:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         
+    - name: Remove Storage Firewall Rule
+      if: always()
+      uses: chef/common-github-actions/.github/actions/update-firewall-rule@main
+      with:
+          action-to-execute: remove
+
+    - name: logout
+      if: always()
+      shell: bash
+      run: |
+          az logout
+
+
 #TODO: Test adding Irfan's quality reporting stage inline here after sonar run (https://github.com/Progress-I360/github-action-reporting)
 # PRODUCT_NAME = [Chef360 | Courier | Inspec] @main removed
     # - name: Run SonarQube report generation
