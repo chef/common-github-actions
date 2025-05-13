@@ -75,6 +75,9 @@ jobs:
       
   SonarQube:
     runs-on: ubuntu-latest-4-cores
+    permissions: 
+      id-token: write
+      contents: read
     steps:
     - name: Checkout
       if: ${{ inputs.visibility == 'private' }}

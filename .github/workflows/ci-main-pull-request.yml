@@ -475,13 +475,14 @@ jobs:
   # #
   # ################################################################################################################
   
+  # TODO: comment this out until we check with security on org secrets usage in public repos
   Sonar-SAST-public:
     name: 'PUBLIC Sonar SAST scan'
     needs: ci-build
     if: ${{ inputs.perform-sonarqube-sca-scan == true && success() && inputs.visibility == 'public'}}
     uses: chef/common-github-actions/.github/workflows/sonarqube-public-repo.yml@main
     secrets: inherit
-    permissions: # Must change the job token permissions to use JWT auth
+    permissions:
       id-token: write
       contents: read
     with:
@@ -507,6 +508,9 @@ jobs:
     needs: ci-build
     uses: chef/common-github-actions/.github/workflows/sonarqube-private-repo.yml@main
     secrets: inherit
+    permissions:
+      id-token: write
+      contents: read
     with:
       perform-build: ${{ inputs.perform-sonar-build }}
       build-profile: ${{ inputs.build-profile }}
@@ -530,6 +534,9 @@ jobs:
     needs: ci-build
     uses: chef/common-github-actions/.github/workflows/sonarqube-internal-repo.yml@main
     secrets: inherit
+    permissions:
+      id-token: write
+      contents: read
     with:
       perform-build: ${{ inputs.perform-sonar-build }}
       build-profile: ${{ inputs.build-profile }}

@@ -78,7 +78,7 @@ jobs:
 
   SonarQube:
     runs-on: ubuntu-latest
-    permissions: # Must change the job token permissions to use JWT auth
+    permissions: 
       id-token: write
       contents: read
     
@@ -88,17 +88,15 @@ jobs:
       with:
         fetch-depth: 0
 
-# from Confluence, with @latest version of the action
+    # from Confluence, with @latest version of the action
     # - name: Prepare Secrets and Login into Azure
     #   id: get-aad-secret
     #   uses: 'prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/azure-login@latest'
     #   with:
     #     akeyless-access-id: '${{ secrets.AKEYLESS_JWT_ID }}'
 
-    # Use @{ver} to select the version of the action. "latest" tag is also available for latest version.
     - name: Prepare Secrets and Login into Azure
       id: get-aad-secret
-# uses: 'prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/azure-login@0.8'
       uses: 'chef/common-github-actions/.github/actions/azure-login@main'
       with:
         akeyless-access-id: '${{ secrets.AKEYLESS_JWT_ID }}'
@@ -117,7 +115,6 @@ jobs:
     - name: SonarQube Scan
       if: ${{ inputs.visibility == 'public' }}
       uses: sonarsource/sonarqube-scan-action@v5.1.0
-      # Confluence uses old version: SonarSource/sonarqube-scan-action@v2.0.1
       continue-on-error: true
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -134,7 +131,6 @@ jobs:
       shell: bash
       run: |
           az logout
-
 
 #TODO: Test adding Irfan's quality reporting stage inline here after sonar run (https://github.com/Progress-I360/github-action-reporting)
 # PRODUCT_NAME = [Chef360 | Courier | Inspec] @main removed
@@ -157,18 +153,3 @@ jobs:
     #     TESTING_TYPE: ${{ inputs.quality-testing-type }}
     #     SERVICE_NAME: ${{ inputs.quality-service-name }}
     #     JUNIT_REPORT: ${{ inputs.quality-junit-report }}
-
-  # IP-RANGE-CONTROLLED no longer works... probably needs IP range refresh, cannot get throughto api.sonar
-  # SonarQube:
-  #   runs-on: ip-range-controlled
-  #   steps:
-  #   - uses: actions/checkout@v4
-  #     with:
-  #       fetch-depth: 0
-    
-  #   - name: SonarQube Scan
-  #     uses: sonarsource/sonarqube-scan-action@v5.1.0
-  #     continue-on-error: true
-  #     env:
-  #       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-  #       SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
