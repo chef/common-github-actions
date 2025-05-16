@@ -2,7 +2,8 @@ name: Version Bumper
 
 description: |
   A reusable GitHub Action to automatically bump the version of a project based on pull request labels.
-  It uses the `bump` gem to handle versioning and tagging.
+  It uses the `bump` gem to handle versioning and tagging. Though implemented in Ruby, it can be used 
+  with any language or project type.
 
   This action is triggered when called by another workflow after a pull request is merged into the main branch.
   It determines the version bump type (major, minor, patch) based on the labels applied to the pull request.
@@ -13,7 +14,11 @@ description: |
   and "Version Bump: Skip" labels in your repository to use this action effectively.
 
   The action updates version strings in the files specified by the `version_file_patterns` input parameter.
-  You may use glob patterns. Files that do not exist will be ignored with a warning.
+  You may use glob patterns. Files that do not exist will be ignored with a warning. The file VERSION 
+  is detected automatically.
+
+  Most of the complexity of this action is in the file processing and label-reading logic; the actual version 
+  bumping is entriely handled by the `bump` gem.
 
   Example usage:
   ```yaml
@@ -29,7 +34,7 @@ on:
   workflow_call:
     inputs:
       version_file_patterns:
-        description: 'List of file patterns to search for version strings (one pattern per line)'
+        description: 'List of file patterns to search for version strings (one pattern per line). VERSION is detected automatically.'
         required: false
         type: string
         default: 'lib/*/version.rb'
