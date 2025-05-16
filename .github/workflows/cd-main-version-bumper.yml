@@ -94,7 +94,7 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: 'ruby'
-          # bundler-cache: true
+          # Do not run bundler - we just want the bump gem
       
       - name: Install bump gem
         run: gem install bump
@@ -223,6 +223,7 @@ jobs:
             fi
           done
           
+          echo "Bump file arguments: $BUMP_FILE_ARGS"
           echo "file_args=$BUMP_FILE_ARGS" >> $GITHUB_OUTPUT
       
       - name: Run version bump with custom files
