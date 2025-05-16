@@ -1,0 +1,257 @@
+name: Version Bumper
+
+description: |
+  A reusable GitHub Action to automatically bump the version of a project based on pull request labels.
+  It uses the `bump` gem to handle versioning and tagging.
+
+  This action is triggered when called by another workflow after a pull request is merged into the main branch.
+  It determines the version bump type (major, minor, patch) based on the labels applied to the pull request.
+  The action will automatically commit the version bump and create a new tag for the release.
+
+  By default, it will bump the patch version unless specified otherwise. Use Labels on your PR 
+  to control behavior.  Define the 'Version Bump: Major', 'Version Bump: Minor', 
+  and "Version Bump: Skip" labels in your repository to use this action effectively.
+
+  The action updates version strings in the files specified by the `version_file_patterns` input parameter.
+  You may use glob patterns. Files that do not exist will be ignored with a warning.
+
+  Example usage:
+  ```yaml
+  uses: ./.github/workflows/version-bumper.yml
+  with:
+    version_file_patterns: |
+      lib/*/version.rb
+      package.json
+      inspec.yml
+  ```
+
+on:
+  workflow_call:
+    inputs:
+      version_file_patterns:
+        description: 'List of file patterns to search for version strings (one pattern per line)'
+        required: false
+        type: string
+        default: 'lib/*/version.rb'
+      target_branch:
+        description: 'The branch to push version changes to'
+        required: false
+        default: 'main'
+        type: string      
+      git_username:
+        description: 'Git username for commits'
+        required: false
+        default: 'Progress CI Automation'
+        type: string
+      git_email:
+        description: 'Git email for commits'
+        required: false
+        default: 'ci@progress.com'
+        type: string
+    outputs:
+      bump_level:
+        description: 'The level that was bumped (major, minor, patch, or skipped)'
+        value: ${{ jobs.bump-version.outputs.bump_level }}
+      was_skipped:
+        description: 'Whether the version bump was skipped'
+        value: ${{ jobs.bump-version.outputs.was_skipped }}
+      new_version:
+        description: 'The new version after bumping'
+        value: ${{ jobs.bump-version.outputs.new_version }}
+      pr_number:
+        description: 'The PR number that was processed'
+        value: ${{ jobs.bump-version.outputs.pr_number }}
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    outputs:
+      bump_level: ${{ steps.bump-type.outputs.level || 'skipped' }}
+      was_skipped: ${{ steps.bump-type.outputs.skip }}
+      new_version: ${{ steps.run-bump.outputs.new_version || '' }}
+      pr_number: ${{ steps.get-pr-number.outputs.pr_number }}
+    permissions:
+      contents: write
+      pull-requests: read
+        
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Git
+        run: |
+          git config --global user.name "${{ inputs.git_username }}"
+          git config --global user.email "${{ inputs.git_email }}"
+      
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 'ruby'
+          bundler-cache: true
+      
+      - name: Install bump gem
+        run: gem install bump
+      
+      - name: Get PR number from context
+        id: get-pr-number
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Check if we're running in the context of a PR event
+            if (!context.payload.pull_request) {
+              core.setFailed('This workflow must be run in a PR context');
+              throw new Error('Not running in PR context');
+            }
+            
+            const prNumber = context.payload.pull_request.number;
+            console.log(`Detected PR number from event context: ${prNumber}`);
+            
+            if (!prNumber) {
+              core.setFailed('Could not detect PR number from context');
+              throw new Error('Failed to detect PR number');
+            }
+            
+            core.setOutput('pr_number', prNumber.toString());
+            return prNumber.toString();
+          result-encoding: string
+
+      - name: Fetch PR labels
+        id: fetch-labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = parseInt(${{ steps.get-pr-number.outputs.pr_number }});
+            
+            try {
+              const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber
+              });
+              
+              const labelNames = pr.labels.map(label => label.name);
+              console.log(`PR #${prNumber} has labels:`, labelNames);
+              return JSON.stringify(labelNames);
+            } catch (error) {
+              console.log(`Error fetching PR #${prNumber}: ${error.message}`);
+              core.setFailed(`Failed to fetch PR #${prNumber}: ${error.message}`);
+              throw new Error(`Failed to fetch PR #${prNumber}`);
+            }
+          result-encoding: string
+
+      - name: Determine bump type from labels
+        id: bump-type
+        run: |
+          # Store the labels in a variable and properly parse JSON format
+          LABELS='${{ steps.fetch-labels.outputs.result }}'
+          
+          # First check if we should skip the version bump entirely
+          if echo "$LABELS" | grep -q "Version Bump: Skip"; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Found label: Version Bump: Skip - will skip version bump"
+            exit 0
+          fi
+          
+          # Check for other version bump labels
+          if echo "$LABELS" | grep -q "Version Bump: Major"; then
+            echo "level=major" >> $GITHUB_OUTPUT
+            echo "Found label: Version Bump: Major"
+          elif echo "$LABELS" | grep -q "Version Bump: Minor"; then
+            echo "level=minor" >> $GITHUB_OUTPUT
+            echo "Found label: Version Bump: Minor"
+          else
+            echo "level=patch" >> $GITHUB_OUTPUT
+            echo "No specific version bump label found, defaulting to patch"
+          fi
+          
+          echo "skip=false" >> $GITHUB_OUTPUT
+          echo "Determined bump level: $(cat $GITHUB_OUTPUT | grep level | cut -d= -f2)"
+      
+      - name: Build list of files to update
+        id: file-list
+        if: steps.bump-type.outputs.skip != 'true'
+        run: |
+          BUMP_FILE_ARGS=""
+          
+          # Process each pattern from the input
+          echo "Processing file patterns from input"
+          echo "${{ inputs.version_file_patterns }}" | while IFS= read -r file_pattern || [ -n "$file_pattern" ]; do
+            # Skip empty lines and comments
+            if [ -z "$file_pattern" ] || [[ "$file_pattern" == \#* ]]; then
+              continue
+            fi
+            
+            # Trim whitespace
+            file_pattern=$(echo "$file_pattern" | xargs)
+            echo "  - Processing pattern: $file_pattern"
+            
+            # Expand the glob pattern to actual files
+            matched_files=$(find . -path "./$file_pattern" 2>/dev/null || echo "")
+            
+            if [ -z "$matched_files" ]; then
+              # Check if it's a literal file that exists
+              if [ -f "$file_pattern" ]; then
+                echo "    - Found literal file: $file_pattern"
+                BUMP_FILE_ARGS+=" --replace-in $file_pattern"
+              else
+                echo "    - WARNING: No files matched pattern '$file_pattern' and file does not exist"
+                echo "    - Skipping this pattern as bump cannot process non-existent files"
+              fi
+            else
+              # Add each matched file individually after verifying it exists
+              while IFS= read -r file; do
+                if [ -n "$file" ]; then
+                  # Remove leading ./ from the file path
+                  relative_file="${file#./}"
+                  
+                  # Double-check the file exists (should always be true from find)
+                  if [ -f "$relative_file" ]; then
+                    echo "    - Found file: $relative_file"
+                    BUMP_FILE_ARGS+=" --replace-in $relative_file"
+                  else
+                    echo "    - WARNING: File '$relative_file' was found by glob but doesn't exist - skipping"
+                  fi
+                fi
+              done <<< "$matched_files"
+            fi
+          done
+          
+          echo "file_args=$BUMP_FILE_ARGS" >> $GITHUB_OUTPUT
+      
+      - name: Run version bump with custom files
+        id: run-bump
+        if: steps.bump-type.outputs.skip != 'true'
+        run: |
+          BUMP_LEVEL="${{ steps.bump-type.outputs.level }}"
+          FILE_ARGS="${{ steps.file-list.outputs.file_args }}"
+          
+          # Build the bump command with the level and any file arguments
+          BUMP_COMMAND="bump $BUMP_LEVEL --tag $FILE_ARGS"
+          
+          echo "Executing: $BUMP_COMMAND"
+          # Execute the bump command (bump will handle committing and tagging)
+          OUTPUT=$(eval $BUMP_COMMAND)
+          echo "$OUTPUT"
+          
+          # Extract the new version number from the output
+          NEW_VERSION=$(echo "$OUTPUT" | grep -o "to [0-9]\+\.[0-9]\+\.[0-9]\+" | cut -d' ' -f2)
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "Bumped to version: $NEW_VERSION"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Push changes to target branch
+        if: steps.bump-type.outputs.skip != 'true'
+        run: |
+          # Bump has already committed and tagged, we just need to push
+          git push origin HEAD:${{ inputs.target_branch }}
+          git push origin --tags
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Log skipped version bump
+        if: steps.bump-type.outputs.skip == 'true'
+        run: |
+          echo "Version bump was skipped due to the 'Version Bump: Skip' label"
