@@ -209,12 +209,8 @@ jobs:
             fi
           done
           
-          # Add automatic detection for VERSION file
-          if [ -f "VERSION" ]; then
-            echo "  - Found VERSION file"
-            BUMP_FILE_ARGS="$BUMP_FILE_ARGS --replace-in VERSION"
-          fi
-          
+          # Note that bump auto-detects VERSION, and mentioning it again is an error.
+
           echo "Bump file arguments: $BUMP_FILE_ARGS"
           echo "file_args=$BUMP_FILE_ARGS" >> $GITHUB_OUTPUT
       
