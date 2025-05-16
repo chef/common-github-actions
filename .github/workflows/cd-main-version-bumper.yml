@@ -178,50 +178,42 @@ jobs:
         id: file-list
         if: steps.bump-type.outputs.skip != 'true'
         run: |
+          # Process file patterns line by line
           BUMP_FILE_ARGS=""
           
-          # Process each pattern from the input
+          # Save the patterns to a variable first
+          PATTERNS="${{ inputs.version_file_patterns }}"
+          
           echo "Processing file patterns from input"
-          echo "${{ inputs.version_file_patterns }}" | while IFS= read -r file_pattern || [ -n "$file_pattern" ]; do
-            # Skip empty lines and comments
-            if [ -z "$file_pattern" ] || [[ "$file_pattern" == \#* ]]; then
+          # Use a for loop to process each pattern
+          for file_pattern in $PATTERNS; do
+            # Skip empty patterns
+            if [ -z "$file_pattern" ]; then
               continue
             fi
             
-            # Trim whitespace
-            file_pattern=$(echo "$file_pattern" | xargs)
             echo "  - Processing pattern: $file_pattern"
             
-            # Expand the glob pattern to actual files
-            matched_files=$(find . -path "./$file_pattern" 2>/dev/null || echo "")
-            
-            if [ -z "$matched_files" ]; then
-              # Check if it's a literal file that exists
-              if [ -f "$file_pattern" ]; then
-                echo "    - Found literal file: $file_pattern"
-                BUMP_FILE_ARGS+=" --replace-in $file_pattern"
-              else
-                echo "    - WARNING: No files matched pattern '$file_pattern' and file does not exist"
-                echo "    - Skipping this pattern as bump cannot process non-existent files"
-              fi
+            # Check if the file exists directly
+            if [ -f "$file_pattern" ]; then
+              echo "    - Found file: $file_pattern"
+              BUMP_FILE_ARGS="$BUMP_FILE_ARGS --replace-in $file_pattern"
             else
-              # Add each matched file individually after verifying it exists
-              while IFS= read -r file; do
-                if [ -n "$file" ]; then
-                  # Remove leading ./ from the file path
-                  relative_file="${file#./}"
-                  
-                  # Double-check the file exists (should always be true from find)
-                  if [ -f "$relative_file" ]; then
-                    echo "    - Found file: $relative_file"
-                    BUMP_FILE_ARGS+=" --replace-in $relative_file"
-                  else
-                    echo "    - WARNING: File '$relative_file' was found by glob but doesn't exist - skipping"
-                  fi
+              # Check for glob matches
+              for matched_file in $file_pattern; do
+                if [ -f "$matched_file" ]; then
+                  echo "    - Found file: $matched_file"
+                  BUMP_FILE_ARGS="$BUMP_FILE_ARGS --replace-in $matched_file"
                 fi
-              done <<< "$matched_files"
+              done
             fi
           done
+          
+          # Add automatic detection for VERSION file
+          if [ -f "VERSION" ]; then
+            echo "  - Found VERSION file"
+            BUMP_FILE_ARGS="$BUMP_FILE_ARGS --replace-in VERSION"
+          fi
           
           echo "Bump file arguments: $BUMP_FILE_ARGS"
           echo "file_args=$BUMP_FILE_ARGS" >> $GITHUB_OUTPUT
