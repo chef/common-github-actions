@@ -29,8 +29,8 @@ on:
         description: 'Export SBOM from GitHub Dependency Graph API' 
         required: false
         type: boolean
-      generate-blackduck-polaris-sbom:
-        description: 'Generate SBOM using Blackduck Polaris Tool'
+      generate-blackduck-sbom:
+        description: 'Generate SBOM using Blackduck Tool'
         required: false
         type: boolean
       generate-msft-sbom:
@@ -155,8 +155,8 @@ jobs:
 #
 # Blackduck SBOM is at SERVER: https://progresssoftware.app.blackduck.com/ - org variable!
 # API token in repo - https://github.com/chef/chef-vault/settings/secrets/actions
-  generate-blackduck-polaris-sbom:
-    name: Generate SBOM using Blackduck Polaris Tool
+  generate-blackduck-sbom:
+    name: Generate SBOM using Blackduck Tool
     runs-on: ubuntu-latest
     if: ${{ inputs.generate-blackduck-polaris-sbom == true }}
     steps:

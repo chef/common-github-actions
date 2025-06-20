@@ -1,0 +1,1 @@
+# This is the GitHub Action workflow for handling pull requests for building, testing and security scans for GOLANG CLIs on the main or release branches.

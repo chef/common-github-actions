@@ -1,20 +1,19 @@
-# WORK IN PROCESS
-# MERGE INTO ci-main-pull-request-checks.yml WHEN DONE TESTING
 # CI pipeline for all application types on main and release branches
-# use stubs/ci-main-pull-request-checks-stub.yml in your repo to call this common action using workflow_call
+#
+# use stubs/ci-main-pull-request-stub.yml in your repo to call this common action using workflow_call
 #
 # performs the following actions:
 # 1. run source code complexity checks (SCC) using scc
 # 2. run language-specific pre-compilation checks (e.g., gosec, rubocop, etc.)
-# 3. run language-agnostic pre-compilation checks (e.g., OWASP dependency check)
-# 4. run security source code analysis (SCA) scans (e.g., trufflehog, srcclr, veracode, blackduck)
-# 5. run build and packaging steps (e.g., go build, cargo build, etc.)
-# 6. run unit tests (e.g., go test, cargo test, etc.)
-# 7. run security DAST tests and scans (e.g., SonarQube, BlackDuck coverity, BlackDuck polaris)
-# 8. generate software bill-of-materials (SBOM) using SPDX format
+# 3. run language-agnostic pre-compilation checks (e.g., OWASP dependency or top 10 checks,trufflehog)
+# 4. run security static application security tests (SAST, e.g. Sonar or BlackDuck Polaris)
+# 5. run source composition analysis (SCA) scans (e.g., dependabot, blackduck)
+# 6. run build and packaging steps (e.g., go build, cargo build, etc.)
+# 7. run unit tests (e.g., go test, cargo test, etc.) - integration tests are in CD pipeline
+# 7. run security DAST tests and scans (e.g., Veracode or BlackDuck coverity)
+# 8. generate software bill-of-materials (SBOM) using SPDX format and lookup licenses (GitHub SBOM, Micrsosoft SBOM, license_scout, and/or BlackDuck SBOM)
 # 
-# https://docs.github.com/en/actions/sharing-automations/reusing-workflows#passing-inputs-and-secrets-to-a-reusable-workflow
-#
+# See DEV-README.md for more details on the steps and how to use this action, or the confluence page at <TODO: URL>
 
 name: CI flow containing PR checks for main & release, v2
 
@@ -36,6 +35,11 @@ on:
         required: false
         type: string
         default: 'scc-output.txt'
+      perform-language-linting:
+        description: 'Perform language-specific linting and pre-compilation checks'
+        required: false
+        type: boolean
+        default: true
       perform-trufflehog-scan:
         description: 'Perform trufflehog scan'
         required: false
@@ -43,14 +47,21 @@ on:
         default: true
       # perform-srcclr-scan:
       #   description: 'Perform source clear scan'
-      #   required: false
-      #   type: boolean
-      #   default: true
       # perform-veracode-sca-scan:
       #   description: 'Perform Veracode SCA scan'
-      #   required: false
-      #   type: boolean
-      #   default: true
+      perform-blackduck-polaris:
+        description: 'Perform BlackDuck Polaris (SAST) scan'
+        required: false
+        type: boolean
+        default: false
+      polaris-application-name:
+        description: 'Polaris application name, one of these {Chef-Agents | Chef-Automate | Chef-Chef360 | Chef-Habitat | Chef-Infrastructure-Server | Chef-Shared-Services}'
+        required: false
+        type: string
+      polaris-project-name:
+        description: 'Polaris project name, typically the application name, followed by - and the repository name, for example Chef-Chef360-chef-vault'
+        required: false
+        type: string
       perform-blackduck-sca-scan:
         description: 'Perform BlackDuck SCA scan'
         required: false
@@ -71,7 +82,7 @@ on:
         required: false
         type: boolean
         default: true
-      perform-sonarqube-sca-scan: 
+      perform-sonarqube-scan: 
         description: 'Perform basic SonarQube scan'
         required: false
         type: boolean
@@ -121,16 +132,6 @@ on:
         required: false
         type: string
         default: 'path/to/junit/report'
-      # perform-blackduck-coverity:
-      #   description: 'Perform BlackDuck coverity scan'
-      #   required: false
-      #   type: boolean
-      #   default: false
-      # perform-blackduck-polaris:
-      #   description: 'Perform BlackDuck polaris scan'
-      #   required: false
-      #   type: boolean
-      #   default: true
       generate-sbom:
         description: 'Generate software bill-of-materials (SPDX SBOM)'
         required: false
@@ -161,7 +162,7 @@ on:
         required: false
         type: boolean
         default: true
-      generate-blackduck-polaris-sbom:
+      generate-blackduck-sbom:
         description: 'Generate SBOM using BlackDuck polaris'
         required: false
         type: boolean
@@ -195,7 +196,7 @@ on:
 env:
   REPO_VISIBILITY: ${{ github.event.repository.visibility }}
   REPO_NAME: ${{ github.event.repository.name }}
-  PIPELINE_VERSION: '1.0.1'
+  PIPELINE_VERSION: '1.0.2'
 
 jobs:
   precompilation-checks:
@@ -205,28 +206,63 @@ jobs:
     steps:
       - name: 'Echo version of pipeline and inputs'
         run: |
-          echo "pipeline version $PIPELINE_VERSION"
-          echo "Language set to ${{ inputs.language }} "
+          echo "CI Pipeline Version $PIPELINE_VERSION"
           echo "Repository visibility set to $REPO_VISIBILITY [ ${{ inputs.visibility }} ]"
-          echo "*************************************************************"
-          echo "BUILD set to ${{ inputs.build }}"
-          echo "Unit tests set to ${{ inputs.unit-tests }}"
-          echo "*************************************************************"
-          echo "Perform complexity checks set to ${{ inputs.perform-complexity-checks }}"
-          echo "SCC output filename set to ${{ inputs.scc-output-filename }} "
-          echo "*************************************************************"
-          echo "Perform trufflehog scan set to ${{ inputs.perform-trufflehog-scan }}"
-          echo "Perform source clear scan set to ${{ inputs.perform-srcclr-scan }}"   
-          echo "Perform Veracode SCA scan set to ${{ inputs.perform-veracode-sca-scan }}"
-          echo "Perform BlackDuck SCA scan set to ${{ inputs.perform-blackduck-sca-scan }}"
-          echo "*************************************************************"
-          echo "Perform SonarQube scan set to ${{ inputs.perform-sonarqube-sca-scan }}"
-          echo "Perform BlackDuck coverity scan set to ${{ inputs.perform-blackduck-coverity }}"
-          echo "Perform BlackDuck polaris scan set to ${{ inputs.perform-blackduck-polaris }}"
-          echo "Generate SBOM set to ${{ inputs.generate-sbom }}"
+          echo "** PRE-CHECKS ***********************************************"
+          echo "  Perform complexity checks set to ${{ inputs.perform-complexity-checks }}"
+          echo "  SCC output filename set to ${{ inputs.scc-output-filename }} "
+          echo "  Perform language-specific linting set to ${{ inputs.perform-language-linting }}"
+          echo "** SECURITY *************************************************"
+          echo "  Perform trufflehog scan set to ${{ inputs.perform-trufflehog-scan }}"
+          echo "  Perform BlackDuck polaris scan set to ${{ inputs.perform-blackduck-polaris }}"
+          echo "  Polaris application name set to ${{ inputs.polaris-application-name }}"
+          echo "  Polaris project name set to ${{ inputs.polaris-project-name }}"
+          echo "  Perform BlackDuck SCA scan set to ${{ inputs.perform-blackduck-sca-scan }}"
+          echo "** BUILD AND UNIT TEST *************************************"
+          echo "  BUILD set to ${{ inputs.build }}"
+          echo "  Language set to ${{ inputs.language }} "
+          echo "  Unit tests set to ${{ inputs.unit-tests }}"
+          echo "** SONAR ***************************************************"
+          echo "  Perform SonarQube scan set to ${{ inputs.perform-sonarqube-scan }}"
+          echo "  Perform Sonar build set to ${{ inputs.perform-sonar-build }}"
+          echo "  Sonar unit test inclusion set to ${{ inputs.report-unit-test-coverage }}"
+          echo "** DEV DASHBOARD *******************************************"
+          echo "  Report to Atlassian dashboard set to ${{ inputs.report-to-atlassian-dashboard }}"
+          echo "  Quality product name set to ${{ inputs.quality-product-name }}"
+          echo "** PACKAGING ***********************************************"
+          echo "  Package binaries set to ${{ inputs.package-binaries }}"
+          echo "  Habitat build set to ${{ inputs.habitat-build }}"
+          echo "  Publish packages set to ${{ inputs.publish-packages }}"
+          echo "** SBOM ****************************************************"
+          echo "  Generate SBOM set to ${{ inputs.generate-sbom }}"
+          echo "  Export SBOM to GitHub set to ${{ inputs.export-github-sbom }}"
+          echo "  Generate BlackDuck SBOM set to ${{ inputs.generate-blackduck-sbom }}"
+          echo "  Generate MSFT SBOM set to ${{ inputs.generate-msft-sbom }}"
+          echo " License scout set to ${{ inputs.license_scout }}"
+          echo "** USER DEFINED FLAGS ***************************************"
+          if [ -n "$${{ inputs.udf1 }}" ]; then  # or == 'true' or = " some value" or -z (empty string)
+            echo "  UDF1 set to ${{ inputs.udf1 }}"
+          fi
         # echo "The job_id is: $GITHUB_JOB"   
-        # echo ${{ secrets.GITHUB_TOKEN }} DO NOT DO THIS
+        # echo ${{ secrets.GITHUB_TOKEN }} DO NOT ECHO THIS
 
+        # also echo when used - go-private-modules, quality-sonar-app-name, quality-testing-type, quality-service-name, quality-junit-report
+
+        # read in repo custom metadata/properties for chef-primary-application, chef-build-profile, and chef-build-language
+  # getCustomRepoProperties:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: octokit/request-action@v2.4.0
+  #       with:
+  #         route: GET /repos/{owner}/{repo}/releases/properties/values
+  #         owner: chef
+  #         repo: request-action
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #     - run: "echo latest release: '${{ steps.getCustomRepoProperties.outputs.data }}'"
+    # then jq it to get thega-build-language, ga-build-profile, primary-application
+    # scripts can curl the address above to get custom metadata (like git client opening a PR)
+      
   checkout:
     name: 'Checkout repository'
     runs-on: ubuntu-latest
@@ -240,6 +276,7 @@ jobs:
     name: 'Source code complexity checks'
     if: ${{ inputs.perform-complexity-checks == true }}
     uses: chef/common-github-actions/.github/workflows/scc.yml@main
+    needs: checkout
     with:
       outputfilename: ${{ inputs.scc-output-filename }}
 
@@ -247,8 +284,9 @@ jobs:
 # language specific tests (gosec, rubocop, linters, etc.)
   rust-language-checks:
     name: 'Rust-specific pre-compilation steps and linting'  
-    if: ${{ inputs.language == 'Rust' && inputs.perform-complexity-checks == true }}
+    if: ${{ inputs.language == 'Rust' && inputs.perform-language-linting == true }}
     runs-on: ubuntu-latest
+    needs: checkout
     steps:
       - run: echo 'crate linter'
 # https://github.com/rust-lang/rust-clippy
@@ -256,8 +294,9 @@ jobs:
 
   ruby-language-checks:
     name: 'Ruby-specific pre-compilation steps and linting'  
-    if: ${{ inputs.language == 'Ruby' && inputs.perform-complexity-checks == true }}
+    if: ${{ inputs.language == 'Ruby' && inputs.perform-language-linting == true }}
     runs-on: ubuntu-latest
+    needs: checkout
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -279,8 +318,9 @@ jobs:
 
   go-language-checks:
     name: 'Go-specific pre-compilation steps and linting'  
-    if: ${{ inputs.language == 'Go' && inputs.perform-complexity-checks == true }}
+    if: ${{ inputs.language == 'Go' && inputs.perform-language-linting == true }}
     runs-on: ubuntu-latest
+    needs: checkout
     steps:
       - run: |
           echo 'go linter'
@@ -299,6 +339,7 @@ jobs:
   language-agnostic-checks:
     name: 'OWASP dependency checks'  
     runs-on: ubuntu-latest
+    needs: checkout
     steps:
       - name: 'Language-agnostic pre-compilation steps (OWASP dependency check)'  
         uses: dependency-check/Dependency-Check_Action@main
@@ -321,7 +362,7 @@ jobs:
               
   ################################################################################################################
   #
-  #    Security source code SCA scans
+  #    Security SAST and SCA scans
   #
   ################################################################################################################
   
@@ -330,7 +371,7 @@ jobs:
     name: 'Trufflehog scan'
     if: ${{ inputs.perform-trufflehog-scan == true }}
     uses: chef/common-github-actions/.github/workflows/trufflehog.yml@main
-    needs: precompilation-checks
+    needs: checkout
 
   # run-srcclr:
   #   if: ${{ inputs.perform-srcclr-scan == true }}
@@ -343,17 +384,133 @@ jobs:
   #   needs: run-scc
   #   secrets: inherit
       
-  # # BLACKDUCK TOOLS
+  # BLACKDUCK POLARIS SAST SCAN
   # # updated to https://documentation.blackduck.com/bundle/bridge/page/documentation/c_download.html#polaris-download
   # # https://github.com/marketplace/actions/black-duck-security-scan
-  # # for polaris, coverity, SRM (SBOM), and SCA (BlackDuck SCA) - Chef uses polaris and SBOM later in this script
+  # NOT USED - from https://documentation.blackduck.com/bundle/bridge/page/documentation/t_github-polaris-quickstart.html
+  # parameters @ https://documentation.blackduck.com/bundle/bridge/page/documentation/c_github-polaris.html
+  # internal confluence https://progresssoftware.atlassian.net/wiki/spaces/TCE/pages/1010336076/Polaris#Examples
+  # chef-vault at https://polaris.blackduck.com/portfolio/portfolios/8b7ad6f7-6dcb-49ec-bded-bfc4f190d4f8/portfolio-items/fe369baf-11d2-4989-bcb7-045577856dcc/projects/2460eabd-d033-48a1-a378-6cadd49be6d1/tests/sast?branchId=a6d2c02a-05f8-4557-bfa1-c40e9337ee5d
+  polaris-sast:
+    if: ${{ inputs.perform-blackduck-polaris == true }}
+    runs-on: ubuntu-latest
+    needs: checkout
+    steps:
+      - name: Starting Black Duck Polaris scan
+        run: |
+          echo "POLARIS_SERVER_URL: ${{ secrets.POLARIS_SERVER_URL }}"
+          echo "Polaris application name: ${{ inputs.polaris-application-name }}"
+          echo "Polaris project name: ${{ inputs.polaris-project-name }}"
+        # echo "POLARIS_ACCESS_TOKEN: ${{ secrets.POLARIS_ACCESS_TOKEN }}"
+      - name: Check input variables
+        run: |
+          if [[ -z "${{ inputs.polaris-application-name }}" ]] || [[ -z "${{ inputs.polaris-project-name }}" ]]; then
+              echo "Polaris application name and project name must be set"
+              exit 1
+          fi
+      # - name: Checkout - already done above
+      #   uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
+      #   with:
+      #     fetch-depth: 1
+      #     submodules: ${{ inputs.git-submodule-strategy }}
+      #     token: ${{ env.GHA_TOKEN }}
+      - name: Polaris scan
+        uses: blackduck-inc/black-duck-security-scan@v2.1.1
+        # uses: blackduck-inc/black-duck-security-scan@805cbd09e806b01907bbea0f990723c2bb85abe9 # 2.0.0 - Jan's version
+        with:
+          ### SCANNING: Required fields
+          polaris_server_url: ${{ secrets.POLARIS_SERVER_URL }} # https://polaris.blackduck.com
+          polaris_access_token: ${{ secrets.POLARIS_ACCESS_TOKEN }}
+          polaris_assessment_types: "SAST"  # may not be licensed for SCA, in the next job ("SCA, SAST")
+          ### SCANNING: Optional fields
+          polaris_application_name: ${{ inputs.polaris-application-name }}
+          polaris_project_name: ${{ inputs.polaris-project-name }}
+        # from Jan's
+        # github_token: ${{ secrets.GITHUB_TOKEN }}
+        # polaris_prComment_enabled: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
+        # polaris_prComment_severities: "CRITICAL,HIGH"
+        
+        # from Blackduck page at https://polaris.blackduck.com/portfolio/portfolios/8b7ad6f7-6dcb-49ec-bded-bfc4f190d4f8/portfolio-items/fe369baf-11d2-4989-bcb7-045577856dcc/projects
+          ### PULL REQUEST COMMENTS: Uncomment below to enable
+          # polaris_prComment_enabled: true 
+          # github_token: ${{ secrets.GH_TOKEN }} # Required when PR comments is enabled
+          
+          ### SARIF report parameters
+          # polaris_reports_sarif_create: true
+          # polaris_upload_sarif_report: true
+
+          ### Mark build status if policy violating issues are found
+          # mark_build_status: 'success'
+          
+          ### Uncomment below configuration to add custom logic based on return status
+          # - name: cmdLine
+          # id: cmdLine
+          # run: |
+          # EXIT_CODE=${{ steps.black-duck-security-scan.outputs.status }}
+          # echo "Black Duck Security Scan exit status - $EXIT_CODE"
+
+        # see inputs above for syntax on application name and project name - app name is more than # ${{ github.event.repository.name }}
+        # polaris_project_name: ${{ github.event.repository.name }}
+
+  # BLACKDUCK POLARIS SAST SCAN
+  #  used to --- uses: chef/common-github-actions/.github/workflows/blackduck-sca.yml@main
+    # from https://documentation.blackduck.com/bundle/bridge/page/documentation/c_github-blackduck.html 
+    # parameters @ https://documentation.blackduck.com/bundle/bridge/page/documentation/c_using-bridge-with-black-duck.html 
   run-blackduck-sca:
-    name: 'BlackDuck SCA scan'
     if: ${{ inputs.perform-blackduck-sca-scan == true }}
-    uses: chef/common-github-actions/.github/workflows/blackduck-sca.yml@main
-    needs: precompilation-checks
-    secrets: inherit 
-            
+    runs-on: ubuntu-latest
+    needs: checkout
+    steps:
+      - name: Starting Black Duck SCA scan
+        run: |
+          echo "POLARIS_SERVER_URL: ${{ secrets.POLARIS_SERVER_URL }}"
+          echo "Polaris application name: ${{ inputs.polaris-application-name }}"
+          echo "Polaris project name: ${{ inputs.polaris-project-name }}"
+      - name: Check input variables
+        run: |
+          if [[ -z "${{ inputs.polaris-application-name }}" ]] || [[ -z "${{ inputs.polaris-project-name }}" ]]; then
+              echo "Polaris application name and project name must be set"
+              exit 1
+          fi
+      # - name: Checkout - already done above
+      
+      - name: Black Duck scan
+        uses: blackduck-inc/black-duck-security-scan@v2.1.1
+      # uses: blackduck-inc/black-duck-security-scan@805cbd09e806b01907bbea0f990723c2bb85abe9 # 2.0.0 Jan's version 
+        env:
+          DETECT_PROJECT_NAME: ${{ inputs.polaris-project-name }}
+      #         DETECT_PROJECT_NAME: ${{ github.event.repository.name }}
+      #         DETECT_PROJECT_VERSION_NAME: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || github.ref_name }}
+        with:
+          ### SCANNING: Required fields
+          blackducksca_url: ${{ secrets.BLACKDUCK_URL }}
+          blackducksca_token: ${{ secrets.BLACKDUCKSCA_ACCESS_TOKEN }}    # {{ BLACKDUCK_TOKEN }}
+          ### SCANNING: Optional fields
+          # blackducksca_scan_full: ${{ github.event_name == 'pull_request' && 'false' || 'true' }}
+          detect_args: "--detect.diagnostic=true --detect.excluded.detector.types=GIT --detect.yarn.dependency.types.excluded=NON_PRODUCTION"
+          blackducksca_scan_failure_severities: 'BLOCKER,CRITICAL'
+          ### FIX PULL REQUEST CREATION: Uncomment below to enable
+          # blackducksca_fixpr_enabled: true
+          # github_token: ${{ secrets.GITHUB_TOKEN }} # Required when Fix PRs is enabled
+          
+          ### PULL REQUEST COMMENTS: Uncomment below to enable
+          # blackducksca_prComment_enabled: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
+          # github_token: ${{ secrets.GITHUB_TOKEN }}
+  
+          ### SARIF report generation and upload to GitHub Adavanced Security: Uncomment below to enable
+          # blackducksca_reports_sarif_create: true # Create Black Duck SCA SARIF report and upload it as artifact
+      - name: Show logs
+        if: failure()
+        run: |
+          cat .bridge/Blackduck\ SCA\ Detect\ Execution/detect/runs/*/logs/all.txt
+
+  # # older tool no longer used in Progress
+  # # run-blackduck-coverity:
+  # #   if: ${{ inputs.perform-blackduck-coverity == true }}
+  # #   uses: chef/common-github-actions/.github/workflows/tools/blackduck-coverity.yml@main
+  # #   needs: echo_inputs
+  # #   secrets: inherit
+
   # ################################################################################################################
   # #
   # #    Build and packaging steps
@@ -363,7 +520,7 @@ jobs:
   ci-build:
     name: 'Build and compilation'
     if : ${{ inputs.build == true }}
-    needs: precompilation-checks
+    needs: checkout
     runs-on: ubuntu-latest
     steps:
       - name: BUILD
@@ -479,7 +636,7 @@ jobs:
   Sonar-SAST-public:
     name: 'PUBLIC Sonar SAST scan'
     needs: ci-build
-    if: ${{ inputs.perform-sonarqube-sca-scan == true && success() && inputs.visibility == 'public'}}
+    if: ${{ inputs.perform-sonarqube-scan == true && success() && inputs.visibility == 'public'}}
     uses: chef/common-github-actions/.github/workflows/sonarqube-public-repo.yml@main
     secrets: inherit
     permissions:
@@ -504,7 +661,7 @@ jobs:
         
   Sonar-SAST-private:
     name: 'PRIVATE Sonar scan'
-    if: ${{ inputs.perform-sonarqube-sca-scan == true && success() && inputs.visibility == 'private'}}
+    if: ${{ inputs.perform-sonarqube-scan == true && success() && inputs.visibility == 'private'}}
     needs: ci-build
     uses: chef/common-github-actions/.github/workflows/sonarqube-private-repo.yml@main
     secrets: inherit
@@ -530,7 +687,7 @@ jobs:
   
   Sonar-SAST-internal:
     name: 'INTERNAL Sonar scan'
-    if: ${{ inputs.perform-sonarqube-sca-scan == true && success() && inputs.visibility == 'internal'}}
+    if: ${{ inputs.perform-sonarqube-scan == true && success() && inputs.visibility == 'internal'}}
     needs: ci-build
     uses: chef/common-github-actions/.github/workflows/sonarqube-internal-repo.yml@main
     secrets: inherit
@@ -553,20 +710,6 @@ jobs:
       udf1: ${{ inputs.udf1 }}
       udf2: ${{ inputs.udf2 }}
       udf3: ${{ inputs.udf3 }}
-      
-  # # older tool no longer used in Progress
-  # # run-blackduck-coverity:
-  # #   if: ${{ inputs.perform-blackduck-coverity == true }}
-  # #   uses: chef/common-github-actions/.github/workflows/tools/blackduck-coverity.yml@main
-  # #   needs: echo_inputs
-  # #   secrets: inherit
-
-  # run-blackduck-polaris:
-  #   name: 'BlackDuck polaris scan'
-  #   if: ${{ inputs.perform-blackduck-polaris == true }}
-  #   uses: chef/common-github-actions/.github/workflows/blackduck-polaris.yml@main
-  #   needs: ci-build
-  #   secrets: inherit
     
   ################################################################################################################
   #
@@ -627,7 +770,7 @@ jobs:
     secrets: inherit
     with:
       export-github-sbom: ${{ inputs.export-github-sbom }}
-      generate-blackduck-polaris-sbom: ${{ inputs.generate-blackduck-polaris-sbom }}
+      generate-blackduck-sbom: ${{ inputs.generate-blackduck-sbom }}
       generate-msft-sbom: ${{ inputs.generate-msft-sbom }}
       license_scout: ${{ inputs.license_scout }}
       go-private-modules: ${{ inputs.go-private-modules }}

@@ -66,3 +66,6 @@ https://github.com/actions/starter-workflows/blob/main/code-scanning/snyk-contai
 Evaluate other tools:
 https://github.com/actions/starter-workflows/blob/main/code-scanning/sysdig-scan.yml
 https://github.com/actions/starter-workflows/blob/main/code-scanning/trivy.yml
+
+## References for building in GitHub Actions
+https://docs.github.com/en/actions/sharing-automations/reusing-workflows#passing-inputs-and-secrets-to-a-reusable-workflow
