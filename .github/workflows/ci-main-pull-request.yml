@@ -572,7 +572,7 @@ jobs:
   
   ci-build:
     name: 'Build and compilation'
-    if : ${{ inputs.build == true }}
+    # if : ${{ inputs.build == true }}
     needs: checkout
     runs-on: ubuntu-latest
     steps:
