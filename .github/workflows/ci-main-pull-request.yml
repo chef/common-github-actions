@@ -240,8 +240,8 @@ jobs:
           # echo "chef-ga-build-profile=$custom_property_value" >> $GITHUB_ENV
           
           echo "PRIMARY APP... $primaryApplication"
-          echo "BUILD LANG... $primaryApplication"
-          echo "PRIMARY APP... $primaryApplication"
+          echo "BUILD LANG... $GABuildLanguage"
+          echo "BUILD PROFILE... $GABuildProfile"
           
           echo "chef-application-name=$primaryApplication" >> $GITHUB_ENV
           echo "chef-ga-build-language=$GABuildLanguage" >> $GITHUB_ENV
@@ -256,10 +256,10 @@ jobs:
         run: |
           echo "CI pipeline execution plan for [$REPO_NAME] version $PIPELINE_VERSION"
           echo "  Repository visibility set to $REPO_VISIBILITY [ ${{ inputs.visibility }} ]"
-          echo "  Repository belongs to application $chef-application-name"
+          echo "  Repository belongs to application ${ chef-application-name }"
           
-          echo "  Build language set to ${ env.chef-ga-build-language }"
-          echo "  Build profile set to ${ env.chef-ga-build-profile }"
+          echo "  Build language set to ${ chef-ga-build-language }"
+          echo "  Build profile set to ${ chef-ga-build-profile }"
           echo "  GOPRIVATE for Go private modules set to ${{ inputs.go-private-modules }}"
           echo "** PRE-CHECKS ***********************************************"
           if [ ${{ inputs.perform-complexity-checks }} ]; then
