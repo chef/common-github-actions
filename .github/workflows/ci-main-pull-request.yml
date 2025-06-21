@@ -14,6 +14,11 @@
 # 8. generate software bill-of-materials (SBOM) using SPDX format and lookup licenses (GitHub SBOM, Micrsosoft SBOM, license_scout, and/or BlackDuck SBOM)
 # 
 # See DEV-README.md for more details on the steps and how to use this action, or the confluence page at <TODO: URL>
+#
+# secrets required (by step) - # secrets are inherited from the calling workflow, typically SONAR_TOKEN, SONAR_HOST_URL, GH_TOKEN, AKEYLESS_JWT_ID
+#
+# custom repository properties are listed below as ENV vars (view these in the repo Settings > Code & Automation > Custom Properties)
+#    
 
 name: CI flow containing PR checks for main & release, v2
 
@@ -24,7 +29,12 @@ on:
         description: 'Visibility of the repository'
         required: false
         type: string
-        default: 'public' # (private, public, or internal)
+        default: 'public' # (private, public, or internal) TODO: should be removed, we know this from github.event.repository.visibility
+      go-private-modules:
+        description: 'GOPRIVATE for Go private modules'
+        required: false
+        type: string
+        default: 'github.com/progress-platform-services/*'
       perform-complexity-checks: 
         description: 'Perform complexity checks with SCC'
         required: false
@@ -72,16 +82,6 @@ on:
         required: false
         type: boolean
         default: true
-      ga-build-profile: # from custom repo property ga-build-profile 
-        description: 'Build profile for the application, for example default, production, or development'
-        required: false
-        type: string
-        default: 'default' # (default, production, development)
-      language:
-        description: 'Primary language in the repository, for language-specific 3rd party dep checks, builds, and unit testing'
-        required: false
-        type: string
-        default: 'Go' # (Go, Ruby, Rust)
       unit-tests:
         description: 'Run unit tests (language-specific)'
         required: false
@@ -137,16 +137,6 @@ on:
         required: false
         type: string
         default: 'path/to/junit/report'
-      generate-sbom:
-        description: 'Generate software bill-of-materials (SPDX SBOM)'
-        required: false
-        type: boolean
-        default: true
-      go-private-modules:
-        description: 'GOPRIVATE for Go private modules'
-        required: false
-        type: string
-        default: 'github.com/progress-platform-services/*'
       package-binaries:
         description: 'Package binaries (e.g., RPM, DEB, MSI, dpkg + signing + SHA)'
         required: false
@@ -159,6 +149,11 @@ on:
         default: true
       publish-packages:
         description: 'Publish packages (e.g., container from Dockerfile to ECR, go-releaser binary to releases page, omnibus to artifactory, gems, choco, homebrew, other app stores)'
+        required: false
+        type: boolean
+        default: true
+      generate-sbom:
+        description: 'Generate software bill-of-materials (SPDX SBOM)'
         required: false
         type: boolean
         default: true
@@ -201,22 +196,73 @@ on:
 env:
   REPO_VISIBILITY: ${{ github.event.repository.visibility }}
   REPO_NAME: ${{ github.event.repository.name }}
-  PIPELINE_VERSION: '1.0.2'
+  PIPELINE_VERSION: '1.0.2'  
+  chef-application-name: 'default'   # Custom repo property [primaryApplication]: chef360, automate, infra-server, habitat, supermarket, licensing, downloads, chef-client, inspec, chef-workstation (or derivatives like habitat-builder)
+  chef-ga-build-language: 'default'  # Custom repo property [GABuildLanguage]: go, ruby, erlang, rust (replaces Language input)
+  chef-ga-build-profile: 'default'   # Custom repo property [GABuildProfile]: TBD
 
 jobs:
   precompilation-checks:
     name: 'Pre-compilation checks'
-    if: ${{ inputs.perform-complexity-checks == true }}
     runs-on: ubuntu-latest
     steps:
+      - name: 'Detect environment variables from repository custom properties'
+      # GH API returns something like [{"property_name":"GABuildLanguage","value":"go"},{"property_name":"GABuildProfile","value":"cli"},{"property_name":"primaryApplication","value":"chef-360"}]'
+        run: |
+          response=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/${{ github.repository }}/properties/values) 
+
+          # | jq -r '.primaryApplication.value')
+          # custom_property_value=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/${{ github.repository }}/properties/values" ) 
+          # echo "chef-application-name=$custom_property_value" >> $GITHUB_ENV
+          # #  | jq -r '.primary-application.value') 
+
+          primaryApplication=$(echo "$response" | jq -r '.[] | select(.property_name=="primaryApplication") | .value')
+          GABuildLanguage=$(echo "$response" | jq -r '.[] | select(.property_name=="GABuildLanguage") | .value')
+          GABuildProfile=$(echo "$response" | jq -r '.[] | select(.property_name=="GABuildProfile") | .value')
+          
+          # echo $response 
+          # response=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/${{ github.repository }}/properties/values | jq -r '.GABuildLanguage.value')
+          # echo $response 
+          # response=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/${{ github.repository }}/properties/values | jq -r '.GABuildProfile.value')
+          # echo $response 
+
+          # custom_property_value=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          #   "https://api.github.com/repos/${{ github.repository }}/properties/values" | jq -r '.ga-build-language.value') 
+          # echo "chef-ga-build-language=$custom_property_value" >> $GITHUB_ENV
+
+          # custom_property_value=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          #   "https://api.github.com/repos/${{ github.repository }}/properties/values" | jq -r '.ga-build-profile.value') 
+          # echo "chef-ga-build-profile=$custom_property_value" >> $GITHUB_ENV
+          
+          echo "PRIMARY APP... $primaryApplication"
+          echo "BUILD LANG... $primaryApplication"
+          echo "PRIMARY APP... $primaryApplication"
+          
+          echo "chef-application-name=$primaryApplication" >> $GITHUB_ENV
+          echo "chef-ga-build-language=$GABuildLanguage" >> $GITHUB_ENV
+          echo "chef-ga-build-profile=$GABuildProfile" >> $GITHUB_ENV
+          # echo "chef-ga-build-language=${{ env.chef-ga-build-language }}" >> $GITHUB_ENV
+          # echo "chef-ga-build-profile=${{ env.chef-ga-build-profile }}" >> $GITHUB_ENV
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+          
       - name: 'Echo version of pipeline and inputs'
         run: |
-          echo "CI Pipeline Version $PIPELINE_VERSION"
-          echo "Repository visibility set to $REPO_VISIBILITY [ ${{ inputs.visibility }} ]"
+          echo "CI pipeline execution plan for [$REPO_NAME] version $PIPELINE_VERSION"
+          echo "  Repository visibility set to $REPO_VISIBILITY [ ${{ inputs.visibility }} ]"
+          echo "  Repository belongs to application ${ env.chef-application-name }"
+          echo "  Build language set to ${ env.chef-ga-build-language }"
+          echo "  Build profile set to ${ env.chef-ga-build-profile }"
+          echo "  GOPRIVATE for Go private modules set to ${{ inputs.go-private-modules }}"
           echo "** PRE-CHECKS ***********************************************"
-          echo "  Perform complexity checks set to ${{ inputs.perform-complexity-checks }}"
-          echo "  SCC output filename set to ${{ inputs.scc-output-filename }} "
-          echo "  Perform language-specific linting set to ${{ inputs.perform-language-linting }}"
+          if [ ${{ inputs.perform-complexity-checks }} ]; then
+            echo "  Perform complexity checks set to ${{ inputs.perform-complexity-checks }}"
+            echo "  SCC output filename set to ${{ inputs.scc-output-filename }} "
+          fi
+          if [ ${{ inputs.perform-language-linting }} ]; then
+            echo "  Perform language-specific linting set to ${{ inputs.perform-language-linting }}"
+          fi
           echo "** SECURITY *************************************************"
           echo "  Perform trufflehog scan set to ${{ inputs.perform-trufflehog-scan }}"
           echo "  Perform BlackDuck polaris scan set to ${{ inputs.perform-blackduck-polaris }}"
@@ -225,7 +271,7 @@ jobs:
           echo "  Perform BlackDuck SCA scan set to ${{ inputs.perform-blackduck-sca-scan }}"
           echo "** BUILD AND UNIT TEST *************************************"
           echo "  BUILD set to ${{ inputs.build }}"
-          echo "  Language set to ${{ inputs.language }} "
+          echo "  Language set to ${{ env.chef-ga-build-language }} "
           echo "  Unit tests set to ${{ inputs.unit-tests }}"
           echo "** SONAR ***************************************************"
           echo "  Perform SonarQube scan set to ${{ inputs.perform-sonarqube-scan }}"
@@ -252,21 +298,6 @@ jobs:
         # echo ${{ secrets.GITHUB_TOKEN }} DO NOT ECHO THIS
 
         # also echo when used - go-private-modules, quality-sonar-app-name, quality-testing-type, quality-service-name, quality-junit-report
-
-        # read in repo custom metadata/properties for chef-primary-application, chef-build-profile, and chef-build-language
-  # getCustomRepoProperties:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: octokit/request-action@v2.4.0
-  #       with:
-  #         route: GET /repos/{owner}/{repo}/releases/properties/values
-  #         owner: chef
-  #         repo: request-action
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #     - run: "echo latest release: '${{ steps.getCustomRepoProperties.outputs.data }}'"
-    # then jq it to get thega-build-language, ga-build-profile, primary-application
-    # scripts can curl the address above to get custom metadata (like git client opening a PR)
       
   checkout:
     name: 'Checkout repository'
@@ -289,7 +320,7 @@ jobs:
 # language specific tests (gosec, rubocop, linters, etc.)
   rust-language-checks:
     name: 'Rust-specific pre-compilation steps and linting'  
-    if: ${{ inputs.language == 'Rust' && inputs.perform-language-linting == true }}
+    if: ${{ env.chef-ga-build-language == 'Rust' && inputs.perform-language-linting == true }}
     runs-on: ubuntu-latest
     needs: checkout
     steps:
@@ -299,7 +330,7 @@ jobs:
 
   ruby-language-checks:
     name: 'Ruby-specific pre-compilation steps and linting'  
-    if: ${{ inputs.language == 'Ruby' && inputs.perform-language-linting == true }}
+    if: ${{ env.chef-ga-build-language == 'Ruby' && inputs.perform-language-linting == true }}
     runs-on: ubuntu-latest
     needs: checkout
     steps:
@@ -325,7 +356,7 @@ jobs:
 
   go-language-checks:
     name: 'Go-specific pre-compilation steps and linting'  
-    if: ${{ inputs.language == 'Go' && inputs.perform-language-linting == true }}
+    if: ${{ env.chef-ga-build-language == 'Go' && inputs.perform-language-linting == true }}
     runs-on: ubuntu-latest
     needs: checkout
     steps:
@@ -545,7 +576,7 @@ jobs:
   #   name: 'CI build and compilation steps'  
   #   steps:
   #     - name: Build for Rust binary
-  #       if: ${{ inputs.language == 'Rust' }}
+  #       if: ${{ env.chef-ga-build-language == 'Rust' }}
   #       run: echo 'hello world'
   #       # cargo build --release --target-dir ./bin
   #     - name: Build for Ruby binary
@@ -582,7 +613,7 @@ jobs:
   ci-unit-test: # FROM CHEF-VAULT
   # TODO: add language-specific unit tests
     name: 'Unit tests'
-    if: ${{ inputs.unit-tests == true && success() && inputs.language == 'Ruby' }}
+    if: ${{ inputs.unit-tests == true && success() && env.chef-ga-build-language == 'Ruby' }}
     needs:  ci-build
     strategy:
       fail-fast: false
@@ -660,7 +691,7 @@ jobs:
     with:
       perform-build: ${{ inputs.perform-sonar-build }}
       build-profile: ${{ inputs.build-profile }}
-      language: ${{ inputs.language }}
+      language: ${{ env.chef-ga-build-language }}
       report-unit-test-coverage: ${{ inputs.report-unit-test-coverage }}
       report-to-atlassian-dashboard: ${{ inputs.report-to-atlassian-dashboard }}
       quality-product-name: ${{ inputs.quality-product-name }}
@@ -686,7 +717,7 @@ jobs:
     with:
       perform-build: ${{ inputs.perform-sonar-build }}
       build-profile: ${{ inputs.build-profile }}
-      language: ${{ inputs.language }}
+      language: ${{ env.chef-ga-build-language }}
       report-unit-test-coverage: ${{ inputs.report-unit-test-coverage }}
       report-to-atlassian-dashboard: ${{ inputs.report-to-atlassian-dashboard }}
       quality-product-name: ${{ inputs.quality-product-name }}
@@ -712,7 +743,7 @@ jobs:
     with:
       perform-build: ${{ inputs.perform-sonar-build }}
       build-profile: ${{ inputs.build-profile }}
-      language: ${{ inputs.language }}
+      language: ${{ env.chef-ga-build-language }}
       report-unit-test-coverage: ${{ inputs.report-unit-test-coverage }}
       report-to-atlassian-dashboard: ${{ inputs.report-to-atlassian-dashboard }}
       quality-product-name: ${{ inputs.quality-product-name }}

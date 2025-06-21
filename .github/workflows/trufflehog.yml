@@ -29,6 +29,10 @@ jobs:
     # may have to run it as command line:
       #    trufflehog --json <target_directory> > results/trufflehog_output.json
 
+    # or try to capture the output
+  #   - name: Write output to file
+  # run: echo "${{ steps.<previous_step_id>.outputs.<output_name> }}" > output.txt
+
     # - name: Upload test coverage artifact
     #   uses: actions/upload-artifact@v4
     #   with:
