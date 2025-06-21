@@ -82,6 +82,11 @@ on:
         required: false
         type: boolean
         default: true
+      language:
+        description: 'Build language (Go, Ruby, Rust, etc.)'
+        required: false
+        type: string
+        default: 'Ruby'  # TODO: should be removed, we know this from custom repository properties
       unit-tests:
         description: 'Run unit tests (language-specific)'
         required: false
@@ -272,6 +277,7 @@ jobs:
           echo "** BUILD AND UNIT TEST *************************************"
           echo "  BUILD set to ${{ inputs.build }}"
           echo "  Language set to ${{ env.chef-ga-build-language }} "
+          echo "  passed in as LANGUAGE = ${{ inputs.language }}"
           echo "  Unit tests set to ${{ inputs.unit-tests }}"
           echo "** SONAR ***************************************************"
           echo "  Perform SonarQube scan set to ${{ inputs.perform-sonarqube-scan }}"
@@ -320,7 +326,7 @@ jobs:
 # language specific tests (gosec, rubocop, linters, etc.)
   rust-language-checks:
     name: 'Rust-specific pre-compilation steps and linting'  
-    if: ${{ env.chef-ga-build-language == 'Rust' && inputs.perform-language-linting == true }}
+    if: ${{ inputs.language == 'Rust' && inputs.perform-language-linting == true }}
     runs-on: ubuntu-latest
     needs: checkout
     steps:
@@ -330,7 +336,7 @@ jobs:
 
   ruby-language-checks:
     name: 'Ruby-specific pre-compilation steps and linting'  
-    if: ${{ env.chef-ga-build-language == 'Ruby' && inputs.perform-language-linting == true }}
+    if: ${{ inputs.language == 'Ruby' && inputs.perform-language-linting == true }}
     runs-on: ubuntu-latest
     needs: checkout
     steps:
@@ -356,7 +362,7 @@ jobs:
 
   go-language-checks:
     name: 'Go-specific pre-compilation steps and linting'  
-    if: ${{ env.chef-ga-build-language == 'Go' && inputs.perform-language-linting == true }}
+    if: ${{ inputs.language == 'Go' && inputs.perform-language-linting == true }}
     runs-on: ubuntu-latest
     needs: checkout
     steps:
@@ -576,7 +582,7 @@ jobs:
   #   name: 'CI build and compilation steps'  
   #   steps:
   #     - name: Build for Rust binary
-  #       if: ${{ env.chef-ga-build-language == 'Rust' }}
+  #       if: ${{ inputs.language == 'Rust' }}
   #       run: echo 'hello world'
   #       # cargo build --release --target-dir ./bin
   #     - name: Build for Ruby binary
@@ -613,7 +619,7 @@ jobs:
   ci-unit-test: # FROM CHEF-VAULT
   # TODO: add language-specific unit tests
     name: 'Unit tests'
-    if: ${{ inputs.unit-tests == true && success() && env.chef-ga-build-language == 'Ruby' }}
+    if: ${{ inputs.unit-tests == true && success() && inputs.language == 'Ruby' }}
     needs:  ci-build
     strategy:
       fail-fast: false
@@ -691,7 +697,7 @@ jobs:
     with:
       perform-build: ${{ inputs.perform-sonar-build }}
       build-profile: ${{ inputs.build-profile }}
-      language: ${{ env.chef-ga-build-language }}
+      language: ${{ inputs.language }}
       report-unit-test-coverage: ${{ inputs.report-unit-test-coverage }}
       report-to-atlassian-dashboard: ${{ inputs.report-to-atlassian-dashboard }}
       quality-product-name: ${{ inputs.quality-product-name }}
@@ -717,7 +723,7 @@ jobs:
     with:
       perform-build: ${{ inputs.perform-sonar-build }}
       build-profile: ${{ inputs.build-profile }}
-      language: ${{ env.chef-ga-build-language }}
+      language: ${{ inputs.language }}
       report-unit-test-coverage: ${{ inputs.report-unit-test-coverage }}
       report-to-atlassian-dashboard: ${{ inputs.report-to-atlassian-dashboard }}
       quality-product-name: ${{ inputs.quality-product-name }}
@@ -743,7 +749,7 @@ jobs:
     with:
       perform-build: ${{ inputs.perform-sonar-build }}
       build-profile: ${{ inputs.build-profile }}
-      language: ${{ env.chef-ga-build-language }}
+      language: ${{ inputs.language }}
       report-unit-test-coverage: ${{ inputs.report-unit-test-coverage }}
       report-to-atlassian-dashboard: ${{ inputs.report-to-atlassian-dashboard }}
       quality-product-name: ${{ inputs.quality-product-name }}
