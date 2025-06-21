@@ -19,13 +19,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Generate complexity metrics (using Adapt-API action)
-        id: scc
-        uses: Adapt-API/scc-docker-action@master
-        with:
-          args: -o ${{ inputs.outputfilename }} -f json --by-file --sort lines,code,comments,blank  
-          # flags like -i js,go,html,css,rb at https://github.com/boyter/scc?tab=readme-ov-file#usage
-              
+      # - name: Generate complexity metrics (using Adapt-API action)
+      #   id: scc
+      #   uses: Adapt-API/scc-docker-action@master
+      # https://github.com/Adapt-API/scc-docker-action 
+      # TODO: no longer in marketplace
+      
+      #   with:
+      #     args: -o ${{ inputs.outputfilename }} -f json --by-file --sort lines,code,comments,blank  
+      #     # flags like -i js,go,html,css,rb at https://github.com/boyter/scc?tab=readme-ov-file#usage
+
+      - name: Install scc CLI
+        run: |
+          go install github.com/boyter/scc/v3@latest
+          scc -o ${{ inputs.outputfilename }} -f json --by-file --sort lines,code,comments,blank
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
