@@ -256,7 +256,8 @@ jobs:
         run: |
           echo "CI pipeline execution plan for [$REPO_NAME] version $PIPELINE_VERSION"
           echo "  Repository visibility set to $REPO_VISIBILITY [ ${{ inputs.visibility }} ]"
-          echo "  Repository belongs to application ${ env.chef-application-name }"
+          echo "  Repository belongs to application $chef-application-name"
+          
           echo "  Build language set to ${ env.chef-ga-build-language }"
           echo "  Build profile set to ${ env.chef-ga-build-profile }"
           echo "  GOPRIVATE for Go private modules set to ${{ inputs.go-private-modules }}"
