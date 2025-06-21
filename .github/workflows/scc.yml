@@ -34,6 +34,8 @@ jobs:
           go install github.com/boyter/scc/v3@latest
           export PATH="$PATH:$(go env GOPATH)/bin"
           scc -o ${{ inputs.outputfilename }} -f json --by-file --sort lines,code,comments,blank
+        continue-on-error: true
+    
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

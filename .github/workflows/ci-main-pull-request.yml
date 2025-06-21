@@ -72,6 +72,11 @@ on:
         required: false
         type: boolean
         default: true
+      ga-build-profile: # from custom repo property ga-build-profile 
+        description: 'Build profile for the application, for example default, production, or development'
+        required: false
+        type: string
+        default: 'default' # (default, production, development)
       language:
         description: 'Primary language in the repository, for language-specific 3rd party dep checks, builds, and unit testing'
         required: false
@@ -279,7 +284,7 @@ jobs:
     needs: checkout
     with:
       outputfilename: ${{ inputs.scc-output-filename }}
-
+     
 # TODO: make three separate flows, by language with all steps (as oposed to one file per step with language-branching in each)
 # language specific tests (gosec, rubocop, linters, etc.)
   rust-language-checks:
