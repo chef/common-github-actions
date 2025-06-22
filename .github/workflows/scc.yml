@@ -29,6 +29,7 @@ jobs:
       #     args: -o ${{ inputs.outputfilename }} -f json --by-file --sort lines,code,comments,blank  
       #     # flags like -i js,go,html,css,rb at https://github.com/boyter/scc?tab=readme-ov-file#usage
 
+      # TODO: add filename date stamp
       - name: Install scc CLI
         run: |
           go install github.com/boyter/scc/v3@latest
