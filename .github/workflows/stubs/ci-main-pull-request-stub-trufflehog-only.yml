@@ -1,7 +1,7 @@
 # stub to call common GitHub Action (GA) as part of Continuous Integration (CI) Pull Request process checks for main branch
+#
 # inputs are described in the <org>/common-github-actions/<GA.yml> with same name as this stub
 #
-# secrets are inherited from the calling workflow, typically SONAR_TOKEN, SONAR_HOST_URL, GH_TOKEN, AKEYLESS_JWT_ID
 
 name: CI Pull Request on Main Branch
 
@@ -51,12 +51,13 @@ jobs:
       # requires secrets POLARIS_SERVER_URL and POLARIS_ACCESS_TOKEN
       perform-blackduck-polaris: false
       polaris-application-name: 'Chef-Chef360'  # one of these: Chef-Agents, Chef-Automate, Chef-Chef360, Chef-Habitat, Chef-Infrastructure-Server, Chef-Shared-Services
-      polaris-project-name: ${{ polaris_application_name }}-${{ github.event.repository.name }}  # typically the application name, followed by - and the repository name, for example Chef-Chef360-chef-vault'
+      polaris-project-name: ${{ github.event.repository.name }}  # typically the application name, followed by - and the repository name, for example Chef-Chef360-chef-vault'
       perform-blackduck-sca-scan: false
       
       # perform application build and unit testing, will use custom repository properties when implemented for chef-primary-application, chef-build-profile, and chef-build-language
       build: false
-      language: 'Ruby'    # Go, Ruby, Rust  
+      # ga-build-profile: $chef-ga-build-profile   
+      # language: $chef-ga-build-language   # this will be removed from stub as autodetected in central GA
       unit-tests: false
  
       # perform SonarQube scan, with or wihout unit test coverage data
@@ -68,7 +69,7 @@ jobs:
 
       # report to central developer dashboard
       report-to-atlassian-dashboard: false
-      quality-product-name: 'Chef-360'   # product name for quality reporting, like Chef360, Courier, Inspec
+      quality-product-name: ${{ github.event.repository.name }}   # like 'Chef-360' - the product name for quality reporting, like Chef360, Courier, Inspec
       # quality-sonar-app-name: 'YourSonarAppName'
       # quality-testing-type: 'Integration' like Unit, Integration, e2e, api, Performance, Security
       # quality-service-name: 'YourServiceOrRepoName'
