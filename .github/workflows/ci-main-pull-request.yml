@@ -255,8 +255,8 @@ jobs:
           echo "  Repository visibility set to $REPO_VISIBILITY [ ${{ inputs.visibility }} ]"
           echo "  Repository belongs to application $PRIMARY_APPLICATION"
           
-          echo "  Build language set to ${ chef-ga-build-language }"
-          echo "  Build profile set to ${ chef-ga-build-profile }"
+          echo "  Build language set to $GA_BUILD_LANGUAGE [ input: ${{ inputs.language }} ]"
+          echo "  Build profile set to $GA_BUILD_PROFILE"
           echo "  GOPRIVATE for Go private modules set to ${{ inputs.go-private-modules }}"
           echo "** PRE-CHECKS ***********************************************"
           if [ ${{ inputs.perform-complexity-checks }} ]; then
