@@ -18,7 +18,7 @@ jobs:
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-        #  extra_args: --results=verified,unknown
+          extra_args: --only-verified
         continue-on-error: false
         # --only-verified --fail --github-actions --results=verified,unknown --branch dev
         # TODO: use the GH_TOKEN --org=progress --token=ghp_xxxxx
