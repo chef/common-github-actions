@@ -98,11 +98,13 @@ jobs:
     - name: Prepare Secrets and Login into Azure
       id: get-aad-secret
       uses: 'chef/common-github-actions/.github/actions/azure-login@main'
+      continue-on-error: true
       with:
         akeyless-access-id: '${{ secrets.AKEYLESS_JWT_ID }}'
       
     - name: Add runner IP to Firewall List
       uses: chef/common-github-actions/.github/actions/update-firewall-rule@main
+      continue-on-error: true
       with:
         action-to-execute: add
 
