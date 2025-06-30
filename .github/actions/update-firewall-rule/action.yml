@@ -11,7 +11,9 @@ runs:
     - name: ${{ inputs.action-to-execute }} Firewall Rule
       shell: bash
       run: |
-        AgentPublicIp=$(curl ipconfig.io)
+        AgentPublicIp=$(curl checkip.amazonaws.com)
         echo "##[warning]Adding $AgentPublicIp To Storage Account Firewall, Please Wait..."
         az network nsg rule update -n HTTPS_CI --nsg-name vmsonarqubeprod001-nsg -g rg-prgssonarqube-prod-001 --add sourceAddressPrefixes $AgentPublicIp
         sleep 30
+      # was AgentPublicIp=$(curl ipconfig.io) which returned a 522/timeout error, so switched to checkip.amazonaws.com
+        
