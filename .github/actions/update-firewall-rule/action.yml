@@ -10,13 +10,24 @@ runs:
   using: composite
   steps:
     - name: ${{ inputs.action-to-execute }} Firewall Rule
-      shell: bash
+      shell: pwsh
       run: |
-        AgentPublicIp=$(curl checkip.amazonaws.com)
-        echo "##[warning]${{ inputs.action-to-execute }}ing $AgentPublicIp To Storage Account Firewall, Please Wait..." 
-        az network nsg rule update -n HTTPS_CI --nsg-name vmsonarqubeprod001-nsg -g rg-prgssonarqube-prod-001 --${{ inputs.action-to-execute }} sourceAddressPrefixes $AgentPublicIp
-        sleep 30
-      # was echo "##[warning]Adding $AgentPublicIp To Storage Account Firewall, Please Wait..."
+          $AgentPublicIp = Invoke-RestMethod https://checkip.amazonaws.com
+          Write-Host "##[warning]${{ inputs.action-to-execute }}ing $AgentPublicIp To Storage Account Firewall, Please Wait..." 
+          az keyvault network-rule ${{ inputs.action-to-execute }} --name caps-evcodesign-useast --ip-address $AgentPublicIp
+          Start-Sleep -Seconds 20
+      
+      
+      # shell: bash
+      # run: |
+      #   AgentPublicIp=$(curl checkip.amazonaws.com)
+      #   echo "##[warning]${{ inputs.action-to-execute }}ing $AgentPublicIp To Storage Account Firewall, Please Wait..." 
+      #   az network nsg rule update -n HTTPS_CI --nsg-name vmsonarqubeprod001-nsg -g rg-prgssonarqube-prod-001 --${{ inputs.action-to-execute }} sourceAddressPrefixes $AgentPublicIp
+      #   CANONICAL UPDATED az network nsg rule update -n HTTPS_CI --nsg-name vmsonarqubeprod001-nsg -g rg-prgssonarqube-prod-001 --${{ inputs.action-to-execute }} --source-address-prefixes $AgentPublicIp
+      # CANONICAL  az network nsg rule update --name MyNsgRule --nsg-name MyNsg --resource-group MyResourceGroup --source-address-prefixes 208.130.28/24
+      #   sleep 30
+
+      # # was echo "##[warning]Adding $AgentPublicIp To Storage Account Firewall, Please Wait..."
       # was AgentPublicIp=$(curl ipconfig.io) which returned a 522/timeout error, so switched to checkip.amazonaws.com
       # az network nsg rule update -n HTTPS_CI --nsg-name vmsonarqubeprod001-nsg -g rg-prgssonarqube-prod-001 --add sourceAddressPrefixes $AgentPublicIp
         
