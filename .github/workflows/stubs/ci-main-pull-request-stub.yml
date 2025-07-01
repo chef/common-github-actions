@@ -1,5 +1,5 @@
 # stub to call common GitHub Action (GA) as part of Continuous Integration (CI) Pull Request process checks for main branch
-# inputs are described in the <org>/common-github-actions/<GA.yml> with same name as this stub
+# inputs are described in the chef/common-github-actions/<GA.yml> with same name as this stub
 #
 # secrets are inherited from the calling workflow, typically SONAR_TOKEN, SONAR_HOST_URL, GH_TOKEN, AKEYLESS_JWT_ID
 
@@ -26,7 +26,7 @@ jobs:
     steps:
       - name: echo version of stub and inputs
         run: |
-          echo "[ci-main-pull-request-stub.yml] version $STUB_VERSION"
+          echo "CI main pull request stub version $STUB_VERSION"
 
   call-ci-main-pr-check-pipeline:
     uses: chef/common-github-actions/.github/workflows/ci-main-pull-request.yml@main
@@ -51,7 +51,7 @@ jobs:
       # requires secrets POLARIS_SERVER_URL and POLARIS_ACCESS_TOKEN
       perform-blackduck-polaris: true
       polaris-application-name: 'Chef-Chef360'  # one of these: Chef-Agents, Chef-Automate, Chef-Chef360, Chef-Habitat, Chef-Infrastructure-Server, Chef-Shared-Services
-      polaris-project-name: ${{ polaris_application_name }}-${{ github.event.repository.name }}  # typically the application name, followed by - and the repository name, for example Chef-Chef360-chef-vault'
+      polaris-project-name: ${{ polaris_application_name }}-${{ github.event.repository.name }}  # typically the application name, followed by - and the repository name, for example Chef-Chef360-chef-vault
       perform-blackduck-sca-scan: true
      
       # perform application build and unit testing, will use custom repository properties when implemented for chef-primary-application, chef-build-profile, and chef-build-language
@@ -59,7 +59,7 @@ jobs:
       language: 'Ruby'    # Go, Ruby, Rust  
       unit-tests: false
  
-      # perform SonarQube scan, withor wihout unit test coverage data
+      # perform SonarQube scan, withor without unit test coverage data
       # requires secrets SONAR_TOKEN and SONAR_HOST_URL (progress.sonar.com)
       perform-sonarqube-scan: true
       perform-sonar-build: true
