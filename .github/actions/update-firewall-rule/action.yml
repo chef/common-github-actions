@@ -14,9 +14,9 @@ runs:
       run: |
         AgentPublicIp=$(curl checkip.amazonaws.com)
         echo "##[warning]${{ inputs.action-to-execute }}ing $AgentPublicIp To Storage Account Firewall, Please Wait..." 
-        az network nsg rule update -n HTTPS_CI --nsg-name vmsonarqubeprod001-nsg -g rg-prgssonarqube-prod-001 --${{ inputs.action-to-execute }} --source-address-prefixes $AgentPublicIp
+        az network nsg rule update -n HTTPS_CI --nsg-name vmsonarqubeprod001-nsg -g rg-prgssonarqube-prod-001 --${{ inputs.action-to-execute }} sourceAddressPrefixes $AgentPublicIp
         sleep 30
-        
+
       # CANONICAL  az network nsg rule update --name MyNsgRule --nsg-name MyNsg --resource-group MyResourceGroup --source-address-prefixes 208.130.28/24
       
       # # was echo "##[warning]Adding $AgentPublicIp To Storage Account Firewall, Please Wait..."
