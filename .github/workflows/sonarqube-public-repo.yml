@@ -108,10 +108,9 @@ jobs:
       with:
         action-to-execute: add
 
-    - name: wait
+    - name: Wait 30 sec
       shell: bash
       run: |
-        echo "##[warning]Waiting for 30 seconds to allow the firewall rule to take effect"
         sleep 30
       
     - name: SonarQube Scan

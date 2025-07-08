@@ -9,7 +9,18 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Remove Firewall Rule (thank you Eric)
+      if: ${{ inputs.action-to-execute == 'remove' }}
+      shell: bash
+      run: |
+        AgentPublicIp=$(curl https://checkip.amazonaws.com)
+        echo "##[warning]Removing $AgentPublicIp from the Storage Account Firewall, Please Wait..."
+        az network nsg rule update -n HTTPS_CI --nsg-name vmsonarqubeprod001-nsg -g rg-prgssonarqube-prod-001 \
+          --source-address-prefixes $(az network nsg rule show -g rg-prgssonarqube-prod-001 --nsg-name vmsonarqubeprod001-nsg -n HTTPS_CI \
+          --query "sourceAddressPrefixes[?@ != '$AgentPublicIp']" -o tsv)
+
     - name: ${{ inputs.action-to-execute }} Firewall Rule
+      if: ${{ inputs.action-to-execute == 'add' }}
       shell: bash
       run: |
         AgentPublicIp=$(curl checkip.amazonaws.com)
