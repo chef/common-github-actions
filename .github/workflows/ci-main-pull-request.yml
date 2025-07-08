@@ -793,10 +793,10 @@ jobs:
   package-binary:
     name: 'Creating packaged binaries'
     runs-on: ubuntu-latest
+    if: ${{ success() && inputs.package-binaries == true }}
     needs: ci-build
     steps:
       - name: 'Create packaged binaries'
-        if: ${{ success() && inputs.package-binaries == true }}
         run: echo "Creating packaged binaries"
   # TODO: add flag for any params needed
 
@@ -808,10 +808,10 @@ jobs:
   habitat-build:
     name: 'Creating Habitat packages'
     runs-on: ubuntu-latest
+    if: ${{ success() && inputs.habitat-build == true }}
     needs: package-binary
     steps:
       - name: 'Create Habitat packages'
-        if: ${{ success() && inputs.habitat-build == true }}
         run: echo "Creating Habitat packages"
   # TODO: add flag for any params needed
 
@@ -824,10 +824,10 @@ jobs:
   publish:
     name: 'Publishing packages'
     runs-on: ubuntu-latest
+    if: ${{ success() && inputs.publish-packages == true }}
     needs: habitat-build
     steps:
       - name: 'Publishing packages'
-        if: ${{ success() && inputs.publish-packages == true }}
         run: echo "Publishing packages"
   # TODO: add flag for any params needed
 
