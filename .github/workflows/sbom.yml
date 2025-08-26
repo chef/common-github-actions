@@ -69,9 +69,10 @@ jobs:
 
     - name: Generate Filename Prefix
       run: |
-        FILE_PREFIX=$(echo "${{ github.repository }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
+        FILE_PREFIX=$(echo "${{ github.repository }}-${{ github.ref_name }}-${{ inputs.version }}-" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
         echo "FILE_PREFIX=${FILE_PREFIX}" >> $GITHUB_ENV
-
+  # FILE_PREFIX=$(echo "${{ github.repository }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
+      
     - name: Download SBOM from GitHub Dependency Graph API
       run: |
         curl -L \
@@ -147,14 +148,14 @@ jobs:
     - name: Upload JSON artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ env.FILE_PREFIX }}-GitHub-sbom.json
-        path: ${{ env.FILE_PREFIX }}-GitHub-sbom.json
+        name: ${{ env.FILE_PREFIX }}-GitHub-SBOM.json
+        path: ${{ env.FILE_PREFIX }}-GitHub-SBOM.json
 
     - name: Upload SBOM CSV as Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ env.FILE_PREFIX }}-GitHub-sbom.csv
-        path: ${{ env.FILE_PREFIX }}-GitHub-sbom.csv
+        name: ${{ env.FILE_PREFIX }}-GitHub-SBOM.csv
+        path: ${{ env.FILE_PREFIX }}-GitHub-SBOM.csv
 
 # example project https://progresssoftware.app.blackduck.com/api/risk-profile-dashboard?limit=25&offset=0
 # server URL https://progresssoftware.app.blackduck.com/api/projects/c7954ee4-348d-4c2f-b259-d577e1df40dc
