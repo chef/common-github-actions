@@ -63,7 +63,7 @@ jobs:
       - name: Upload Vulnerability Scan Results
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.FILE_PREFIX }}-Trivy.json
+          name: ${{ env.FILE_PREFIX }}-Trivy.txt
           # name: trivy-report-${{ github.event.repository.name }}-${{ github.ref_name }}-${{ inputs.version }}-$(date +'%Y%m%d')-text
           path: trivy-report.txt
           retention-days: 30
