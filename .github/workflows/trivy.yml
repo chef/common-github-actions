@@ -9,6 +9,11 @@ on:
         required: false
         type: string
         default: 'trivy-output.json'
+      version:
+        description: 'Version of the project'
+        required: false
+        type: string
+        default: '1.0.0'
 
 jobs:
   trivy:
@@ -21,22 +26,38 @@ jobs:
         uses: actions/checkout@v4
 
       # The first call to the action will invoke setup-trivy and install trivy
-      - name: Generate Trivy Vulnerability Report
+      - name: Generate Trivy Vulnerability Report (JSON)
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: "fs"
           output: trivy-report.json
-          format: json
+          format: json  # can be json, table, template, cyclonedx, sarif, table, spdx, spdx-json
           scan-ref: .
           exit-code: 0
 
       - name: Upload Vulnerability Scan Results
         uses: actions/upload-artifact@v4
         with:
-          name: trivy-report
+          name: trivy-report-${{ github.event.repository.name }}-${{ github.ref_name }}-${{ inputs.version }}-$(date +'%Y%m%d')-json
           path: trivy-report.json
           retention-days: 30
 
+      - name: Generate Trivy Vulnerability Report (TABLE)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          output: trivy-report.txt
+          format: table  
+          scan-ref: .
+          skip-setup-trivy: true
+          exit-code: 0
+
+      - name: Upload Vulnerability Scan Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report-${{ github.event.repository.name }}-${{ github.ref_name }}-${{ inputs.version }}-$(date +'%Y%m%d')-text
+          path: trivy-report.txt
+          retention-days: 30
           #   - name: Fail build on High/Criticial Vulnerabilities
         #     uses: aquasecurity/trivy-action@master
         #     with:

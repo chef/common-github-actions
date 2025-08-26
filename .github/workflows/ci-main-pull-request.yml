@@ -461,6 +461,8 @@ jobs:
     if: ${{ inputs.perform-trivy-scan }}
     uses: chef/common-github-actions/.github/workflows/trivy.yml@main
     needs: checkout
+    with:
+      version: ${{ inputs.version }}
 
   # run-srcclr:
   #   if: ${{ inputs.perform-srcclr-scan == true }}
