@@ -55,6 +55,11 @@ on:
         required: false
         type: boolean
         default: true
+      perform-trivy-scan:
+        description: 'Perform Trivy scan'
+        required: false
+        type: boolean
+        default: true
       perform-blackduck-polaris:
         description: 'Perform BlackDuck Polaris (SAST) scan'
         required: false
@@ -68,7 +73,7 @@ on:
         description: 'Polaris project name, typically the application name, followed by - and the repository name, for example Chef-Chef360-chef-vault'
         required: false
         type: string
-      perform-blackduck-sca-scan:
+      perform-blackduck-sca-scan: # combined with generate sbom below
         description: 'Perform BlackDuck SCA scan'
         required: false
         type: boolean
@@ -163,7 +168,7 @@ on:
         required: false
         type: boolean
         default: true
-      generate-blackduck-sbom:
+      generate-blackduck-sbom:  # obsolete
         description: 'Generate SBOM using BlackDuck polaris'
         required: false
         type: boolean
@@ -445,6 +450,12 @@ jobs:
     name: 'Trufflehog scan'
     if: ${{ inputs.perform-trufflehog-scan }}
     uses: chef/common-github-actions/.github/workflows/trufflehog.yml@main
+    needs: checkout
+
+  run-trivy:
+    name: 'Trivy scan'
+    if: ${{ inputs.perform-trivy-scan }}
+    uses: chef/common-github-actions/.github/workflows/trivy.yml@main
     needs: checkout
 
   # run-srcclr:
