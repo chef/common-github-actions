@@ -25,11 +25,20 @@ name: Download SBOM from Insights and Convert to CSV
 on:
   workflow_call:
     inputs:
+      version:
+        description: 'Version of the project'
+        required: true
+        type: string
       export-github-sbom:
         description: 'Export SBOM from GitHub Dependency Graph API' 
         required: false
         type: boolean
-      generate-blackduck-sbom:
+      perform-blackduck-sca-scan: # combined with export-github-sbom above
+        description: 'Perform BlackDuck SCA scan'
+        required: false
+        type: boolean
+        default: true
+      generate-blackduck-sbom:  # obsolete
         description: 'Generate SBOM using Blackduck Tool'
         required: false
         type: boolean
@@ -72,13 +81,12 @@ jobs:
           https://api.github.com/repos/${{ github.repository }}/dependency-graph/sbom \
           -o "${FILE_PREFIX}-GitHub-sbom.json"
 
-    # TODO: remove the ls -l and preview steps
-    - name: Verify SBOM JSON File
-      run: |
-        ls -l "${FILE_PREFIX}-GitHub-sbom.json"
-    - name: Preview SBOM JSON Content
-      run: |
-        head -n 20 "${FILE_PREFIX}-GitHub-sbom.json"
+    # - name: Verify SBOM JSON File
+    #   run: |
+    #     ls -l "${FILE_PREFIX}-GitHub-sbom.json"
+    # - name: Preview SBOM JSON Content
+    #   run: |
+    #     head -n 20 "${FILE_PREFIX}-GitHub-sbom.json"
 
     - name: Convert SBOM to CSV using jq
       run: |
@@ -93,10 +101,9 @@ jobs:
             "None", "None", "None"
           ] | @csv' "${FILE_PREFIX}-GitHub-sbom.json" >> "${FILE_PREFIX}-GitHub-sbom.csv"
 
-    # TODO: remove preview step
-    - name: Preview SBOM CSV Content
-      run: |
-        head -n 20 "${FILE_PREFIX}-GitHub-sbom.csv"
+    # - name: Preview SBOM CSV Content
+    #   run: |
+    #     head -n 20 "${FILE_PREFIX}-GitHub-sbom.csv"
 
     - name: Enrich SBOM CSV from RubyGems
       run: |
@@ -133,9 +140,9 @@ jobs:
         done
         mv "$TEMP_CSV" "${FILE_PREFIX}-GitHub-sbom.csv"
 
-    - name: Verify SBOM CSV File
-      run: |
-        ls -l "${FILE_PREFIX}-GitHub-sbom.csv"
+    # - name: Verify SBOM CSV File
+    #   run: |
+    #     ls -l "${FILE_PREFIX}-GitHub-sbom.csv"
 
     - name: Upload JSON artifact
       uses: actions/upload-artifact@v4
@@ -156,29 +163,37 @@ jobs:
 # Blackduck SBOM is at SERVER: https://progresssoftware.app.blackduck.com/ - org variable!
 # API token in repo - https://github.com/chef/chef-vault/settings/secrets/actions
   generate-blackduck-sbom:
-    name: Generate SBOM using Blackduck Tool
+    name: Generate SBOM using Blackduck Tool (BLUE)
     runs-on: ubuntu-latest
-    if: ${{ inputs.generate-blackduck-polaris-sbom == true }}
+    if: ${{ inputs.perform-blackduck-sca-scan == true }}
+    # if: ${{ inputs.generate-blackduck-polaris-sbom == true }} OBSOLETE, use perform-blackduck-sca-scan instead
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
-      - name: Starting Black Duck Bridge scan
+      - name: BlackDuck SCA scan
+        id: black-duck-sca-scan
         run: |
           echo "BLACKDUCK_SBOM_URL: ${{ secrets.BLACKDUCK_SBOM_URL }}"
-          echo "BLACKDUCK_SBOM_API_KEY: ${{ secrets.BLACKDUCK_SBOM_API_KEY }}"
+        # echo "BLACKDUCK_SBOM_API_KEY: ${{ secrets.BLACKDUCK_SBOM_API_KEY }}" no longer used, see BLACKDUCK_SCA_TOKEN
       - name: BlackDuck SBOM scan
         uses: blackduck-inc/black-duck-security-scan@v2.1.1
+        env: 
+          DETECT_PROJECT_GROUP_NAME: 'Chef-Agents' # <the_parent_group_of_your_target_project>, Chef, Chef-Agents, Chef-Automate, Chef-Chef360, Chef-Habitat, Chef-Infrastructure-Server, Chef-Shared-Services
+          DETECT_PROJECT_NAME: ${{ github.event.repository.name }}
+          DETECT_PROJECT_VERSION_NAME: ${{ inputs.version }} # <the_existing_version_in_your_project>
         with:
+          ### ---------- SCANNING required fields ----------
+          blackducksca_url: ${{ secrets.BLACKDUCK_SBOM_URL }}  # BLACKDUCK_URL, should be https://progresssoftware.app.blackduck.com/ 
+          blackducksca_token: ${{ secrets.BLACKDUCK_SCA_TOKEN }}  # was BLACKDUCK_API_KEY
+          # blackducksca_scan_failure_severities: 'BLOCKER,CRITICAL'
+          
           ### ---------- SRM SCANNING: REQUIRED FIELDS ----------
-          srm_url: ${{ secrets.BLACKDUCK_SBOM_URL }}  # SRM_URL
-          srm_apikey: ${{ secrets.BLACKDUCK_SBOM_API_KEY }}  # SRM_API_KEY
-          # TODO: this may be just SAST
-          srm_assessment_types: "SCA,SAST"
-          ### SCANNING: Optional fields from https://documentation.blackduck.com/bundle/bridge/page/documentation/c_github-srm.html
-          # srm_project_name: ${{ github.event.repository.name }} # chef-vault
-          srm_project_id: c7954ee4-348d-4c2f-b259-d577e1df40dc
-
-          #### srm_auto_create_project: true  # Whether SRM should automatically create a project with the given project-name if it does not yet exist.	false	No[2]
+          # srm_url: ${{ secrets.BLACKDUCK_SBOM_URL }}  # SRM_URL
+          # srm_apikey: ${{ secrets.BLACKDUCK_SBOM_API_KEY }}  # SRM_API_KEY
+          # ### SCANNING: Optional fields from https://documentation.blackduck.com/bundle/bridge/page/documentation/c_github-srm.html
+          # # srm_project_name: ${{ github.event.repository.name }} # chef-vault
+          # srm_project_id: c7954ee4-348d-4c2f-b259-d577e1df40dc
+          # srm_auto_create_project: true  # Whether SRM should automatically create a project with the given project-name if it does not yet exist.	false	No[2]
           # srm_project_id: ${{ vars.PROJECT_ID }}
           # srm_branch_name: ${{ vars.BRANCH_NAME }}
           # srm_branch_parent: ${{ vars.BRANCH_PARENT }}

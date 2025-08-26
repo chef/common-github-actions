@@ -35,6 +35,11 @@ on:
         required: false
         type: string
         default: 'github.com/progress-platform-services/*'
+      version:
+        description: 'Version of the project'
+        required: false
+        type: string
+        default: '1.0.0'
       perform-complexity-checks: 
         description: 'Perform complexity checks with SCC'
         required: false
@@ -451,7 +456,6 @@ jobs:
     if: ${{ inputs.perform-trufflehog-scan }}
     uses: chef/common-github-actions/.github/workflows/trufflehog.yml@main
     needs: checkout
-
   run-trivy:
     name: 'Trivy scan'
     if: ${{ inputs.perform-trivy-scan }}
@@ -476,7 +480,7 @@ jobs:
   # parameters @ https://documentation.blackduck.com/bundle/bridge/page/documentation/c_github-polaris.html
   # internal confluence https://progresssoftware.atlassian.net/wiki/spaces/TCE/pages/1010336076/Polaris#Examples
   # chef-vault at https://polaris.blackduck.com/portfolio/portfolios/8b7ad6f7-6dcb-49ec-bded-bfc4f190d4f8/portfolio-items/fe369baf-11d2-4989-bcb7-045577856dcc/projects/2460eabd-d033-48a1-a378-6cadd49be6d1/tests/sast?branchId=a6d2c02a-05f8-4557-bfa1-c40e9337ee5d
-  polaris-sast:
+  BlackDuck-Polaris-SAST:
     if: ${{ inputs.perform-blackduck-polaris == true }}
     runs-on: ubuntu-latest
     needs: checkout
@@ -493,14 +497,10 @@ jobs:
               echo "Polaris application name and project name must be set"
               exit 1
           fi
-      # - name: Checkout - already done above
-      #   uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
-      #   with:
-      #     fetch-depth: 1
-      #     submodules: ${{ inputs.git-submodule-strategy }}
-      #     token: ${{ env.GHA_TOKEN }}
-      - name: Polaris scan
-        uses: blackduck-inc/black-duck-security-scan@v2.1.1
+      # - name: Checkout - is already done above since this is inline
+      - name: BlackDuck Polaris scan
+        uses: blackduck-inc/black-duck-security-scan@v2
+        # was: uses: blackduck-inc/black-duck-security-scan@v2.1.1
         # uses: blackduck-inc/black-duck-security-scan@805cbd09e806b01907bbea0f990723c2bb85abe9 # 2.0.0 - Jan's version
         with:
           ### SCANNING: Required fields
@@ -510,85 +510,18 @@ jobs:
           ### SCANNING: Optional fields
           polaris_application_name: ${{ inputs.polaris-application-name }}  // <Solution>-<Product>-<Module If Applicable>-<Optional Numeric Suffix If Needed>
           polaris_project_name: ${{ inputs.polaris-project-name }}  // typically GitHub repo name
+          github_token: ${{ secrets.GITHUB_TOKEN }}
         # from Jan's
-        # github_token: ${{ secrets.GITHUB_TOKEN }}
         # polaris_prComment_enabled: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
         # polaris_prComment_severities: "CRITICAL,HIGH"
         
         # from Blackduck page at https://polaris.blackduck.com/portfolio/portfolios/8b7ad6f7-6dcb-49ec-bded-bfc4f190d4f8/portfolio-items/fe369baf-11d2-4989-bcb7-045577856dcc/projects
-          
           ### SARIF report parameters
           # polaris_reports_sarif_create: true
           # polaris_upload_sarif_report: true
-          # github_token: ${{ secrets.GITHUB_TOKEN }} # Required when polaris_upload_sarif_report is set as true
-
+        
           ### Mark build status if policy violating issues are found
           # mark_build_status: 'success'
-          
-          ### Uncomment below configuration to add custom logic based on return status
-          # - name: cmdLine
-          # id: cmdLine
-          # run: |
-          # EXIT_CODE=${{ steps.black-duck-security-scan.outputs.status }}
-          # echo "Black Duck Security Scan exit status - $EXIT_CODE"
-
-  # BLACKDUCK POLARIS SAST SCAN - - WE ARE NOT LICENSED FOR SCA
-  #  used to --- uses: chef/common-github-actions/.github/workflows/blackduck-sca.yml@main
-    # from https://documentation.blackduck.com/bundle/bridge/page/documentation/c_github-blackduck.html 
-    # parameters @ https://documentation.blackduck.com/bundle/bridge/page/documentation/c_using-bridge-with-black-duck.html 
-  # run-blackduck-sca:
-  #   if: ${{ inputs.perform-blackduck-sca-scan == true }}
-  #   runs-on: ubuntu-latest
-  #   needs: checkout
-  #   steps:
-  #     - name: Starting Black Duck SCA scan
-  #       run: |
-  #         echo "POLARIS_SERVER_URL: ${{ secrets.POLARIS_SERVER_URL }}"
-  #         echo "Polaris application name: ${{ inputs.polaris-application-name }}"
-  #         echo "Polaris project name: ${{ inputs.polaris-project-name }}"
-  #     - name: Check input variables
-  #       run: |
-  #         if [[ -z "${{ inputs.polaris-application-name }}" ]] || [[ -z "${{ inputs.polaris-project-name }}" ]]; then
-  #             echo "Polaris application name and project name must be set"
-  #             exit 1
-  #         fi
-       
-  #     - name: Black Duck scan
-  #       uses: blackduck-inc/black-duck-security-scan@v2.1.1
-  #     # uses: blackduck-inc/black-duck-security-scan@805cbd09e806b01907bbea0f990723c2bb85abe9 # 2.0.0 Jan's version 
-  #       env:
-  #         DETECT_PROJECT_NAME: ${{ inputs.polaris-project-name }}
-  #     #         DETECT_PROJECT_NAME: ${{ github.event.repository.name }}
-  #     #         DETECT_PROJECT_VERSION_NAME: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || github.ref_name }}
-  #       with:
-  #         ### SCANNING: Required fields
-  #         blackducksca_url: ${{ secrets.BLACKDUCK_URL }}
-  #         blackducksca_token: ${{ secrets.BLACKDUCKSCA_ACCESS_TOKEN }}    # {{ BLACKDUCK_TOKEN }}
-  #         ### SCANNING: Optional fields
-  #         # blackducksca_scan_full: ${{ github.event_name == 'pull_request' && 'false' || 'true' }}
-  #         detect_args: "--detect.diagnostic=true --detect.excluded.detector.types=GIT --detect.yarn.dependency.types.excluded=NON_PRODUCTION"
-  #         blackducksca_scan_failure_severities: 'BLOCKER,CRITICAL'
-  #         ### FIX PULL REQUEST CREATION: Uncomment below to enable
-  #         # blackducksca_fixpr_enabled: true
-  #         # github_token: ${{ secrets.GITHUB_TOKEN }} # Required when Fix PRs is enabled
-          
-  #         ### PULL REQUEST COMMENTS: Uncomment below to enable
-  #         # blackducksca_prComment_enabled: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
-  #         # github_token: ${{ secrets.GITHUB_TOKEN }}
-  
-  #         ### SARIF report generation and upload to GitHub Adavanced Security: Uncomment below to enable
-  #         # blackducksca_reports_sarif_create: true # Create Black Duck SCA SARIF report and upload it as artifact
-  #     - name: Show logs
-  #       if: failure()
-  #       run: |
-  #         cat .bridge/Blackduck\ SCA\ Detect\ Execution/detect/runs/*/logs/all.txt
-
-  # # older tool no longer used in Progress
-  # # run-blackduck-coverity:
-  # #   if: ${{ inputs.perform-blackduck-coverity == true }}
-  # #   uses: chef/common-github-actions/.github/workflows/tools/blackduck-coverity.yml@main
-  # #   needs: echo_inputs
-  # #   secrets: inherit
 
   # ################################################################################################################
   # #
@@ -848,8 +781,10 @@ jobs:
     needs: ci-build
     secrets: inherit
     with:
+      version: ${{ inputs.version }}
       export-github-sbom: ${{ inputs.export-github-sbom }}
-      generate-blackduck-sbom: ${{ inputs.generate-blackduck-sbom }}
+      perform-blackduck-sca-scan: ${{ inputs.perform-blackduck-sca-scan }}
+      generate-blackduck-sbom: ${{ inputs.generate-blackduck-sbom }}  # obsolete, remove TODO
       generate-msft-sbom: ${{ inputs.generate-msft-sbom }}
       license_scout: ${{ inputs.license_scout }}
       go-private-modules: ${{ inputs.go-private-modules }}
