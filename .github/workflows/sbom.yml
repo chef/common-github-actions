@@ -38,10 +38,18 @@ on:
         required: false
         type: boolean
         default: true
-      generate-blackduck-sbom:  # obsolete
-        description: 'Generate SBOM using Blackduck Tool'
+      # generate-blackduck-sbom:  # obsolete
+      #   description: 'Generate SBOM using Blackduck Tool'
+      #   required: false
+      #   type: boolean
+      blackduck-project-group-name:
+        description: 'BlackDuck project group name'
         required: false
-        type: boolean
+        type: string
+      blackduck-project-name:
+        description: 'BlackDuck project name'
+        required: false
+        type: string
       generate-msft-sbom:
         description: 'Generate SBOM using Microsoft SBOM Tool'
         required: false
@@ -166,43 +174,37 @@ jobs:
   generate-blackduck-sbom:
     name: Generate SBOM using Blackduck Tool (BLUE)
     runs-on: ubuntu-latest
-    if: ${{ inputs.perform-blackduck-sca-scan == true }}
-    # if: ${{ inputs.generate-blackduck-polaris-sbom == true }} OBSOLETE, use perform-blackduck-sca-scan instead
+    if: ${{ inputs.perform-blackduck-sca-scan == true || inputs.generate-blackduck-polaris-sbom == true }} # generate-blackduck--polaris-sbom is OBSOLETE, use perform-blackduck-sca-scan instead
     steps:
+      - name: 'Echo inputs'
+        run: |
+          echo "Starting BlackDuck SCA scan"
+          echo "BlackDuck_SCA_URL: ${{ secrets.BLACKDUCK_SCA_URL }}"
+          echo "BLACKDUCK_SCA_TOKEN: ${{ secrets.BLACKDUCK_SCA_TOKEN }}"
+          echo "DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name }}"
+          echo "DETECT_PROJECT_NAME: ${{ inputs.blackduck-project-name }}"
+          echo "DETECT_PROJECT_VERSION_NAME: ${{ inputs.version }}"
+         
       - name: Checkout source
         uses: actions/checkout@v4
+
       - name: BlackDuck SCA scan
         id: black-duck-sca-scan
         run: |
           echo "BLACKDUCK_SBOM_URL: ${{ secrets.BLACKDUCK_SBOM_URL }}"
         # echo "BLACKDUCK_SBOM_API_KEY: ${{ secrets.BLACKDUCK_SBOM_API_KEY }}" no longer used, see BLACKDUCK_SCA_TOKEN
+
       - name: BlackDuck SBOM scan
         uses: blackduck-inc/black-duck-security-scan@v2.1.1
         env: 
-          DETECT_PROJECT_GROUP_NAME: 'Chef-Agents' # <the_parent_group_of_your_target_project>, Chef, Chef-Agents, Chef-Automate, Chef-Chef360, Chef-Habitat, Chef-Infrastructure-Server, Chef-Shared-Services
-          DETECT_PROJECT_NAME: ${{ github.event.repository.name }}
+          DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name}} #'Chef-Agents' # <the_parent_group_of_your_target_project>, Chef, Chef-Agents, Chef-Automate, Chef-Chef360, Chef-Habitat, Chef-Infrastructure-Server, Chef-Shared-Services
+          DETECT_PROJECT_NAME: ${{ inputs.blackduck-project-name }}
           DETECT_PROJECT_VERSION_NAME: ${{ inputs.version }} # <the_existing_version_in_your_project>
         with:
-          ### ---------- SCANNING required fields ----------
           blackducksca_url: ${{ secrets.BLACKDUCK_SBOM_URL }}  # BLACKDUCK_URL, should be https://progresssoftware.app.blackduck.com/ 
           blackducksca_token: ${{ secrets.BLACKDUCK_SCA_TOKEN }}  # was BLACKDUCK_API_KEY
           # blackducksca_scan_failure_severities: 'BLOCKER,CRITICAL'
           detect_args: --detect.excluded.detector.types=PIP   # ignore python per https://documentation.blackduck.com/bundle/detect/page/packagemgrs/python.html
-          
-          ### ---------- SRM SCANNING: REQUIRED FIELDS ----------
-          # srm_url: ${{ secrets.BLACKDUCK_SBOM_URL }}  # SRM_URL
-          # srm_apikey: ${{ secrets.BLACKDUCK_SBOM_API_KEY }}  # SRM_API_KEY
-          # ### SCANNING: Optional fields from https://documentation.blackduck.com/bundle/bridge/page/documentation/c_github-srm.html
-          # # srm_project_name: ${{ github.event.repository.name }} # chef-vault
-          # srm_project_id: c7954ee4-348d-4c2f-b259-d577e1df40dc
-          # srm_auto_create_project: true  # Whether SRM should automatically create a project with the given project-name if it does not yet exist.	false	No[2]
-          # srm_project_id: ${{ vars.PROJECT_ID }}
-          # srm_branch_name: ${{ vars.BRANCH_NAME }}
-          # srm_branch_parent: ${{ vars.BRANCH_PARENT }}
-          # srm_waitForScan: false   # Used to support the async mode 
-          # detect_execution_path: ${{ vars.DETECT_EXECUTION_PATH }}
-          # coverity_execution_path: ${{ vars.COVERITY_EXECUTION_PATH }}    
-          # project_directory: ${{ vars.PROJECT_DIRECTORY }}
 
 ######################################################
 # original from https://github.com/progress-platform-services/common-github-actions/blob/main/.github/workflows/examples/ci-all-sbom-main.yml
