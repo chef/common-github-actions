@@ -83,7 +83,7 @@ jobs:
         FILE_PREFIX=$(echo "${{ github.repository }}${{ env.DEFAULT_SEPARATOR }}${{ github.ref_name }}${{ env.DEFAULT_SEPARATOR }}${{ inputs.version }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
         echo "FILE_PREFIX=${FILE_PREFIX}" >> $GITHUB_ENV
         FILE_NAME=$(echo "${{ env.FILE_PREFIX }}${{ env.DEFAULT_SEPARATOR }}${{ env.DEFAULT_FILE_NAME }}${{ env.DEFAULT_FILE_EXTENSION }}")
-        echo "FILE_NAME=${env.FILE_NAME}" >> $GITHUB_ENV
+        echo "FILE_NAME=${FILE_NAME}" >> $GITHUB_ENV
       
     - name: Download SBOM from GitHub Dependency Graph API
       run: |
