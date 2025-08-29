@@ -65,6 +65,9 @@ on:
 env:
   # Set the default SBOM filename prefix
   FILE_PREFIX: $(echo "${{ github.repository }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
+  DEFAULT_FILE_NAME: "GitHub-sbom"
+  DEFAULT_FILE_EXTENSION: ".json"
+  DEFAULT_SEPARATOR: "-"
 
 jobs:
   export-github-SBOM:
@@ -75,11 +78,12 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Generate Filename Prefix
+    - name: Generate Filename Prefix and full JSON file name as environment variables for later steps
       run: |
-        FILE_PREFIX=$(echo "${{ github.repository }}-${{ github.ref_name }}-${{ inputs.version }}-" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
+        FILE_PREFIX=$(echo "${{ github.repository }}${{ env.DEFAULT_SEPARATOR }}${{ github.ref_name }}${{ env.DEFAULT_SEPARATOR }}${{ inputs.version }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
         echo "FILE_PREFIX=${FILE_PREFIX}" >> $GITHUB_ENV
-  # FILE_PREFIX=$(echo "${{ github.repository }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
+        FILE_NAME=$(echo "${{ env.FILE_PREFIX }}${{ env.DEFAULT_SEPARATOR }}${{ env.DEFAULT_FILE_NAME }}${{ env.DEFAULT_FILE_EXTENSION }}")
+        echo "FILE_NAME=${env.FILE_NAME}" >> $GITHUB_ENV
       
     - name: Download SBOM from GitHub Dependency Graph API
       run: |
@@ -88,7 +92,7 @@ jobs:
           -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
           -H "X-GitHub-Api-Version: 2022-11-28" \
           https://api.github.com/repos/${{ github.repository }}/dependency-graph/sbom \
-          -o "${{ env.FILE_PREFIX }}-GitHub-sbom.json"
+          -o "${{ env.FILE_NAME }}"
 
     # - name: Verify SBOM JSON File
     #   run: |
@@ -99,7 +103,7 @@ jobs:
 
     - name: Convert SBOM to CSV using jq
       run: |
-        echo "name,SPDXID,versionInfo,downloadLocation,externalRefs,license,source_code_url,vendor" > "${FILE_PREFIX}-sbom.csv"
+        echo "name,SPDXID,versionInfo,downloadLocation,externalRefs,license,source_code_url,vendor" > "${FILE_PREFIX}${DEFAULT_SEPARATOR}${DEFAULT_FILE_NAME}.csv"
         jq -r '
           .sbom.packages[] | [
             .name,
@@ -108,17 +112,18 @@ jobs:
             .downloadLocation,
             ( .externalRefs[]? | .referenceLocator ),
             "None", "None", "None"
-          ] | @csv' "${FILE_PREFIX}-GitHub-sbom.json" >> "${FILE_PREFIX}-GitHub-sbom.csv"
+          ] | @csv' "${FILE_NAME}" >> "${FILE_PREFIX}${DEFAULT_SEPARATOR}${DEFAULT_FILE_NAME}.csv"
 
     # - name: Preview SBOM CSV Content
     #   run: |
     #     head -n 20 "${FILE_PREFIX}-GitHub-sbom.csv"
 
+    # TODO: add enrichment from other sources (pkgdev (Go), cargo, GitHub Actions / Marketplace etc.)
     - name: Enrich SBOM CSV from RubyGems
       run: |
-        TEMP_CSV="${FILE_PREFIX}-sbom-temp.csv"
+        TEMP_CSV="${FILE_PREFIX}${DEFAULT_SEPARATOR}${DEFAULT_FILE_NAME}-temp.csv"
         echo "name,SPDXID,versionInfo,downloadLocation,externalRefs,license,source_code_url,vendor" > "$TEMP_CSV"
-        tail -n +2 "${FILE_PREFIX}-sbom.csv" | while IFS=, read -r name SPDXID versionInfo downloadLocation externalRefs license source_code_url vendor; do
+        tail -n +2 "${FILE_PREFIX}${DEFAULT_SEPARATOR}${DEFAULT_FILE_NAME}.csv" | while IFS=, read -r name SPDXID versionInfo downloadLocation externalRefs license source_code_url vendor; do
           # Debug each row
           echo "Processing: $name, $SPDXID, $versionInfo, $downloadLocation, $externalRefs, $license, $source_code_url, $vendor"
           if [[ "$externalRefs" == *"pkg:gem"* ]]; then
@@ -147,7 +152,7 @@ jobs:
           fi
           echo "$name,$SPDXID,$versionInfo,$downloadLocation,$externalRefs,$new_license,$new_source_code_url,$new_vendor" >> "$TEMP_CSV"
         done
-        mv "$TEMP_CSV" "${FILE_PREFIX}-GitHub-sbom.csv"
+        mv "$TEMP_CSV" "${FILE_PREFIX}${DEFAULT_SEPARATOR}${DEFAULT_FILE_NAME}.csv"
 
     # - name: Verify SBOM CSV File
     #   run: |
@@ -156,14 +161,18 @@ jobs:
     - name: Upload JSON artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ env.FILE_PREFIX }}-GitHub-SBOM.json
-        path: ${{ env.FILE_PREFIX }}-GitHub-SBOM.json
+        # name: ${{ env.FILE_PREFIX }}-GitHub-SBOM.json
+        name: ${{ env.FILE_NAME }}
+        # path: ${{ env.FILE_PREFIX }}-GitHub-SBOM.json
+        path: ${{ env.FILE_NAME }}
 
     - name: Upload SBOM CSV as Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ env.FILE_PREFIX }}-GitHub-SBOM.csv
-        path: ${{ env.FILE_PREFIX }}-GitHub-SBOM.csv
+        # name: ${{ env.FILE_PREFIX }}-GitHub-SBOM.csv
+        name: ${{ env.FILE_PREFIX }}${{ env.DEFAULT_SEPARATOR }}${{ env.DEFAULT_FILE_NAME }}.csv
+        # path: ${{ env.FILE_PREFIX }}-GitHub-SBOM.csv
+        path: ${{ env.FILE_PREFIX }}${{ env.DEFAULT_SEPARATOR }}${{ env.DEFAULT_FILE_NAME }}.csv
 
 # example project https://progresssoftware.app.blackduck.com/api/risk-profile-dashboard?limit=25&offset=0
 # server URL https://progresssoftware.app.blackduck.com/api/projects/c7954ee4-348d-4c2f-b259-d577e1df40dc
