@@ -289,13 +289,13 @@ jobs:
           if [ ${{ inputs.perform-trufflehog-scan }} ]; then
             echo "  Perform trufflehog scan set to ${{ inputs.perform-trufflehog-scan }}"
           fi
+          if [ ${{ inputs.perform-trivy-scan }} ]; then
+            echo "  Perform Trivy scan set to ${{ inputs.perform-trivy-scan }}"
+          fi
           if [ ${{ inputs.perform-blackduck-polaris }} ]; then
             echo "  Perform BlackDuck polaris scan set to ${{ inputs.perform-blackduck-polaris }}"
             echo "  Polaris application name set to ${{ inputs.polaris-application-name }}"
             echo "  Polaris project name set to ${{ inputs.polaris-project-name }}"
-          fi
-          if [ ${{ inputs.perform-blackduck-sca-scan }} ]; then
-            echo "  Perform BlackDuck SCA scan set to ${{ inputs.perform-blackduck-sca-scan }}"
           fi
           echo "** BUILD AND UNIT TEST *************************************"
           if [ ${{ inputs.build }} ]; then
@@ -320,8 +320,12 @@ jobs:
           echo "** SBOM ****************************************************"
           if [ ${{ inputs.generate-sbom }} ]; then
             echo "  Generate SBOM set to ${{ inputs.generate-sbom }}"
+            echo "  SBOM application version set to ${{ inputs.version }}"
             echo "  Export SBOM from GitHub set to ${{ inputs.export-github-sbom }}"
-            echo "  Generate BlackDuck SBOM set to ${{ inputs.generate-blackduck-sbom }}"
+            if [ ${{ inputs.perform-blackduck-sca-scan }} ]; then
+              echo "  Perform BlackDuck SCA scan set to ${{ inputs.perform-blackduck-sca-scan }}"
+            fi
+            echo "  Generate BlackDuck SBOM set to ${{ inputs.generate-blackduck-sbom }} OBSOLETE, NO EFFECT"
             echo "  Generate MSFT SBOM set to ${{ inputs.generate-msft-sbom }}"
             echo "  License scout set to ${{ inputs.license_scout }}"
           fi
