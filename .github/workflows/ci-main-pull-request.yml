@@ -595,8 +595,10 @@ jobs:
           polaris_server_url: ${{ secrets.POLARIS_SERVER_URL }} # https://polaris.blackduck.com
           polaris_access_token: ${{ secrets.POLARIS_ACCESS_TOKEN }}
           polaris_assessment_types: "SAST"
-          polaris_application_name: ${{ inputs.polaris-application-name }}  // <Solution>-<Product>-<Module If Applicable>-<Optional Numeric Suffix If Needed>
-          polaris_project_name: ${{ inputs.polaris-project-name }}  // typically GitHub repo name
+          polaris_application_name: "${{ inputs.polaris-application-name }}"  
+          # <Solution>-<Product>-<Module If Applicable>-<Optional Numeric Suffix If Needed>
+          polaris_project_name: ${{ inputs.polaris-project-name }}  
+          #typically GitHub repo name
           github_token: ${{ secrets.GITHUB_TOKEN }}
           
           # from https://github.com/prgs-community/githubactions-securityscans/blob/main/polaris/action.yml
