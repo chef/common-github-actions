@@ -137,7 +137,7 @@ jobs:
 
     - name: SonarQube Scan
       if: ${{ inputs.perform-build == true && inputs.report-unit-test-coverage == true && inputs.visibility == 'internal' }}
-      uses: sonarsource/sonarqube-scan-action@v5.1.0
+      uses: sonarsource/sonarqube-scan-action@v5.3.1
       # was uses: sonarsource/sonarqube-scan-action@master
       continue-on-error: true
       env:
