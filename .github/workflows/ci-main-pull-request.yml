@@ -19,6 +19,9 @@
 #
 # custom repository properties are listed below as ENV vars (view these in the repo Settings > Code & Automation > Custom Properties)
 #    
+# TODO: # add "path-to-binary" >> $GITHUB_PATH 
+
+
 
 name: CI flow containing PR checks for main & release, v2
 
@@ -40,6 +43,15 @@ on:
         required: false
         type: string
         default: '1.0.0'
+      detect-version-source-type:  # options include "none" (do not detect), "file", "github-tag" or "github-release"
+        description: 'flag to determine how to detect version dynamically'
+        required: false
+        type: string
+        default: 'none'
+      detect-version-source-parameter:  # use for file name
+        required: false
+        type: string
+        default: ''
       perform-complexity-checks: 
         description: 'Perform complexity checks with SCC'
         required: false
@@ -188,6 +200,16 @@ on:
         required: false
         type: boolean
         default: false 
+      polaris-blackduck-executable: 
+        description: 'Path to BlackDuck polaris executable after build or download step'
+        required: false
+        type: string
+        default: 'path/to/blackduck/binary'
+      polaris-executable-detect-path: 
+        description: 'Additions to $PATH for BlackDuck polaris to find executable'
+        required: false
+        type: string
+        default: 'path/to/detect'
       generate-msft-sbom:
         description: 'Generate SBOM using MSFT tools'
         required: false
@@ -221,6 +243,7 @@ env:
   PRIMARY_APPLICATION: 'default'   # Custom repo property [primaryApplication]: chef360, automate, infra-server, habitat, supermarket, licensing, downloads, chef-client, inspec, chef-workstation (or derivatives like habitat-builder)
   GA_BUILD_LANGUAGE: 'default'  # Custom repo property [GABuildLanguage]: go, ruby, erlang, rust (replaces Language input)
   GA_BUILD_PROFILE: 'default'   # Custom repo property [GABuildProfile]: TBD
+  # APP_VERSION: $(cat VERSION) 
 
 jobs:
   precompilation-checks:
@@ -489,6 +512,54 @@ jobs:
   #   needs: run-scc
   #   secrets: inherit
       
+  # TODO: move this to after build or download step
+
+  # TODO: dynamic version detection stepswith new flags ${{ detect-version-source-type: 'none' # options include "none" (do not detect), "file", "github-tag" or "github-release"
+      # AND ${{ detect-version-source-parameter: '' # use for file name}}
+# version: ${{ github.workflow.env.APP_VERSION }}
+      # version: ${{ needs.set-app-version.outputs.app-version }}
+      
+      # if you have a version file, you can read it in to an environment variable with
+  #     - name: Set variables
+  #       run: |
+  #         VER=$(cat VERSION)
+  #         echo "VERSION=$VER" >> $GITHUB_ENV
+  #   then ${{ env.VERSION }}
+  
+  set-application-version:
+    runs-on: ubuntu-latest
+    name: 'Detect SBOM version for application'
+    if: (inputs.version == '') && (inputs.detect-version-source-parameter != '') 
+    needs: checkout
+    steps:
+      - name: Detect SBOM version
+        run: |
+          echo "placeholder for setting version"
+          echo ${{ inputs.version }}
+          echo ${{ inputs.detect-version-source-parameter }}
+          echo ${{ inputs.detect-version-source-type }}
+    # outputs:
+    #   app-version: ${{ steps.set-app-version.outputs.version }} # Map the step's output to the job's output
+    # steps:
+    #   - name: Checkout code
+    #     uses: actions/checkout@v4
+    #   - name: Set application version from file
+    #     id: set-app-version
+    #     run: |
+    #       VERSION=$(cat VERSION) # cat VERSION works
+    #       echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
+
+    #       echo "env.APP_VERSION = ${{ env.APP_VERSION }}"
+
+    #       VERSION=$(cat VERSION)
+    #       echo "two $VERSION"
+    #       echo "VERSION=$VERSION" >> $GITHUB_ENV
+    #       echo "$VERSION is the shell variable" 
+    #       echo "Setting version to ${{ github.env.VERSION }} [$VERSION]"
+    #       echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+# TODO: add new flags to BLACKDUCK ${{ polaris-blackduck-executable }} && ${{ polaris-executable-detect-path }}
+
   # BLACKDUCK POLARIS SAST SCAN
   # NOW THE LATEST COMMUNITY - https://github.com/prgs-community/githubactions-securityscans/blob/main/polaris/action.yml 
   # # updated to https://documentation.blackduck.com/bundle/bridge/page/documentation/c_download.html#polaris-download
@@ -504,7 +575,7 @@ jobs:
     #   color: 'red'
     if: ${{ inputs.perform-blackduck-polaris == true }}
     runs-on: ubuntu-latest
-    needs: checkout
+    needs: set-application-version
     steps:
       - name: Starting Black Duck Polaris scan
         run: |
