@@ -1,7 +1,7 @@
 # stub to call common GitHub Action (GA) as part of Continuous Integration (CI) Pull Request process checks for main branch
 # inputs are described in the chef/common-github-actions/<GA.yml> with same name as this stub
 #
-# secrets are inherited from the calling workflow, typically SONAR_TOKEN, SONAR_HOST_URL, GH_TOKEN, AKEYLESS_JWT_ID
+# secrets are inherited from the calling workflow, typically SONAR_TOKEN, SONAR_HOST_URL, GH_TOKEN, AKEYLESS_JWT_ID, POLARIS_SERVER_URL and POLARIS_ACCESS_TOKEN
 
 name: CI Pull Request on Main Branch
 
@@ -17,8 +17,8 @@ permissions:
   contents: read
   
 env:
-  STUB_VERSION: "1.0.3" 
-  
+  STUB_VERSION: "1.0.4" 
+
 jobs: 
   echo_version:
     name: 'Echo stub version'
@@ -38,13 +38,11 @@ jobs:
     with:   
       visibility: ${{ github.event.repository.visibility }}   #  private, public, or internal
       # go-private-modules: GOPRIVATE for Go private modules, default is 'github.com/progress-platform-services/*
+
+      # if version specified, it takes precedence; can be a semver like 1.0.2-xyz or a tag like "latest"
       version: '1.0.8' # ${{ github.event.repository.version }}
-      # if you have a version file, you can read it in to an environment variable with
-  #     - name: Set variables
-  #       run: |
-  #         VER=$(cat VERSION)
-  #         echo "VERSION=$VER" >> $GITHUB_ENV
-  #   then ${{ env.VERSION }}
+      detect-version-source-type: 'none' # options include "none" (do not detect), "file", "github-tag" or "github-release"
+      detect-version-source-parameter: '' # use for file name
 
       # complexity-checks
       perform-complexity-checks: false
@@ -57,13 +55,14 @@ jobs:
       # ADDED TRIVY SCAN
       perform-trivy-scan: true
       
-      # BlackDuck SAST (Polaris) and SCA scans
-      # requires secrets POLARIS_SERVER_URL and POLARIS_ACCESS_TOKEN
-      perform-blackduck-polaris: false
-      polaris-application-name: 'Chef-Automate'  # one of these: Chef-Agents, Chef-Automate, Chef-Chef360, Chef-Habitat, Chef-Infrastructure-Server, Chef-Shared-Services, Chef-Other
-      polaris-project-name: ${{ polaris_application_name }}-${{ github.event.repository.name }}  # typically the application name, followed by - and the repository name, for example Chef-Chef360-chef-vault
-      # 'ArchSample'
-
+      # BlackDuck SAST (Polaris) and SCA scans (requires a build or download to do SAST)
+      # requires these secrets: POLARIS_SERVER_URL, POLARIS_ACCESS_TOKEN
+      perform-blackduck-polaris: true
+      polaris-application-name: "Chef-Automate"  # one of these: Chef-Agents, Chef-Automate, Chef-Chef360, Chef-Habitat, Chef-Infrastructure-Server, Chef-Shared-Services, Chef-Other
+      polaris-project-name: 'ArchSample'
+      polaris-blackduck-executable: 'path/to/blackduck/binary'
+      polaris-executable-detect-path: 'path/to/detect'
+ 
       # perform application build and unit testing, will use custom repository properties when implemented for chef-primary-application, chef-build-profile, and chef-build-language
       build: false
       # ga-build-profile: $chef-ga-build-profile   
@@ -104,4 +103,4 @@ jobs:
 
       # udf1: 'default' # user defined flag 1
       # udf2: 'default' # user defined flag 2 
-      # udf3: 'default' # user defined flag 3     
+      # udf3: 'default' # user defined flag 3  
