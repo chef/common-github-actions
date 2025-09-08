@@ -137,7 +137,7 @@ on:
         description: 'Perform unit tests and report coverage to SonarQube'
         required: false
         type: boolean
-        default: true
+        default: false
       report-to-atlassian-dashboard: 
         description: 'Report Sonar test coverage and other metrics to Atlassian dashboard (Irfans QA dashboard)'
         required: false
