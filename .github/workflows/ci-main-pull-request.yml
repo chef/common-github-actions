@@ -137,7 +137,7 @@ on:
         description: 'Perform unit tests and report coverage to SonarQube'
         required: false
         type: boolean
-        default: false
+        default: true
       report-to-atlassian-dashboard: 
         description: 'Report Sonar test coverage and other metrics to Atlassian dashboard (Irfans QA dashboard)'
         required: false
@@ -401,7 +401,7 @@ jobs:
           fetch-depth: 0
 
   generate-filename-slug:
-    name: Generate a simple slulg based on repo and date for use in any output artifacts
+    name: Generate a simple slug based on repo and date for use in any output artifacts
     runs-on: ubuntu-latest
     steps:
     - name: Generate Filename Prefix and full JSON file name as environment variables for later steps
@@ -565,16 +565,16 @@ jobs:
   #   name: 'CI build and compilation steps'  
   #   steps:
   #     - name: Build for Rust binary
-  #       if: ${{ inputs.language == 'Rust' }}
+  #       if: ${{ inputs.language == 'Rust' }} -- switch to ${{ env.GA_BUILD_LANGUAGE }} 
   #       run: echo 'hello world'
   #       # cargo build --release --target-dir ./bin
   #     - name: Build for Ruby binary
-  #       if: ${{ inputs.language == 'Ruby' }}
+  #       if: ${{ inputs.language == 'Ruby' }} -- switch to ${{ env.GA_BUILD_LANGUAGE }} 
   #       run: echo 'hello world'
   #       # bundle install --path vendor/bundle
   #       # bundle exec rake build
   #     - name: Build for Go binary
-  #       if: ${{ inputs.language == 'Go' }}
+  #       if: ${{ inputs.language == 'Go' }} -- switch to ${{ env.GA_BUILD_LANGUAGE }} 
   #       run: echo 'hello world'
   #       # go build -o ./bin/chef-api ./cmd/chef-api/main.go
 
