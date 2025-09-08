@@ -72,10 +72,10 @@ on:
         type: boolean
         default: true
       scc-output-filename:
-        description: 'Name of the SCC complexity output file artifact'
+        description: 'Name of the SCC complexity output file artifact, do not add file extension'
         required: false
         type: string
-        default: $(echo "${{ github.repository }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)-scc-complexity.txt
+        default: 'scc-complexity'
       perform-language-linting:
         description: 'Perform language-specific linting and pre-compilation checks'
         required: false
