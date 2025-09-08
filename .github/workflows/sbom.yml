@@ -21,7 +21,11 @@ name: Download SBOM from Insights and Convert to CSV
 # https://github.com/srcclr/srcclr_sbom_gen 
 # https://github.com/openclarity/kubeclarity?tab=readme-ov-file#installation 
 
-# inherit secrets from the calling workflow including BLACKDUCK_SBOM_URL, BLACKDUCK_SBOM_API_KEY
+# BLACKDUCK SBOM
+# required secrets: BLACKDUCK_SCA_URL, BLACKDUCK_SCA_TOKEN (organization)
+# required inputs: blackduck-project-group-name, blackduck-project-name, version
+
+
 on:
   workflow_call:
     inputs:
@@ -177,7 +181,7 @@ jobs:
       - name: 'Echo inputs'
         run: |
           echo "Starting BlackDuck SCA scan"
-          echo "BlackDuck_SCA_URL: ${{ secrets.BLACKDUCK_SCA_URL }}"
+          echo "BlackDuck_SCA_URL: ${{ secrets.BLACKDUCK_SBOM_URL }}"
           echo "BLACKDUCK_SCA_TOKEN: ${{ secrets.BLACKDUCK_SCA_TOKEN }}"
           echo "DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name }}"
           echo "DETECT_PROJECT_NAME: ${{ inputs.blackduck-project-name }}"
