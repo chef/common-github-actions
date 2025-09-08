@@ -75,7 +75,7 @@ on:
         description: 'Name of the SCC complexity output file artifact'
         required: false
         type: string
-        default: 'scc-output.txt'
+        default: $(echo "${{ github.repository }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)-scc-complexity.txt
       perform-language-linting:
         description: 'Perform language-specific linting and pre-compilation checks'
         required: false
@@ -258,6 +258,9 @@ env:
   GA_BUILD_LANGUAGE: 'default'  # Custom repo property [GABuildLanguage]: go, ruby, erlang, rust (replaces Language input)
   GA_BUILD_PROFILE: 'default'   # Custom repo property [GABuildProfile]: TBD
   # APP_VERSION: $(cat VERSION) 
+  FILE_PREFIX: $(echo "${{ github.repository }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
+  DEFAULT_FILE_EXTENSION: ".json"
+  DEFAULT_SEPARATOR: "-"
 
 jobs:
   precompilation-checks:
@@ -398,6 +401,16 @@ jobs:
         with:
           fetch-depth: 0
 
+  generate-filename-slug:
+    name: Generate a simple slulg based on repo and date for use in any output artifacts
+    runs-on: ubuntu-latest
+    steps:
+    - name: Generate Filename Prefix and full JSON file name as environment variables for later steps
+      run: |
+        FILE_PREFIX=$(echo "${{ github.repository }}${{ env.DEFAULT_SEPARATOR }}${{ github.ref_name }}${{ env.DEFAULT_SEPARATOR }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
+        echo "FILE_PREFIX=${FILE_PREFIX}" >> $GITHUB_ENV
+      # FILE_NAME=$(echo "${{ env.FILE_PREFIX }}${{ env.DEFAULT_SEPARATOR }}${{ env.DEFAULT_FILE_NAME }}${{ env.DEFAULT_FILE_EXTENSION }}")
+      
   scc:
     name: 'Source code complexity checks'
     if: ${{ inputs.perform-complexity-checks == true }}

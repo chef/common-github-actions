@@ -1,4 +1,4 @@
-# scc.yml
+# scc.yml - Generate complexity metrics
 # from https://github.com/boyter/scc
 name: source code complexity scan
     
@@ -19,7 +19,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # - name: Generate complexity metrics (using Adapt-API action)
+      # - name:  (using Adapt-API action)
       #   id: scc
       #   uses: Adapt-API/scc-docker-action@master
       # https://github.com/Adapt-API/scc-docker-action 
@@ -29,18 +29,38 @@ jobs:
       #     args: -o ${{ inputs.outputfilename }} -f json --by-file --sort lines,code,comments,blank  
       #     # flags like -i js,go,html,css,rb at https://github.com/boyter/scc?tab=readme-ov-file#usage
 
-      # TODO: add filename date stamp
       - name: Install scc CLI
         run: |
           go install github.com/boyter/scc/v3@latest
           export PATH="$PATH:$(go env GOPATH)/bin"
-          scc -o ${{ inputs.outputfilename }} -f json --by-file --sort lines,code,comments,blank
+          scc -o '${{ inputs.outputfilename }}.txt' 
+          scc -o '${{ inputs.outputfilename }}.json' -f json --by-file --sort lines,code,comments,blank
+          scc -o '${{ inputs.outputfilename }}.html' -f html --by-file --sort lines,code,comments,blank
         continue-on-error: true
     
-      - name: Upload artifact
+      - name: Upload tabular artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.outputfilename }}
-          path: ${{ inputs.outputfilename }}
+          name: '${{ inputs.outputfilename }}.txt'
+          path: '${{ inputs.outputfilename }}.txt'
           retention-days: 30
           overwrite: true
+        continue-on-error: true
+
+      - name: Upload JSON detailed artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: '${{ inputs.outputfilename }}.json'
+          path: '${{ inputs.outputfilename }}.json'
+          retention-days: 30
+          overwrite: true
+        continue-on-error: true
+
+      - name: Upload HTML detailed artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: '${{ inputs.outputfilename }}.html'
+          path: '${{ inputs.outputfilename }}.html'
+          retention-days: 30
+          overwrite: true
+        continue-on-error: true
