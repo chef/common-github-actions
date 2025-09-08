@@ -45,7 +45,7 @@ jobs:
       detect-version-source-parameter: '' # use for file name
 
       # complexity-checks
-      perform-complexity-checks: false
+      perform-complexity-checks: true
       # scc-output-filename: 'scc-output.txt'
       perform-language-linting: false    # Perform language-specific linting and pre-compilation checks
 

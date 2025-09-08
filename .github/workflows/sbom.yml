@@ -93,13 +93,16 @@ jobs:
           -H "X-GitHub-Api-Version: 2022-11-28" \
           https://api.github.com/repos/${{ github.repository }}/dependency-graph/sbom \
           -o "${{ env.FILE_NAME }}"
+      continue-on-error: true
 
-    # - name: Verify SBOM JSON File
-    #   run: |
-    #     ls -l "${FILE_PREFIX}-GitHub-sbom.json"
-    # - name: Preview SBOM JSON Content
-    #   run: |
-    #     head -n 20 "${FILE_PREFIX}-GitHub-sbom.json"
+    - name: Upload JSON artifact
+      uses: actions/upload-artifact@v4
+      with:
+        # name: ${{ env.FILE_PREFIX }}-GitHub-SBOM.json
+        name: ${{ env.FILE_NAME }}
+        # path: ${{ env.FILE_PREFIX }}-GitHub-SBOM.json
+        path: ${{ env.FILE_NAME }}
+      continue-on-error: true
 
     - name: Convert SBOM to CSV using jq
       run: |
@@ -113,11 +116,8 @@ jobs:
             ( .externalRefs[]? | .referenceLocator ),
             "None", "None", "None"
           ] | @csv' "${FILE_NAME}" >> "${FILE_PREFIX}${DEFAULT_SEPARATOR}${DEFAULT_FILE_NAME}.csv"
-
-    # - name: Preview SBOM CSV Content
-    #   run: |
-    #     head -n 20 "${FILE_PREFIX}-GitHub-sbom.csv"
-
+      continue-on-error: true
+    
     # TODO: add enrichment from other sources (pkgdev (Go), cargo, GitHub Actions / Marketplace etc.)
     - name: Enrich SBOM CSV from RubyGems
       run: |
@@ -153,19 +153,8 @@ jobs:
           echo "$name,$SPDXID,$versionInfo,$downloadLocation,$externalRefs,$new_license,$new_source_code_url,$new_vendor" >> "$TEMP_CSV"
         done
         mv "$TEMP_CSV" "${FILE_PREFIX}${DEFAULT_SEPARATOR}${DEFAULT_FILE_NAME}.csv"
-
-    # - name: Verify SBOM CSV File
-    #   run: |
-    #     ls -l "${FILE_PREFIX}-GitHub-sbom.csv"
-
-    - name: Upload JSON artifact
-      uses: actions/upload-artifact@v4
-      with:
-        # name: ${{ env.FILE_PREFIX }}-GitHub-SBOM.json
-        name: ${{ env.FILE_NAME }}
-        # path: ${{ env.FILE_PREFIX }}-GitHub-SBOM.json
-        path: ${{ env.FILE_NAME }}
-
+      continue-on-error: true
+    
     - name: Upload SBOM CSV as Artifact
       uses: actions/upload-artifact@v4
       with:
