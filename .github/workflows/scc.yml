@@ -6,7 +6,7 @@ on:
   workflow_call:
     inputs:
       outputfilename:
-        description: 'Name of the SCC output file'
+        description: 'Name of the SCC output file, do not add file extension'
         required: false
         type: string
         default: 'scc-complexity'
@@ -24,27 +24,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      #   with:
-      #     args: -o ${{ inputs.outputfilename }} -f json --by-file --sort lines,code,comments,blank  
-      #     
-
-      - name: Install scc CLI
+      - name: Install and run scc CLI
         run: |
           go install github.com/boyter/scc/v3@latest
           export PATH="$PATH:$(go env GOPATH)/bin"
-          FILE_PREFIX=$(echo "${{ github.repository }}${{ env.DEFAULT_SEPARATOR }}${{ github.ref_name }}${{ env.DEFAULT_SEPARATOR }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
+          FILE_PREFIX=$(echo "${{ github.repository }}${{ env.DEFAULT_SEPARATOR }}${{ github.ref_name }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
           echo "FILE_PREFIX=${FILE_PREFIX}" >> $GITHUB_ENV
         
-          scc -o '${{ env.FILE_PREFIX}}-${{ inputs.outputfilename }}.txt' 
-          scc -o '${{ env.FILE_PREFIX}}-${{ inputs.outputfilename }}.json' -f json --by-file --sort lines,code,comments,blank
-          scc -o '${{ env.FILE_PREFIX}}-${{ inputs.outputfilename }}.html' -f html --by-file --sort lines,code,comments,blank
+          scc -o '$FILE_PREFIX-${{ inputs.outputfilename }}.txt' 
+          scc -o '$FILE_PREFIX-${{ inputs.outputfilename }}.json' -f json --by-file --sort lines,code,comments,blank
+          scc -o '$FILE_PREFIX-${{ inputs.outputfilename }}.html' -f html --by-file --sort lines,code,comments,blank
         continue-on-error: true
     
       - name: Upload tabular artifact
         uses: actions/upload-artifact@v4
         with:
-          name: '${{ env.FILE_PREFIX}}-${{ inputs.outputfilename }}.txt'
-          path: '${{ env.FILE_PREFIX}}-${{ inputs.outputfilename }}.txt'
+          name: '${{ env.FILE_PREFIX }}-${{ inputs.outputfilename }}.txt'
+          path: '${{ env.FILE_PREFIX }}-${{ inputs.outputfilename }}.txt'
           retention-days: 30
           overwrite: true
         continue-on-error: true
@@ -52,8 +48,8 @@ jobs:
       - name: Upload JSON detailed artifact
         uses: actions/upload-artifact@v4
         with:
-          name: '${{ env.FILE_PREFIX}}-${{ inputs.outputfilename }}.json'
-          path: '${{ env.FILE_PREFIX}}-${{ inputs.outputfilename }}.json'
+          name: '${{ env.FILE_PREFIX }}-${{ inputs.outputfilename }}.json'
+          path: '${{ env.FILE_PREFIX }}-${{ inputs.outputfilename }}.json'
           retention-days: 30
           overwrite: true
         continue-on-error: true
@@ -61,8 +57,8 @@ jobs:
       - name: Upload HTML detailed artifact
         uses: actions/upload-artifact@v4
         with:
-          name: '${{ env.FILE_PREFIX}}-${{ inputs.outputfilename }}.html'
-          path: '${{ env.FILE_PREFIX}}-${{ inputs.outputfilename }}.html'
+          name: '${{ env.FILE_PREFIX }}-${{ inputs.outputfilename }}.html'
+          path: '${{ env.FILE_PREFIX }}-${{ inputs.outputfilename }}.html'
           retention-days: 30
           overwrite: true
         continue-on-error: true
