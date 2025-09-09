@@ -640,6 +640,12 @@ jobs:
     #       echo "Setting version to ${{ github.env.VERSION }} [$VERSION]"
     #       echo "version=$VERSION" >> $GITHUB_OUTPUT
 
+    # if "latest-tag" then use action to get latest tag or ${{ github.event.release.tag_name }}
+      # - name: Get latest tag
+      #   uses: actions-ecosystem/action-get-latest-tag@v1
+      #   id: latest_tag
+      # - name: Use the latest tag
+      #   run: echo "The latest tag is ${{ steps.latest_tag.outputs.tag }}"
 
   # ################################################################################################################
   # #
@@ -769,7 +775,8 @@ jobs:
   
   Sonar-SAST-internal:
     name: 'INTERNAL Sonar scan'
-    if: ${{ inputs.perform-sonarqube-scan == true && success() && inputs.visibility == 'internal'}}
+    if: ${{ inputs.perform-sonarqube-scan == true && inputs.visibility == 'internal'}}
+    # was if: ${{ inputs.perform-sonarqube-scan == true && success() && inputs.visibility == 'internal'}}
     needs: ci-build
     uses: chef/common-github-actions/.github/workflows/sonarqube-internal-repo.yml@main
     secrets: inherit
@@ -777,7 +784,7 @@ jobs:
       id-token: write
       contents: read
     with:
-      perform-build: ${{ inputs.perform-sonar-build }}
+      perform-build: ${{ inputs.perform-sonar-build }} # TODO: change to true for internal, harmonize chef360 with other internal SQ, also update sonar-props files in chef360
       build-profile: ${{ inputs.build-profile }}
       language: ${{ inputs.language }}
       report-unit-test-coverage: ${{ inputs.report-unit-test-coverage }}

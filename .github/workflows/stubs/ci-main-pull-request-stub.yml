@@ -53,14 +53,14 @@ jobs:
       # trufflehog secret scanning
       perform-trufflehog-scan: true
       
-      # ADDED TRIVY SCAN
+      # trivy dependency and container scanning
       perform-trivy-scan: true
       
       # BlackDuck SAST (Polaris) and SCA scans (requires a build or download to do SAST)
       # requires these secrets: POLARIS_SERVER_URL, POLARIS_ACCESS_TOKEN
       perform-blackduck-polaris: true
       polaris-application-name: "Chef-Automate"  # one of these: Chef-Agents, Chef-Automate, Chef-Chef360, Chef-Habitat, Chef-Infrastructure-Server, Chef-Shared-Services, Chef-Other
-      polaris-project-name: 'ArchSample'
+      polaris-project-name: ${{ github.event.repository.name }}
       polaris-blackduck-executable: 'path/to/blackduck/binary'
       polaris-executable-detect-path: 'path/to/detect'
  
