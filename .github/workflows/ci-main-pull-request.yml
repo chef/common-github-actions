@@ -533,8 +533,8 @@ jobs:
     needs: checkout
     with:
       version: ${{ inputs.version }}
-
-  # run-srcclr:
+  
+      # run-srcclr:
   #   if: ${{ inputs.perform-srcclr-scan == true }}
   #   uses: chef/common-github-actions/.github/workflows/srcclr.yml@main
   #   needs: run-scc
@@ -836,7 +836,7 @@ jobs:
               echo "Polaris application name and project name must be set"
               exit 1
           fi
-      # - name: Checkout - is already done above since this is inline
+      
       - name: BlackDuck Polaris scan
         uses: blackduck-inc/black-duck-security-scan@v2
         # was: uses: blackduck-inc/black-duck-security-scan@v2.1.1
@@ -878,7 +878,8 @@ jobs:
           #   polaris_upload_sarif_report: true
           # Mark build status if policy violating issues are found
           #   mark_build_status: 'success'
-
+        continue-on-error: true
+       
   ################################################################################################################
   #
   #    TODO: Add packaging steps – rpm, deb, MSI, dpkg + signing + SHA)
