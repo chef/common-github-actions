@@ -17,7 +17,7 @@ permissions:
   contents: read
   
 env:
-  STUB_VERSION: "1.0.4" 
+  STUB_VERSION: "1.0.5" 
 
 jobs: 
   echo_version:
@@ -43,6 +43,7 @@ jobs:
       version: '1.0.8' # ${{ github.event.repository.version }}
       detect-version-source-type: 'none' # options include "none" (do not detect), "file", "github-tag" or "github-release"
       detect-version-source-parameter: '' # use for file name
+      language: 'go'  # Go, Ruby, Rust, JavaScript, TypeScript, Python, Java, C#, PHP, other - used for build and SonarQube language setting
 
       # complexity-checks
       perform-complexity-checks: true
@@ -75,6 +76,8 @@ jobs:
       # perform-sonar-build: true
       # build-profile: 'default' 
       # report-unit-test-coverage: true
+
+      perform-docker-scan: false  # scan Dockerfile and built images with Docker Scout or Trivy; see repo custom properties matching "container"
 
       # report to central developer dashboard
       report-to-atlassian-dashboard: false
