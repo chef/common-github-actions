@@ -347,7 +347,7 @@ jobs:
           fi
           echo "** SONAR ***************************************************"
           echo "  Perform SonarQube scan set to ${{ inputs.perform-sonarqube-scan }}"
-          echo "  Perform Sonar build set to ${{ inputs.perform-sonar-build }}"
+          echo "  Perform Sonar build set to ${{ inputs.build }}"
           echo "  Sonar unit test inclusion set to ${{ inputs.report-unit-test-coverage }}"
           echo "** DEV DASHBOARD *******************************************"
           echo "  Report to Atlassian dashboard set to ${{ inputs.report-to-atlassian-dashboard }}"
@@ -731,7 +731,7 @@ jobs:
       id-token: write
       contents: read
     with:
-      perform-build: ${{ inputs.perform-sonar-build }}
+      perform-build: ${{ inputs.build }} # was ${{ inputs.perform-sonar-build }}
       build-profile: ${{ inputs.build-profile }}
       language: ${{ inputs.language }}
       report-unit-test-coverage: ${{ inputs.report-unit-test-coverage }}
@@ -757,7 +757,7 @@ jobs:
       id-token: write
       contents: read
     with:
-      perform-build: ${{ inputs.perform-sonar-build }}
+      perform-build: ${{ inputs.build }} # was ${{ inputs.perform-sonar-build }}
       build-profile: ${{ inputs.build-profile }}
       language: ${{ inputs.language }}
       report-unit-test-coverage: ${{ inputs.report-unit-test-coverage }}
@@ -784,7 +784,7 @@ jobs:
       id-token: write
       contents: read
     with:
-      perform-build: ${{ inputs.perform-sonar-build }} # TODO: change to true for internal, harmonize chef360 with other internal SQ, also update sonar-props files in chef360
+      perform-build: ${{ inputs.build }} # was ${{ inputs.perform-sonar-build }}
       build-profile: ${{ inputs.build-profile }}
       language: ${{ inputs.language }}
       report-unit-test-coverage: ${{ inputs.report-unit-test-coverage }}
