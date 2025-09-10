@@ -154,6 +154,11 @@ jobs:
       id-token: write
       contents: read
     steps:
+    - name: checkout
+      # removed: if: ${{ inputs.perform-build == true && inputs.visibility == 'internal' }} -- this is internal, so always do checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     - name: SonarQube Scan
       # if: ${{ inputs.perform-build == true && inputs.report-unit-test-coverage == true && inputs.visibility == 'internal' }} -- removing caveat,should be responsibility of caller
       uses: sonarsource/sonarqube-scan-action@v5.3.1
