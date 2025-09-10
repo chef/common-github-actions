@@ -721,7 +721,7 @@ jobs:
   # #
   # ################################################################################################################
   
-  Sonar-SAST-public:
+  Sonar-public-repo:
     name: 'PUBLIC Sonar SAST scan'
     needs: ci-build
     if: ${{ inputs.perform-sonarqube-scan == true && success() && inputs.visibility == 'public'}}
@@ -747,33 +747,22 @@ jobs:
       udf2: ${{ inputs.udf2 }}
       udf3: ${{ inputs.udf3 }}
         
-  Sonar-SAST-private:
-    name: 'PRIVATE Sonar scan'
+  Sonar-private-repo:
+    name: 'PRIVATE Sonar scan (inline)'
     if: ${{ inputs.perform-sonarqube-scan == true && success() && inputs.visibility == 'private'}}
     needs: ci-build
-    uses: chef/common-github-actions/.github/workflows/sonarqube-private-repo.yml@main
-    secrets: inherit
-    permissions:
-      id-token: write
-      contents: read
-    with:
-      perform-build: ${{ inputs.build }} # was ${{ inputs.perform-sonar-build }}
-      build-profile: ${{ inputs.build-profile }}
-      language: ${{ inputs.language }}
-      report-unit-test-coverage: ${{ inputs.report-unit-test-coverage }}
-      report-to-atlassian-dashboard: ${{ inputs.report-to-atlassian-dashboard }}
-      quality-product-name: ${{ inputs.quality-product-name }}
-      quality-sonar-app-name: ${{ inputs.quality-sonar-app-name }}
-      quality-testing-type: ${{ inputs.quality-testing-type }}
-      quality-service-name: ${{ inputs.quality-service-name }}
-      quality-junit-report: ${{ inputs.quality-junit-report }}
-      visibility: ${{ inputs.visibility }}
-      go-private-modules: ${{ inputs.go-private-modules }}
-      udf1: ${{ inputs.udf1 }}
-      udf2: ${{ inputs.udf2 }}
-      udf3: ${{ inputs.udf3 }}
-  
-  Sonar-SAST-internal:
+    # was uses: chef/common-github-actions/.github/workflows/sonarqube-private-repo.yml@main
+    runs-on: ubuntu-latest
+    steps:
+    - name: SonarQube Scan
+      if: ${{ inputs.visibility == 'private' }}
+      uses: sonarsource/sonarqube-scan-action@v5.3.1
+      continue-on-error: true
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        
+  Sonar-internal-repo:
     name: 'INTERNAL Sonar scan'
     if: ${{ inputs.perform-sonarqube-scan == true && inputs.visibility == 'internal'}}
     # was if: ${{ inputs.perform-sonarqube-scan == true && success() && inputs.visibility == 'internal'}}
@@ -947,3 +936,29 @@ jobs:
       generate-msft-sbom: ${{ inputs.generate-msft-sbom }}
       license_scout: ${{ inputs.license_scout }}
       go-private-modules: ${{ inputs.go-private-modules }}
+
+  quality-dashboard:
+    name: 'Reporting to quality dashboard'
+    needs: generate-sbom
+    secrets: inherit
+    permissions:
+      id-token: write
+      contents: read
+    if: ${{ inputs.report-to-atlassian-dashboard == true && success() }}
+    uses: chef/common-github-actions/.github/workflows/irfan-quality-dashboard.yml@main
+    with:
+      perform-build: ${{ inputs.build }} # was ${{ inputs.perform-sonar-build }}
+      build-profile: ${{ inputs.build-profile }}
+      language: ${{ inputs.language }}
+      report-unit-test-coverage: ${{ inputs.report-unit-test-coverage }}
+      report-to-atlassian-dashboard: ${{ inputs.report-to-atlassian-dashboard }}
+      quality-product-name: ${{ inputs.quality-product-name }}
+      quality-sonar-app-name: ${{ inputs.quality-sonar-app-name }}
+      quality-testing-type: ${{ inputs.quality-testing-type }}
+      quality-service-name: ${{ inputs.quality-service-name }}
+      quality-junit-report: ${{ inputs.quality-junit-report }}
+      visibility: ${{ inputs.visibility }}
+      go-private-modules: ${{ inputs.go-private-modules }}
+      udf1: ${{ inputs.udf1 }}
+      udf2: ${{ inputs.udf2 }}
+      udf3: ${{ inputs.udf3 }}
