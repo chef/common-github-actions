@@ -86,7 +86,8 @@ jobs:
         fetch-depth: 0
     - name: SonarQube Scan
       if: ${{ inputs.visibility == 'private' }}
-      uses: sonarsource/sonarqube-scan-action@v5.1.0
+      uses: sonarsource/sonarqube-scan-action@v5.3.1
+      # was uses: sonarsource/sonarqube-scan-action@v5.1.0
       continue-on-error: true
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
