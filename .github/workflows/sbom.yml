@@ -199,7 +199,36 @@ jobs:
       - name: Configure git for private Go modules
         env:
           GOPRIVATE: ${{ inputs.go-private-modules }}
-        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: |
+          git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+          # Also set up Git credentials for this session
+          git config --global credential.helper store
+          echo "https://${{ secrets.GH_TOKEN }}@github.com" > ~/.git-credentials
+          # Set additional Go environment variables
+          echo "GOPRIVATE=${{ inputs.go-private-modules }}" >> $GITHUB_ENV
+          echo "GOPROXY=direct" >> $GITHUB_ENV
+          echo "GOSUMDB=off" >> $GITHUB_ENV
+
+      - name: Download Go dependencies with authentication
+        run: |
+          if [ -f "go.mod" ]; then
+            echo "Current Go environment:"
+            echo "GOPRIVATE: $GOPRIVATE"
+            echo "GOPROXY: $GOPROXY"  
+            echo "GOSUMDB: $GOSUMDB"
+            echo "Downloading Go dependencies..."
+            # First, try to download dependencies normally
+            go mod download -x
+            # Also try to verify and tidy modules
+            go mod verify || true
+            go mod tidy || true
+            echo "Go dependency download completed"
+            # List downloaded modules for debugging
+            go list -m all || true
+          else
+            echo "No go.mod file found, skipping Go dependency download"
+          fi
+        continue-on-error: true
 
       - name: BlackDuck SCA scan
         id: black-duck-sca-scan
