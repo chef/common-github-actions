@@ -563,21 +563,6 @@ jobs:
     needs: checkout
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Set up Go
-        if: env.GA_BUILD_LANGUAGE == 'go'
-        uses: actions/setup-go@v5
-        with: 
-          go-version: '1.24'
-          check-latest: true
-      - name: Configure git for private Go modules
-        if: env.GA_BUILD_LANGUAGE == 'go'
-        env:
-          GOPRIVATE: ${{ inputs.go-private-modules }}
-        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
       - name: BUILD
         run: echo 'BUILD STEP'
   #   runs-on: ubuntu-latest
