@@ -190,26 +190,10 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 'stable'
-          check-latest: true
-
       - name: Configure git for private Go modules
         env:
           GOPRIVATE: ${{ inputs.go-private-modules }}
         run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
-
-      - name: Download Go dependencies
-        env:
-          GOPRIVATE: ${{ inputs.go-private-modules }}
-        run: |
-          if [ -f "go.mod" ]; then
-            echo "Downloading Go dependencies..."
-            go mod download
-          fi
-        continue-on-error: true
 
       - name: BlackDuck SCA scan
         id: black-duck-sca-scan
