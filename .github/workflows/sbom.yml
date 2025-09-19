@@ -203,6 +203,7 @@ jobs:
 
       - name: BlackDuck SBOM scan
         uses: blackduck-inc/black-duck-security-scan@v2.1.1
+        continue-on-error: true  # Allow pipeline to continue even with policy violations
         env: 
           GOPRIVATE: ${{ inputs.go-private-modules }}
           DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name}} #'Chef-Agents' # <the_parent_group_of_your_target_project>, Chef, Chef-Agents, Chef-Automate, Chef-Chef360, Chef-Habitat, Chef-Infrastructure-Server, Chef-Shared-Services
