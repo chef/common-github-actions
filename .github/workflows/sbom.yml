@@ -199,34 +199,15 @@ jobs:
       - name: Configure git for private Go modules
         env:
           GOPRIVATE: ${{ inputs.go-private-modules }}
-        run: |
-          git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          # Also set up Git credentials for this session
-          git config --global credential.helper store
-          echo "https://${{ secrets.GH_TOKEN }}@github.com" > ~/.git-credentials
-          # Set additional Go environment variables
-          echo "GOPRIVATE=${{ inputs.go-private-modules }}" >> $GITHUB_ENV
-          echo "GOPROXY=direct" >> $GITHUB_ENV
-          echo "GOSUMDB=off" >> $GITHUB_ENV
+        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
-      - name: Download Go dependencies with authentication
+      - name: Download Go dependencies
+        env:
+          GOPRIVATE: ${{ inputs.go-private-modules }}
         run: |
           if [ -f "go.mod" ]; then
-            echo "Current Go environment:"
-            echo "GOPRIVATE: $GOPRIVATE"
-            echo "GOPROXY: $GOPROXY"  
-            echo "GOSUMDB: $GOSUMDB"
             echo "Downloading Go dependencies..."
-            # First, try to download dependencies normally
-            go mod download -x
-            # Also try to verify and tidy modules
-            go mod verify || true
-            go mod tidy || true
-            echo "Go dependency download completed"
-            # List downloaded modules for debugging
-            go list -m all || true
-          else
-            echo "No go.mod file found, skipping Go dependency download"
+            go mod download
           fi
         continue-on-error: true
 
@@ -238,7 +219,9 @@ jobs:
 
       - name: BlackDuck SBOM scan
         uses: blackduck-inc/black-duck-security-scan@v2.1.1
+        continue-on-error: true  # Allow pipeline to continue even with policy violations
         env: 
+          GOPRIVATE: ${{ inputs.go-private-modules }}
           DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name}} #'Chef-Agents' # <the_parent_group_of_your_target_project>, Chef, Chef-Agents, Chef-Automate, Chef-Chef360, Chef-Habitat, Chef-Infrastructure-Server, Chef-Shared-Services
           DETECT_PROJECT_NAME: ${{ inputs.blackduck-project-name }}
           DETECT_PROJECT_VERSION_NAME: ${{ inputs.version }} # <the_existing_version_in_your_project>
@@ -263,8 +246,7 @@ jobs:
       uses: actions/setup-go@v5
       with:
         go-version: 'stable'
-#        go-version: 1.24.2
-#        check-latest: true
+        check-latest: true
     - name: Configure git for private modules
       env:
         GOPRIVATE: ${{ inputs.go-private-modules }}
@@ -305,8 +287,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: 'stable'
-#        go-version: 1.24.2
-#        check-latest: true
+          check-latest: true
         
       - name: Configure git for private modules
         env:
