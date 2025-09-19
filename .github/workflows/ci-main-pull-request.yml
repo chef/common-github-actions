@@ -943,7 +943,7 @@ jobs:
   generate-sbom:
     name: 'Generating SBOM'
     if: ${{ inputs.generate-sbom == true }}
-    uses: chef/common-github-actions/.github/workflows/sbom.yml@main
+    uses: chef/common-github-actions/.github/workflows/sbom.yml@sandhi/fix-pipeline
     needs: ci-build
     secrets: inherit
     with:
