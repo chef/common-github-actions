@@ -66,7 +66,7 @@ on:
         required: false
         type: boolean
         default: true
-      blackduck-bridge-break:
+      bridge-break:
         description: 'Break the build if BlackDuck SCA scan finds new bridge vulnerabilities'
         required: false
         type: boolean
