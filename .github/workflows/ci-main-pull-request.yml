@@ -66,6 +66,11 @@ on:
         required: false
         type: boolean
         default: true
+      blackduck-bridge-break:
+        description: 'Break the build if BlackDuck SCA scan finds new bridge vulnerabilities'
+        required: false
+        type: boolean
+        default: true
       detect-version-source-type:  # options include "none" (do not detect), "file", "github-tag" or "github-release"
         description: 'flag to determine how to detect version dynamically'
         required: false
