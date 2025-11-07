@@ -463,6 +463,11 @@ jobs:
         with: 
           go-version: '1.24'
           check-latest: true
+      - name: Configure git for private Go modules
+        if: env.GA_BUILD_LANGUAGE == 'go'
+        env:
+          GOPRIVATE: ${{ inputs.go-private-modules }}
+        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
       - name: Go linting and security checks  
         if: env.GA_BUILD_LANGUAGE == 'go'
         run: |
@@ -962,3 +967,4 @@ jobs:
       udf1: ${{ inputs.udf1 }}
       udf2: ${{ inputs.udf2 }}
       udf3: ${{ inputs.udf3 }}
+

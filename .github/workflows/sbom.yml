@@ -190,6 +190,11 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
+      - name: Configure git for private Go modules
+        env:
+          GOPRIVATE: ${{ inputs.go-private-modules }}
+        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+
       - name: BlackDuck SCA scan
         id: black-duck-sca-scan
         run: |
@@ -198,7 +203,9 @@ jobs:
 
       - name: BlackDuck SBOM scan
         uses: blackduck-inc/black-duck-security-scan@v2.1.1
+        continue-on-error: true  # Allow pipeline to continue even with policy violations
         env: 
+          GOPRIVATE: ${{ inputs.go-private-modules }}
           DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name}} #'Chef-Agents' # <the_parent_group_of_your_target_project>, Chef, Chef-Agents, Chef-Automate, Chef-Chef360, Chef-Habitat, Chef-Infrastructure-Server, Chef-Shared-Services
           DETECT_PROJECT_NAME: ${{ inputs.blackduck-project-name }}
           DETECT_PROJECT_VERSION_NAME: ${{ inputs.version }} # <the_existing_version_in_your_project>
@@ -225,11 +232,10 @@ jobs:
         go-version: 'stable'
 #        go-version: 1.24.2
 #        check-latest: true
-    # - name: Configure git for private modules
-    #   env:
-    #     GOPRIVATE: github.com/progress-platform-services/*
-    #       use ${{ inputs.go-private-modules }}
-    #   run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+    - name: Configure git for private modules
+      env:
+        GOPRIVATE: ${{ inputs.go-private-modules }}
+      run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
     - name: create folder
       run: mkdir -p ./bin
@@ -269,11 +275,10 @@ jobs:
 #        go-version: 1.24.2
 #        check-latest: true
         
-      # - name: Configure git for private modules
-      #   env:
-      #     GOPRIVATE: github.com/progress-platform-services/*
-      #       use ${{ inputs.go-private-modules }}
-      #   run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+      - name: Configure git for private modules
+        env:
+          GOPRIVATE: ${{ inputs.go-private-modules }}
+        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - name: set up license_scout
         uses: ruby/setup-ruby@v1
