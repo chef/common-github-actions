@@ -56,6 +56,16 @@ on:
         required: false
         type: string
         default: '1.0.0'
+      detect-policy-check-fail-on-severities:
+        description: 'Detect policy check on failure of prior steps, prevents an upload of SBOM or BlackDuck SCA scan if prior steps failed'
+        required: false
+        type: string
+        default: 'ALL'
+      blackduck-break-build:
+        description: 'Break the build if BlackDuck SCA scan finds new high or critical vulnerabilities'
+        required: false
+        type: boolean
+        default: true
       detect-version-source-type:  # options include "none" (do not detect), "file", "github-tag" or "github-release"
         description: 'flag to determine how to detect version dynamically'
         required: false
