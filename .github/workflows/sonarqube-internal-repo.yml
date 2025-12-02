@@ -56,53 +56,62 @@ on:
         type: string
       
 jobs:
-  echo-inputs:
-    name: 'Echo inputs'
+  # echo-inputs:
+  #   name: 'Echo inputs'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: Echo inputs
+  #     run: |
+  #       echo "Sonarqube scan for INTERNAL repositories, running on ubuntu-latest-4-cores runner"
+  #       echo "Perform build set to ${{ inputs.perform-build }}"
+  #       echo "Build profile set to ${{ inputs.build-profile }}"
+  #       echo "Language set to ${{ inputs.language }} "
+  #       echo "Visibility set to ${{ inputs.visibility }} [ ${{ github.event.repository.visibility }} ]"
+  #       echo "Perform unit test coverage set to ${{ inputs.report-unit-test-coverage }}"
+  #       echo "Report to Atlassian dashboard set to ${{ inputs.report-to-atlassian-dashboard }}"
+  #       echo "Quality product name set to ${{ inputs.quality-product-name }}" 
+  #       echo "Quality sonar application name set to ${{ inputs.quality-sonar-app-name }}"
+  #       echo "Quality testing type set to ${{ inputs.quality-testing-type }}"
+  #       echo "Quality service name set to ${{ inputs.quality-service-name }}"
+  #       echo "Quality JUnit report set to ${{ inputs.quality-junit-report }}"
+  #       echo "Go private modules set to ${{ inputs.go-private-modules }}"
+      
+  # MOVE INLINE - to main-PR-checkin
+
+  checkout:
+    name: 'Checkout code'
     runs-on: ubuntu-latest
     steps:
-    - name: Echo inputs
-      run: |
-        echo "Sonarqube scan for INTERNAL repositories, running on ubuntu-latest-4-cores runner"
-        echo "Perform build set to ${{ inputs.perform-build }}"
-        echo "Build profile set to ${{ inputs.build-profile }}"
-        echo "Language set to ${{ inputs.language }} "
-        echo "Visibility set to ${{ inputs.visibility }} [ ${{ github.event.repository.visibility }} ]"
-        echo "Perform unit test coverage set to ${{ inputs.report-unit-test-coverage }}"
-        echo "Report to Atlassian dashboard set to ${{ inputs.report-to-atlassian-dashboard }}"
-        echo "Quality product name set to ${{ inputs.quality-product-name }}" 
-        echo "Quality sonar application name set to ${{ inputs.quality-sonar-app-name }}"
-        echo "Quality testing type set to ${{ inputs.quality-testing-type }}"
-        echo "Quality service name set to ${{ inputs.quality-service-name }}"
-        echo "Quality JUnit report set to ${{ inputs.quality-junit-report }}"
-        echo "Go private modules set to ${{ inputs.go-private-modules }}"
-      
-  SonarQube:
+    - name: Configure git for private modules
+      if: ${{ inputs.visibility == 'internal' }}
+      env:
+        GOPRIVATE: ${{ inputs.go-private-modules }}   # github.com/progress-platform-services/*
+      run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+      continue-on-error: true
+    - name: checkout
+      # removed: if: ${{ inputs.perform-build == true && inputs.visibility == 'internal' }} -- this is internal, so always do checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+  build:
     runs-on: ubuntu-latest-4-cores
     permissions: 
       id-token: write
       contents: read
     steps:
-    - name: checkout
-      if: ${{ inputs.perform-build == true && inputs.visibility == 'internal' }}
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
     - name: Set up Go
-      if: ${{ inputs.perform-build == true && inputs.language == 'Go' && inputs.visibility == 'internal' }}
+      if: ${{ inputs.perform-build == true && inputs.language == 'Go' }}
       uses: actions/setup-go@v5
       with:
         go-version: 'stable'
 #        go-version: 1.24.2
-#        check-latest: true
+        check-latest: true
 
-    - name: Configure git for private modules
-      if: ${{ inputs.perform-build == true && inputs.visibility == 'internal' }}
-      env:
-        GOPRIVATE: ${{ inputs.go-private-modules }}   # github.com/progress-platform-services/*
-      run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
-
-      #TODO: language specific unit tests (also needs paramterization)
+  unit-tests:
+    runs-on: ubuntu-latest-4-cores
+    steps:
+    #TODO: language specific unit tests (also needs paramterization)
     # GoLang Unit tests
     - name: Generate unit test coverage files
       if: ${{ inputs.perform-build == true && inputs.report-unit-test-coverage == true && inputs.language == 'Go' && inputs.visibility == 'internal'}}
@@ -110,6 +119,8 @@ jobs:
         go test -v -coverprofile="coverage.out" ./... 
         mkdir -p test/coverage
         cp coverage.out test/coverage/coverage.out 
+      continue-on-error: true
+
     # Ruby Unit tests
     - name: Generate unit test coverage files
       if: ${{ inputs.perform-build == true && inputs.report-unit-test-coverage == true && inputs.language == 'Ruby' && inputs.visibility == 'internal'}}
@@ -117,6 +128,8 @@ jobs:
         mkdir -p test/coverage
         cp coverage/.resultset.json test/coverage/.resultset.json
         coverage-test:
+      continue-on-error: true
+
     # name: Coverage from chef-vault
     # runs-on: ubuntu-22.04
     # steps:
@@ -135,32 +148,23 @@ jobs:
     #       failedThreshold: 90
     #       resultPath: coverage/.last_run.json
 
+  SonarQube:
+    runs-on: ubuntu-latest-4-cores
+    permissions: 
+      id-token: write
+      contents: read
+    steps:
+    - name: checkout
+      # removed: if: ${{ inputs.perform-build == true && inputs.visibility == 'internal' }} -- this is internal, so always do checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     - name: SonarQube Scan
-      if: ${{ inputs.perform-build == true && inputs.report-unit-test-coverage == true && inputs.visibility == 'internal' }}
+      # if: ${{ inputs.perform-build == true && inputs.report-unit-test-coverage == true && inputs.visibility == 'internal' }} -- removing caveat,should be responsibility of caller
       uses: sonarsource/sonarqube-scan-action@v5.3.1
+      # was uses: sonarsource/sonarqube-scan-action@v5.1.0
       # was uses: sonarsource/sonarqube-scan-action@master
       continue-on-error: true
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}    
-
-#TODO: Test adding Irfan's quality reporting stage inline here after sonar run (https://github.com/Progress-I360/github-action-reporting)
-# PRODUCT_NAME = [Chef360 | Courier | Inspec]
-    - name: Run SonarQube report generation
-      if: ${{ inputs.report-to-atlassian-dashboard == true && inputs.visibility == 'internal' }}
-      uses: Progress-I360/github-action-reporting/sonarqube@main
-      with:
-        PRODUCT_NAME: ${{ inputs.quality-product-name }}
-        SONAR_APP_NAME: ${{ inputs.quality-sonar-app-name }}
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-# TESTING_TYPE = [Unit | Integration | e2e | api | Performance | Security]
-# ENVIRONMENT = [DEV | STAGE | PROD] (optional)
-    - name: Run report generation
-      if: ${{ inputs.report-to-atlassian-dashboard == true && inputs.report-unit-test-coverage == true && inputs.visibility == 'internal' }}
-      uses: Progress-I360/github-action-reporting/automation@main
-      with:
-        PRODUCT_NAME: ${{ inputs.quality-product-name }}
-        TESTING_TYPE: ${{ inputs.quality-testing-type }}
-        SERVICE_NAME: ${{ inputs.quality-service-name }}
-        JUNIT_REPORT: ${{ inputs.quality-junit-report }}

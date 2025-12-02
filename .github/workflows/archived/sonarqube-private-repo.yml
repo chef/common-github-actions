@@ -1,13 +1,10 @@
-# sonarqube-public-repo.yml
-#
-# from internal GA page - https://progresssoftware.atlassian.net/wiki/spaces/TCE/pages/641925121/SonarQube+-+Github+Actions
-# gets Akeyless secret to permit firewall traffic from GA to SonarQube
-name: SonarQube scan for public repositories
+# sonarqube-private-repo.yml
+name: SonarQube scan for private repositories
 # configuration @ https://github.com/marketplace/actions/official-sonarqube-scan
 
 on:
   workflow_call:
-    # all secrets are inherited from the calling workflow, typically SONAR_TOKEN, SONAR_HOST_URL, AKEYLESS_JWT_ID
+    # all secrets are inherited from the calling workflow, typically SONAR_TOKEN, SONAR_HOST_URL
     inputs:
       perform-build: 
         required: false
@@ -57,44 +54,19 @@ on:
 
 jobs:
   SonarQube:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-4-cores
     permissions: 
       id-token: write
       contents: read
-    
     steps:
-    - name: Checkout code
+    - name: Checkout
+      if: ${{ inputs.visibility == 'private' }}
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-
-    # from Confluence, with @latest version of the action
-    # - name: Prepare Secrets and Login into Azure
-    #   id: get-aad-secret
-    #   uses: 'prgs-community/githubactions-reusableworkflow-sonarqube/.github/actions/azure-login@latest'
-    #   with:
-    #     akeyless-access-id: '${{ secrets.AKEYLESS_JWT_ID }}'
-
-    - name: Prepare Secrets and Login into Azure
-      id: get-aad-secret
-      uses: 'chef/common-github-actions/.github/actions/azure-login@main'
-      continue-on-error: true
-      with:
-        akeyless-access-id: '${{ secrets.AKEYLESS_JWT_ID }}'
-      
-    - name: Add runner IP to Firewall List
-      uses: chef/common-github-actions/.github/actions/update-firewall-rule@main
-      continue-on-error: true
-      with:
-        action-to-execute: add
-
-    - name: Wait 30 sec
-      shell: bash
-      run: |
-        sleep 30
-      
+        
     - name: SonarQube Scan
-      if: ${{ inputs.visibility == 'public' }}
+      if: ${{ inputs.visibility == 'private' }}
       uses: sonarsource/sonarqube-scan-action@v5.3.1
       # was uses: sonarsource/sonarqube-scan-action@v5.1.0
       continue-on-error: true
@@ -102,14 +74,3 @@ jobs:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         
-    - name: Remove Storage Firewall Rule
-      if: always()
-      uses: chef/common-github-actions/.github/actions/update-firewall-rule@main
-      with:
-          action-to-execute: remove
-
-    - name: logout
-      if: always()
-      shell: bash
-      run: |
-          az logout

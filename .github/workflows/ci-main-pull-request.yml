@@ -15,10 +15,26 @@
 # 
 # See DEV-README.md for more details on the steps and how to use this action, or the confluence page at <TODO: URL>
 #
-# secrets required (by step) - # secrets are inherited from the calling workflow, typically SONAR_TOKEN, SONAR_HOST_URL, GH_TOKEN, AKEYLESS_JWT_ID
-#
-# custom repository properties are listed below as ENV vars (view these in the repo Settings > Code & Automation > Custom Properties)
-#    
+# secrets required (by step)
+# SonarQube 
+# SONAR_TOKEN (repository level)
+# SONAR_HOST_URL (organization level)
+# AKEYLESS_JWT_ID (organization level, for creation of Azure firewall rules)
+
+# BlackDuck SAST/Polaris
+# POLARIS_ACCESS_TOKEN (organization level)
+# POLARIS_SERVER_URL (organization level)
+
+# BlackDuck SCA/SBOM, Sbominator
+# BLACKDUCK_SBOM_URL (organization level)
+# BLACKDUCK_SCA_TOKEN (organization level)
+
+# Custom repository properties (view these in the repo Settings > Code & Automation > Custom Properties)
+# - GABuildLanguage (the primary language used in compilation and testing in GitHub Actions. select from go, ruby, erlang, rust)
+# - GABuildProfile (a build profile to be used when building an application using GitHub Actions. This is experimental and will determine build, unit test paths by type of application (e.g., CLI, standard container, web API, etc.) in combination with GABuildLanguage
+# - lifecycle (the current status of the repo in terms of level of engagement with the contents: indeterminate, active, inactive, under-review, in-process)
+# - primaryApplication (the primary application of which this repo is a component. Which product owner is responsible for maintaining this repo? indeterminate, automate, chef-360, chef-server, chef-test-kitchen-enterprise, chef-workstation, chef-client, haabitt, inspec, non-product, online-services, other)
+# - standardizationWorkflow (standardize, indtrminate, etc.)
 
 name: CI flow containing PR checks for main & release, v2
 
@@ -40,16 +56,25 @@ on:
         required: false
         type: string
         default: '1.0.0'
+      detect-version-source-type:  # options include "none" (do not detect), "file", "github-tag" or "github-release"
+        description: 'flag to determine how to detect version dynamically'
+        required: false
+        type: string
+        default: 'none'
+      detect-version-source-parameter:  # use for file name
+        required: false
+        type: string
+        default: ''
       perform-complexity-checks: 
         description: 'Perform complexity checks with SCC'
         required: false
         type: boolean
         default: true
       scc-output-filename:
-        description: 'Name of the SCC complexity output file artifact'
+        description: 'Name of the SCC complexity output file artifact, do not add file extension'
         required: false
         type: string
-        default: 'scc-output.txt'
+        default: 'scc-complexity'
       perform-language-linting:
         description: 'Perform language-specific linting and pre-compilation checks'
         required: false
@@ -98,11 +123,11 @@ on:
         required: false
         type: boolean
         default: true
-      perform-sonar-build: 
-        description: 'Perform the build (in specified language and profile)'
+      perform-docker-scan:
+        description: 'Perform Docker scan of Dockerfile and built images in chef360 and other containerized applications'
         required: false
         type: boolean
-        default: true
+        default: false
       build-profile: 
         description: 'Build profile for SonarQube - application specific path'
         required: false
@@ -188,6 +213,16 @@ on:
         required: false
         type: boolean
         default: false 
+      polaris-blackduck-executable: 
+        description: 'Path to BlackDuck polaris executable after build or download step'
+        required: false
+        type: string
+        default: 'path/to/blackduck/binary'
+      polaris-executable-detect-path: 
+        description: 'Additions to $PATH for BlackDuck polaris to find executable'
+        required: false
+        type: string
+        default: 'path/to/detect'
       generate-msft-sbom:
         description: 'Generate SBOM using MSFT tools'
         required: false
@@ -217,10 +252,14 @@ on:
 env:
   REPO_VISIBILITY: ${{ github.event.repository.visibility }}
   REPO_NAME: ${{ github.event.repository.name }}
-  PIPELINE_VERSION: '1.0.2'  
+  PIPELINE_VERSION: '1.0.5'  # version of this CI pipeline
   PRIMARY_APPLICATION: 'default'   # Custom repo property [primaryApplication]: chef360, automate, infra-server, habitat, supermarket, licensing, downloads, chef-client, inspec, chef-workstation (or derivatives like habitat-builder)
   GA_BUILD_LANGUAGE: 'default'  # Custom repo property [GABuildLanguage]: go, ruby, erlang, rust (replaces Language input)
   GA_BUILD_PROFILE: 'default'   # Custom repo property [GABuildProfile]: TBD
+  # APP_VERSION: $(cat VERSION) 
+  FILE_PREFIX: $(echo "${{ github.repository }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
+  DEFAULT_FILE_EXTENSION: ".json"
+  DEFAULT_SEPARATOR: "-"
 
 jobs:
   precompilation-checks:
@@ -308,7 +347,7 @@ jobs:
           fi
           echo "** SONAR ***************************************************"
           echo "  Perform SonarQube scan set to ${{ inputs.perform-sonarqube-scan }}"
-          echo "  Perform Sonar build set to ${{ inputs.perform-sonar-build }}"
+          echo "  Perform Sonar build set to ${{ inputs.build }}"
           echo "  Sonar unit test inclusion set to ${{ inputs.report-unit-test-coverage }}"
           echo "** DEV DASHBOARD *******************************************"
           echo "  Report to Atlassian dashboard set to ${{ inputs.report-to-atlassian-dashboard }}"
@@ -321,11 +360,18 @@ jobs:
           if [ ${{ inputs.generate-sbom }} ]; then
             echo "  Generate SBOM set to ${{ inputs.generate-sbom }}"
             echo "  SBOM application version set to ${{ inputs.version }}"
+            echo "    SBOM version detection type set to ${{ inputs.detect-version-source-type }} (if version not specified)"
+            echo "    SBOM file name set to ${{ inputs.detect-version-source-parameter }} (if detection type is [file])"
             echo "  Export SBOM from GitHub set to ${{ inputs.export-github-sbom }}"
             if [ ${{ inputs.perform-blackduck-sca-scan }} ]; then
               echo "  Perform BlackDuck SCA scan set to ${{ inputs.perform-blackduck-sca-scan }}"
+              echo "    output will be located at https://progresssoftware.app.blackduck.com/api/project-groups/fc6da208-79a9-4c47-a14d-6cfdf26bcfd5 (Chef)"
+              echo "    BlackDuck project group name set to ${{ inputs.blackduck-project-group-name }}"
+              echo "    BlackDuck project name set to ${{ inputs.blackduck-project-name }}"
+              echo "    Polaris BlackDuck executable set to ${{ inputs.polaris-blackduck-executable }}"
+              echo "    Polaris executable detect path set to ${{ inputs.polaris-executable-detect-path }}"
             fi
-            echo "  Generate BlackDuck SBOM set to ${{ inputs.generate-blackduck-sbom }} OBSOLETE, NO EFFECT"
+            echo "    Generate BlackDuck SBOM set to ${{ inputs.generate-blackduck-sbom }} OBSOLETE, NO EFFECT"
             echo "  Generate MSFT SBOM set to ${{ inputs.generate-msft-sbom }}"
             echo "  License scout set to ${{ inputs.license_scout }}"
           fi
@@ -354,6 +400,16 @@ jobs:
         with:
           fetch-depth: 0
 
+  generate-filename-slug:
+    name: Generate a simple slug based on repo and date for use in any output artifacts
+    runs-on: ubuntu-latest
+    steps:
+    - name: Generate Filename Prefix and full JSON file name as environment variables for later steps
+      run: |
+        FILE_PREFIX=$(echo "${{ github.repository }}${{ env.DEFAULT_SEPARATOR }}${{ github.ref_name }}${{ env.DEFAULT_SEPARATOR }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
+        echo "FILE_PREFIX=${FILE_PREFIX}" >> $GITHUB_ENV
+      # FILE_NAME=$(echo "${{ env.FILE_PREFIX }}${{ env.DEFAULT_SEPARATOR }}${{ env.DEFAULT_FILE_NAME }}${{ env.DEFAULT_FILE_EXTENSION }}")
+      
   scc:
     name: 'Source code complexity checks'
     if: ${{ inputs.perform-complexity-checks == true }}
@@ -407,6 +463,11 @@ jobs:
         with: 
           go-version: '1.24'
           check-latest: true
+      - name: Configure git for private Go modules
+        if: env.GA_BUILD_LANGUAGE == 'go'
+        env:
+          GOPRIVATE: ${{ inputs.go-private-modules }}
+        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
       - name: Go linting and security checks  
         if: env.GA_BUILD_LANGUAGE == 'go'
         run: |
@@ -460,7 +521,7 @@ jobs:
               
   ################################################################################################################
   #
-  #    Security SAST and SCA scans
+  #    Security source and repo secret scans
   #
   ################################################################################################################
   
@@ -477,8 +538,8 @@ jobs:
     needs: checkout
     with:
       version: ${{ inputs.version }}
-
-  # run-srcclr:
+  
+      # run-srcclr:
   #   if: ${{ inputs.perform-srcclr-scan == true }}
   #   uses: chef/common-github-actions/.github/workflows/srcclr.yml@main
   #   needs: run-scc
@@ -488,154 +549,8 @@ jobs:
   #   uses: chef/common-github-actions/.github/workflows/veracode-sca.yml@main
   #   needs: run-scc
   #   secrets: inherit
-      
-  # BLACKDUCK POLARIS SAST SCAN
-  # NOW THE LATEST COMMUNITY - https://github.com/prgs-community/githubactions-securityscans/blob/main/polaris/action.yml 
-  # # updated to https://documentation.blackduck.com/bundle/bridge/page/documentation/c_download.html#polaris-download
-  # # https://github.com/marketplace/actions/black-duck-security-scan
-  # NOT USED - from https://documentation.blackduck.com/bundle/bridge/page/documentation/t_github-polaris-quickstart.html
-  # parameters @ https://documentation.blackduck.com/bundle/bridge/page/documentation/c_github-polaris.html
-  # internal confluence https://progresssoftware.atlassian.net/wiki/spaces/TCE/pages/1010336076/Polaris#Examples
-  #   and https://progresssoftware.atlassian.net/wiki/spaces/TCE/pages/1010303415/Polaris+-+Github+Actions+Templates
-  # chef-vault at https://polaris.blackduck.com/portfolio/portfolios/8b7ad6f7-6dcb-49ec-bded-bfc4f190d4f8/portfolio-items/fe369baf-11d2-4989-bcb7-045577856dcc/projects/2460eabd-d033-48a1-a378-6cadd49be6d1/tests/sast?branchId=a6d2c02a-05f8-4557-bfa1-c40e9337ee5d
-  BlackDuck-Polaris-SAST:
-    # branding: applied at action.yml level, not workflow, see https://docs.github.com/en/actions/reference/workflows-and-actions/metadata-syntax#branding
-    #   icon: 'shield'
-    #   color: 'red'
-    if: ${{ inputs.perform-blackduck-polaris == true }}
-    runs-on: ubuntu-latest
-    needs: checkout
-    steps:
-      - name: Starting Black Duck Polaris scan
-        run: |
-          echo "Starting Polaris SAST scan"
-          echo "Below variable should be https://polaris.blackduck.com"
-          echo "POLARIS_SERVER_URL: ${{ secrets.POLARIS_SERVER_URL }}"
-          echo "Polaris application name: ${{ inputs.polaris-application-name }}"
-          echo "Polaris project name: ${{ inputs.polaris-project-name }}"
-          echo "POLARIS_ACCESS_TOKEN: ${{ secrets.POLARIS_ACCESS_TOKEN }}"
-        # other vars
-  # working-directory:
-  #   description: 'Working directory for the scan'
-  #   required: false
-  #   default: '.'
-  # config-path:
-  #   description: 'Path to Detect configuration file'
-  #   required: false
-  #   default: ''
-  # coverity-config-path:
-  #   description: 'Path to Coverity configuration file'
-  #   required: false
-  #   default: ''
-  # coverity-build-command:
-  #   description: 'Coverity build command'
-  #   required: false
-  #   default: ''
-  # coverity-clean-command:
-  #   description: 'Coverity clean command'
-  #   required: false
-  #   default: ''
-  # coverity-args:
-  #   description: 'Additional Coverity arguments'
-  #   required: false
-  #   default: ''
-  # detect-search-depth:
-  #   description: 'Detect search depth'
-  #   required: false
-  #   default: ''
-  # detect-args:
-  #   description: 'Additional Detect arguments'
-  #   required: false
-  #   default: ''
-  # assessment-mode:
-  #   description: 'Assessment mode (CI or SOURCE_UPLOAD)'
-  #   required: false
-  #   default: 'CI'
-  # source-archive:
-  #   description: 'Path to source archive for SOURCE_UPLOAD mode'
-  #   required: false
-  #   default: ''
-  # source-excludes:
-  #   description: 'Source exclusion patterns (comma-separated)'
-  #   required: false
-  #   default: ''
-  # preserve-symlinks:
-  #   description: 'Preserve symbolic links in source upload'
-  #   required: false
-  #   default: 'false'
-  # wait-for-scan:
-  #   description: 'Wait for scan completion'
-  #   required: false
-  #   default: 'true'
-  # mark-build-status:
-  #   description: 'Mark build status on policy violations'
-  #   required: false
-  #   default: ''
-  # pr-comment-severities:
-  #   description: 'Severities to include in PR comments'
-  #   required: false
-  #   default: 'CRITICAL,HIGH,MEDIUM'
-  # diagnostic:
-  #   description: 'Enable diagnostic files upload'
-  #   required: false
-  #   default: 'false'
-      - name: Check input variables
-        run: |
-          if [[ -z "${{ inputs.polaris-application-name }}" ]] || [[ -z "${{ inputs.polaris-project-name }}" ]]; then
-              echo "Polaris application name and project name must be set"
-              exit 1
-          fi
-      # - name: Checkout - is already done above since this is inline
-      - name: BlackDuck Polaris scan
-        uses: blackduck-inc/black-duck-security-scan@v2
-        # was: uses: blackduck-inc/black-duck-security-scan@v2.1.1
-        # uses: blackduck-inc/black-duck-security-scan@805cbd09e806b01907bbea0f990723c2bb85abe9 # 2.0.0 - Jan's version
-        with:
-          ### SCANNING: Required fields
-          polaris_server_url: ${{ secrets.POLARIS_SERVER_URL }} # https://polaris.blackduck.com
-          polaris_access_token: ${{ secrets.POLARIS_ACCESS_TOKEN }}
-          polaris_assessment_types: "SAST"
-          polaris_application_name: "${{ inputs.polaris-application-name }}"  
-          # <Solution>-<Product>-<Module If Applicable>-<Optional Numeric Suffix If Needed>
-          polaris_project_name: ${{ inputs.polaris-project-name }}  
-          #typically GitHub repo name
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          
-          # from https://github.com/prgs-community/githubactions-securityscans/blob/main/polaris/action.yml
-          # with:
-          # polaris_server_url: ${{ inputs.polaris-server-url }}
-          # polaris_access_token: ${{ inputs.polaris-access-token }}
-          # polaris_application_name: ${{ inputs.application-name }}
-          # polaris_project_name: ${{ inputs.project-name }}
-          # polaris_assessment_types: "SAST"
-          polaris_assessment_mode: 'CI' # ${{ inputs.assessment-mode }} CI or SOURCE_UPLOAD
-          polaris_waitForScan: 'true' # ${{ inputs.wait-for-scan }}
-          project_directory: '.'  # ${{ inputs.working-directory }}
-          project_source_archive: '' # ${{ inputs.source-archive != '' && inputs.source-archive || null }}
-          project_source_excludes: '' # ${{ inputs.source-excludes != '' && inputs.source-excludes || null }}
-          project_source_preserveSymLinks: 'false' # ${{ inputs.preserve-symlinks }}
-          detect_search_depth: '' # ${{ inputs.detect-search-depth != '' && inputs.detect-search-depth || null }}
-          detect_args: '' # ${{ inputs.detect-args != '' && inputs.detect-args || null }}
-          detect_config_path: '' # ${{ inputs.config-path != '' && inputs.config-path || null }}
-          coverity_build_command: '' # ${{ inputs.coverity-build-command != '' && inputs.coverity-build-command || null }}
-          coverity_clean_command: '' # ${{ inputs.coverity-clean-command != '' && inputs.coverity-clean-command || null }}
-          coverity_config_path: '' # ${{ inputs.coverity-config-path != '' && inputs.coverity-config-path || null }}
-          coverity_args: '' # ${{ inputs.coverity-args != '' && inputs.coverity-args || null }}
-          include_diagnostics: 'false' # ${{ inputs.diagnostic }}
-          mark_build_status: '' # ${{ inputs.mark-build-status != '' && inputs.mark-build-status || null }}
-          # github_token: ${{ github.token }}
-
-        # options from Jan's (FlowMon. GitLab)
-        # polaris_prComment_enabled: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
-        # polaris_prComment_severities: "CRITICAL,HIGH"
-        
-        # from Blackduck page at https://polaris.blackduck.com/portfolio/portfolios/8b7ad6f7-6dcb-49ec-bded-bfc4f190d4f8/portfolio-items/fe369baf-11d2-4989-bcb7-045577856dcc/projects
-          ### SARIF report parameters
-          # polaris_reports_sarif_create: true
-          # polaris_upload_sarif_report: true
-        ### Mark build status if policy violating issues are found
-          # mark_build_status: 'success'
-
+    
+  
   # ################################################################################################################
   # #
   # #    Build and packaging steps
@@ -655,16 +570,16 @@ jobs:
   #   name: 'CI build and compilation steps'  
   #   steps:
   #     - name: Build for Rust binary
-  #       if: ${{ inputs.language == 'Rust' }}
+  #       if: ${{ inputs.language == 'Rust' }} -- switch to ${{ env.GA_BUILD_LANGUAGE }} 
   #       run: echo 'hello world'
   #       # cargo build --release --target-dir ./bin
   #     - name: Build for Ruby binary
-  #       if: ${{ inputs.language == 'Ruby' }}
+  #       if: ${{ inputs.language == 'Ruby' }} -- switch to ${{ env.GA_BUILD_LANGUAGE }} 
   #       run: echo 'hello world'
   #       # bundle install --path vendor/bundle
   #       # bundle exec rake build
   #     - name: Build for Go binary
-  #       if: ${{ inputs.language == 'Go' }}
+  #       if: ${{ inputs.language == 'Go' }} -- switch to ${{ env.GA_BUILD_LANGUAGE }} 
   #       run: echo 'hello world'
   #       # go build -o ./bin/chef-api ./cmd/chef-api/main.go
 
@@ -683,6 +598,60 @@ jobs:
     # - name: Copy file
     #   run: mkdir -p test/coverage; cp coverage.out test/coverage/coverage.out
           
+      
+  # TODO: move this to after build or download step
+
+  # TODO: dynamic version detection stepswith new flags ${{ detect-version-source-type: 'none' # options include "none" (do not detect), "file", "github-tag" or "github-release"
+      # AND ${{ detect-version-source-parameter: '' # use for file name}}
+# version: ${{ github.workflow.env.APP_VERSION }}
+      # version: ${{ needs.set-app-version.outputs.app-version }}
+      
+      # if you have a version file, you can read it in to an environment variable with
+  #     - name: Set variables
+  #       run: |
+  #         VER=$(cat VERSION)
+  #         echo "VERSION=$VER" >> $GITHUB_ENV
+  #   then ${{ env.VERSION }}
+  
+  set-application-version:
+    runs-on: ubuntu-latest
+    name: 'Detect SBOM version for application'
+    if: (inputs.version == '') && (inputs.detect-version-source-parameter != '') 
+    needs: ci-build
+    steps:
+      - name: Detect SBOM version
+        run: |
+          echo "placeholder for setting version"
+          echo ${{ inputs.version }}
+          echo ${{ inputs.detect-version-source-parameter }}
+          echo ${{ inputs.detect-version-source-type }}
+    # outputs:
+    #   app-version: ${{ steps.set-app-version.outputs.version }} # Map the step's output to the job's output
+    # steps:
+    #   - name: Checkout code
+    #     uses: actions/checkout@v4
+    #   - name: Set application version from file
+    #     id: set-app-version
+    #     run: |
+    #       VERSION=$(cat VERSION) # cat VERSION works
+    #       echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
+
+    #       echo "env.APP_VERSION = ${{ env.APP_VERSION }}"
+
+    #       VERSION=$(cat VERSION)
+    #       echo "two $VERSION"
+    #       echo "VERSION=$VERSION" >> $GITHUB_ENV
+    #       echo "$VERSION is the shell variable" 
+    #       echo "Setting version to ${{ github.env.VERSION }} [$VERSION]"
+    #       echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    # if "latest-tag" then use action to get latest tag or ${{ github.event.release.tag_name }}
+      # - name: Get latest tag
+      #   uses: actions-ecosystem/action-get-latest-tag@v1
+      #   id: latest_tag
+      # - name: Use the latest tag
+      #   run: echo "The latest tag is ${{ steps.latest_tag.outputs.tag }}"
+
   # ################################################################################################################
   # #
   # #    Unit tests and code quality checks
@@ -753,12 +722,11 @@ jobs:
          
   # ################################################################################################################
   # #
-  # #    Security SAST tests and scans
+  # #    Security SAST tests and scans (SonarQube and Blackduck SAST)
   # #
   # ################################################################################################################
   
-  # TODO: comment this out until we check with security on org secrets usage in public repos
-  Sonar-SAST-public:
+  Sonar-public-repo:
     name: 'PUBLIC Sonar SAST scan'
     needs: ci-build
     if: ${{ inputs.perform-sonarqube-scan == true && success() && inputs.visibility == 'public'}}
@@ -768,7 +736,7 @@ jobs:
       id-token: write
       contents: read
     with:
-      perform-build: ${{ inputs.perform-sonar-build }}
+      perform-build: ${{ inputs.build }} # was ${{ inputs.perform-sonar-build }}
       build-profile: ${{ inputs.build-profile }}
       language: ${{ inputs.language }}
       report-unit-test-coverage: ${{ inputs.report-unit-test-coverage }}
@@ -784,35 +752,25 @@ jobs:
       udf2: ${{ inputs.udf2 }}
       udf3: ${{ inputs.udf3 }}
         
-  Sonar-SAST-private:
-    name: 'PRIVATE Sonar scan'
+  Sonar-private-repo:
+    name: 'PRIVATE Sonar scan (inline)'
     if: ${{ inputs.perform-sonarqube-scan == true && success() && inputs.visibility == 'private'}}
     needs: ci-build
-    uses: chef/common-github-actions/.github/workflows/sonarqube-private-repo.yml@main
-    secrets: inherit
-    permissions:
-      id-token: write
-      contents: read
-    with:
-      perform-build: ${{ inputs.perform-sonar-build }}
-      build-profile: ${{ inputs.build-profile }}
-      language: ${{ inputs.language }}
-      report-unit-test-coverage: ${{ inputs.report-unit-test-coverage }}
-      report-to-atlassian-dashboard: ${{ inputs.report-to-atlassian-dashboard }}
-      quality-product-name: ${{ inputs.quality-product-name }}
-      quality-sonar-app-name: ${{ inputs.quality-sonar-app-name }}
-      quality-testing-type: ${{ inputs.quality-testing-type }}
-      quality-service-name: ${{ inputs.quality-service-name }}
-      quality-junit-report: ${{ inputs.quality-junit-report }}
-      visibility: ${{ inputs.visibility }}
-      go-private-modules: ${{ inputs.go-private-modules }}
-      udf1: ${{ inputs.udf1 }}
-      udf2: ${{ inputs.udf2 }}
-      udf3: ${{ inputs.udf3 }}
-  
-  Sonar-SAST-internal:
+    # was uses: chef/common-github-actions/.github/workflows/sonarqube-private-repo.yml@main
+    runs-on: ubuntu-latest
+    steps:
+    - name: SonarQube Scan
+      if: ${{ inputs.visibility == 'private' }}
+      uses: sonarsource/sonarqube-scan-action@v5.3.1
+      continue-on-error: true
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        
+  Sonar-internal-repo:
     name: 'INTERNAL Sonar scan'
-    if: ${{ inputs.perform-sonarqube-scan == true && success() && inputs.visibility == 'internal'}}
+    if: ${{ inputs.perform-sonarqube-scan == true && inputs.visibility == 'internal'}}
+    # was if: ${{ inputs.perform-sonarqube-scan == true && success() && inputs.visibility == 'internal'}}
     needs: ci-build
     uses: chef/common-github-actions/.github/workflows/sonarqube-internal-repo.yml@main
     secrets: inherit
@@ -820,7 +778,7 @@ jobs:
       id-token: write
       contents: read
     with:
-      perform-build: ${{ inputs.perform-sonar-build }}
+      perform-build: ${{ inputs.build }} # was ${{ inputs.perform-sonar-build }}
       build-profile: ${{ inputs.build-profile }}
       language: ${{ inputs.language }}
       report-unit-test-coverage: ${{ inputs.report-unit-test-coverage }}
@@ -835,7 +793,87 @@ jobs:
       udf1: ${{ inputs.udf1 }}
       udf2: ${{ inputs.udf2 }}
       udf3: ${{ inputs.udf3 }}
-    
+      
+  # TODO: add new flags to BLACKDUCK ${{ polaris-blackduck-executable }} && ${{ polaris-executable-detect-path }}
+
+  # NOW THE LATEST COMMUNITY - https://github.com/prgs-community/githubactions-securityscans/blob/main/polaris/action.yml 
+  # # updated to https://documentation.blackduck.com/bundle/bridge/page/documentation/c_download.html#polaris-download
+  # # https://github.com/marketplace/actions/black-duck-security-scan
+  # NOT USED - from https://documentation.blackduck.com/bundle/bridge/page/documentation/t_github-polaris-quickstart.html
+  # parameters @ https://documentation.blackduck.com/bundle/bridge/page/documentation/c_github-polaris.html
+  # internal confluence https://progresssoftware.atlassian.net/wiki/spaces/TCE/pages/1010336076/Polaris#Examples
+  #   and https://progresssoftware.atlassian.net/wiki/spaces/TCE/pages/1010303415/Polaris+-+Github+Actions+Templates
+  # chef-vault at https://polaris.blackduck.com/portfolio/portfolios/8b7ad6f7-6dcb-49ec-bded-bfc4f190d4f8/portfolio-items/fe369baf-11d2-4989-bcb7-045577856dcc/projects/2460eabd-d033-48a1-a378-6cadd49be6d1/tests/sast?branchId=a6d2c02a-05f8-4557-bfa1-c40e9337ee5d
+  BlackDuck-Polaris-SAST:
+    # branding: applied at action.yml level, not workflow, see https://docs.github.com/en/actions/reference/workflows-and-actions/metadata-syntax#branding
+    #   icon: 'shield'
+    #   color: 'red'
+    if: ${{ inputs.perform-blackduck-polaris == true }}
+    runs-on: ubuntu-latest
+    needs: checkout # TODO: fix set-application-version
+    steps:
+      - name: Starting Black Duck Polaris scan
+        run: |
+          echo "Starting Polaris SAST scan"
+          echo "Below variable should be https://polaris.blackduck.com"
+          echo "POLARIS_SERVER_URL: ${{ secrets.POLARIS_SERVER_URL }}"
+          echo "Polaris application name: ${{ inputs.polaris-application-name }}"
+          echo "Polaris project name: ${{ inputs.polaris-project-name }}"
+          echo "POLARIS_ACCESS_TOKEN: ${{ secrets.POLARIS_ACCESS_TOKEN }}"
+        continue-on-error: true
+        # other polaris/coverity flags (unused): working-directory, config-path, coverity-config-path, coverity-build-command, coverity-clean-command, coverity-args,
+        #   detect-search-depth, detect-args, assessment-mode, source-archive, source-excludes, preserve-symlinks, wait-for-scan, mark-build-status:, pr-comment-severities, diagnostic
+
+      - name: Check input variables
+        run: |
+          if [[ -z "${{ inputs.polaris-application-name }}" ]] || [[ -z "${{ inputs.polaris-project-name }}" ]]; then
+              echo "Polaris application name and project name must be set"
+              exit 1
+          fi
+      
+      - name: BlackDuck Polaris scan
+        uses: blackduck-inc/black-duck-security-scan@v2
+        # was: uses: blackduck-inc/black-duck-security-scan@v2.1.1
+        # uses: blackduck-inc/black-duck-security-scan@805cbd09e806b01907bbea0f990723c2bb85abe9 # 2.0.0 - Jan's version
+        with:
+          ### SCANNING: Required fields
+          polaris_server_url: ${{ secrets.POLARIS_SERVER_URL }} # https://polaris.blackduck.com
+          polaris_access_token: ${{ secrets.POLARIS_ACCESS_TOKEN }}
+          polaris_assessment_types: "SAST"
+          polaris_application_name: "${{ inputs.polaris-application-name }}"  
+          # <Solution>-<Product>-<Module If Applicable>-<Optional Numeric Suffix If Needed>
+          polaris_project_name: ${{ inputs.polaris-project-name }}  
+          #typically GitHub repo name
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          
+          # from https://github.com/prgs-community/githubactions-securityscans/blob/main/polaris/action.yml
+          polaris_assessment_mode: 'CI' # ${{ inputs.assessment-mode }} CI or SOURCE_UPLOAD
+          polaris_waitForScan: 'true' # ${{ inputs.wait-for-scan }}
+          project_directory: '.'  # ${{ inputs.working-directory }}
+          project_source_archive: '' # ${{ inputs.source-archive != '' && inputs.source-archive || null }}
+          project_source_excludes: '' # ${{ inputs.source-excludes != '' && inputs.source-excludes || null }}
+          project_source_preserveSymLinks: 'false' # ${{ inputs.preserve-symlinks }}
+          detect_search_depth: '' # ${{ inputs.detect-search-depth != '' && inputs.detect-search-depth || null }}
+          detect_args: '' # ${{ inputs.detect-args != '' && inputs.detect-args || null }}
+          detect_config_path: '' # ${{ inputs.config-path != '' && inputs.config-path || null }}
+          coverity_build_command: '' # ${{ inputs.coverity-build-command != '' && inputs.coverity-build-command || null }}
+          coverity_clean_command: '' # ${{ inputs.coverity-clean-command != '' && inputs.coverity-clean-command || null }}
+          coverity_config_path: '' # ${{ inputs.coverity-config-path != '' && inputs.coverity-config-path || null }}
+          coverity_args: '' # ${{ inputs.coverity-args != '' && inputs.coverity-args || null }}
+          include_diagnostics: 'false' # ${{ inputs.diagnostic }}
+          mark_build_status: '' # ${{ inputs.mark-build-status != '' && inputs.mark-build-status || null }}
+          # github_token: ${{ github.token }}
+          # options from Jan's (FlowMon. GitLab)
+          #   polaris_prComment_enabled: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
+          #   polaris_prComment_severities: "CRITICAL,HIGH"
+          # from Blackduck page at https://polaris.blackduck.com/portfolio/portfolios/8b7ad6f7-6dcb-49ec-bded-bfc4f190d4f8/portfolio-items/fe369baf-11d2-4989-bcb7-045577856dcc/projects
+          #   SARIF report parameters
+          #   polaris_reports_sarif_create: true
+          #   polaris_upload_sarif_report: true
+          # Mark build status if policy violating issues are found
+          #   mark_build_status: 'success'
+        continue-on-error: true
+       
   ################################################################################################################
   #
   #    TODO: Add packaging steps – rpm, deb, MSI, dpkg + signing + SHA)
@@ -903,3 +941,30 @@ jobs:
       generate-msft-sbom: ${{ inputs.generate-msft-sbom }}
       license_scout: ${{ inputs.license_scout }}
       go-private-modules: ${{ inputs.go-private-modules }}
+
+  quality-dashboard:
+    name: 'Reporting to quality dashboard'
+    needs: generate-sbom
+    secrets: inherit
+    permissions:
+      id-token: write
+      contents: read
+    if: ${{ inputs.report-to-atlassian-dashboard == true && success() }}
+    uses: chef/common-github-actions/.github/workflows/irfan-quality-dashboard.yml@main
+    with:
+      perform-build: ${{ inputs.build }} # was ${{ inputs.perform-sonar-build }}
+      build-profile: ${{ inputs.build-profile }}
+      language: ${{ inputs.language }}
+      report-unit-test-coverage: ${{ inputs.report-unit-test-coverage }}
+      report-to-atlassian-dashboard: ${{ inputs.report-to-atlassian-dashboard }}
+      quality-product-name: ${{ inputs.quality-product-name }}
+      quality-sonar-app-name: ${{ inputs.quality-sonar-app-name }}
+      quality-testing-type: ${{ inputs.quality-testing-type }}
+      quality-service-name: ${{ inputs.quality-service-name }}
+      quality-junit-report: ${{ inputs.quality-junit-report }}
+      visibility: ${{ inputs.visibility }}
+      go-private-modules: ${{ inputs.go-private-modules }}
+      udf1: ${{ inputs.udf1 }}
+      udf2: ${{ inputs.udf2 }}
+      udf3: ${{ inputs.udf3 }}
+

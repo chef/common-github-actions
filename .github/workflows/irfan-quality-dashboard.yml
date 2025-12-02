@@ -1,10 +1,11 @@
-# sonarqube-private-repo.yml
-name: SonarQube scan for private repositories
-# configuration @ https://github.com/marketplace/actions/official-sonarqube-scan
+# runs after sonar
+
+# sonarqube-internal-repo.yml
+name: Quality reporting
 
 on:
   workflow_call:
-    # all secrets are inherited from the calling workflow, typically SONAR_TOKEN, SONAR_HOST_URL
+    # all secrets are inherited from the calling workflow, typically SONAR_TOKEN, SONAR_HOST_URL, GH_TOKEN
     inputs:
       perform-build: 
         required: false
@@ -51,47 +52,14 @@ on:
       udf3:
         required: false
         type: string
-
-jobs:
-  echo-inputs:
-    name: 'Echo inputs'
-    runs-on: ubuntu-latest
-    steps:
-    - name: Echo inputs
-      run: |
-        echo "Sonarqube scan for PRIVATE repositories, running on ubuntu-latest-4-cores runner"
-        echo "Perform build set to ${{ inputs.perform-build }}"
-        echo "Build profile set to ${{ inputs.build-profile }}"
-        echo "Language set to ${{ inputs.language }} "
-        echo "Visibility set to ${{ inputs.visibility }} [ ${{ github.event.repository.visibility }} ]"
-        echo "Perform unit test coverage set to ${{ inputs.report-unit-test-coverage }}"
-        echo "Report to Atlassian dashboard set to ${{ inputs.report-to-atlassian-dashboard }}"
-        echo "Quality product name set to ${{ inputs.quality-product-name }}" 
-        echo "Quality sonar application name set to ${{ inputs.quality-sonar-app-name }}"
-        echo "Quality testing type set to ${{ inputs.quality-testing-type }}"
-        echo "Quality service name set to ${{ inputs.quality-service-name }}"
-        echo "Quality JUnit report set to ${{ inputs.quality-junit-report }}"
-        echo "Go private modules set to ${{ inputs.go-private-modules }}" 
       
-  SonarQube:
+jobs:
+  irfan:
     runs-on: ubuntu-latest-4-cores
     permissions: 
       id-token: write
       contents: read
     steps:
-    - name: Checkout
-      if: ${{ inputs.visibility == 'private' }}
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-    - name: SonarQube Scan
-      if: ${{ inputs.visibility == 'private' }}
-      uses: sonarsource/sonarqube-scan-action@v5.3.1
-      continue-on-error: true
-      env:
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        
 #TODO: Test adding Irfan's quality reporting stage inline here after sonar run (https://github.com/Progress-I360/github-action-reporting)
 # PRODUCT_NAME = [Chef360 | Courier | Inspec]
     - name: Run SonarQube report generation
