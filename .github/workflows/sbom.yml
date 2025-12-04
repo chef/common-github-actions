@@ -54,6 +54,11 @@ on:
         description: 'BlackDuck project name'
         required: false
         type: string
+      blackduck-detect-source-paths:
+        description: 'Semicolon-separated list of directories to scan for dependencies (e.g., ".;omnibus;components/gems")'
+        required: false
+        type: string
+        default: '.'
       generate-msft-sbom:
         description: 'Generate SBOM using Microsoft SBOM Tool'
         required: false
@@ -186,6 +191,7 @@ jobs:
           echo "DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name }}"
           echo "DETECT_PROJECT_NAME: ${{ inputs.blackduck-project-name }}"
           echo "DETECT_PROJECT_VERSION_NAME: ${{ inputs.version }}"
+          echo "DETECT_SOURCE_PATHS: ${{ inputs.blackduck-detect-source-paths }}"
          
       - name: Checkout source
         uses: actions/checkout@v4
@@ -213,7 +219,7 @@ jobs:
           blackducksca_url: ${{ secrets.BLACKDUCK_SBOM_URL }}  # BLACKDUCK_URL, should be https://progresssoftware.app.blackduck.com/ 
           blackducksca_token: ${{ secrets.BLACKDUCK_SCA_TOKEN }}  # was BLACKDUCK_API_KEY
           # blackducksca_scan_failure_severities: 'BLOCKER,CRITICAL'
-          detect_args: --detect.excluded.detector.types=PIP   # ignore python per https://documentation.blackduck.com/bundle/detect/page/packagemgrs/python.html
+          detect_args: --detect.excluded.detector.types=PIP --detect.source.path "${{ inputs.blackduck-detect-source-paths }}"   # ignore python and scan multiple source paths for Gemfile.lock
 
 ######################################################
 # original from https://github.com/progress-platform-services/common-github-actions/blob/main/.github/workflows/examples/ci-all-sbom-main.yml

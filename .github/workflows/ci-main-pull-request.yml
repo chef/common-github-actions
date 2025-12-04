@@ -208,6 +208,11 @@ on:
         required: false
         type: string
         default: ${{ github.event.repository.name }}
+      blackduck-detect-source-paths:
+        description: 'Semicolon-separated list of directories to scan for dependencies (e.g., ".;omnibus;components/gems")'
+        required: false
+        type: string
+        default: '.'
       generate-blackduck-sbom:  # obsolete
         description: 'Generate SBOM using BlackDuck polaris (OBSOLETE, use perform-blackduck-sca-scan instead)'
         required: false
@@ -928,7 +933,7 @@ jobs:
   generate-sbom:
     name: 'Generating SBOM'
     if: ${{ inputs.generate-sbom == true }}
-    uses: chef/common-github-actions/.github/workflows/sbom.yml@main
+    uses: chef/common-github-actions/.github/workflows/sbom.yml@nikhil/detect-lockfile-in-subfolders-chef-workstation
     needs: ci-build
     secrets: inherit
     with:
@@ -938,6 +943,7 @@ jobs:
       # generate-blackduck-sbom: ${{ inputs.generate-blackduck-sbom }}  # obsolete, remove TODO
       blackduck-project-group-name: ${{ inputs.blackduck-project-group-name }}
       blackduck-project-name: ${{ inputs.blackduck-project-name }}
+      blackduck-detect-source-paths: ${{ inputs.blackduck-detect-source-paths }}
       generate-msft-sbom: ${{ inputs.generate-msft-sbom }}
       license_scout: ${{ inputs.license_scout }}
       go-private-modules: ${{ inputs.go-private-modules }}
