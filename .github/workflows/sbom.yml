@@ -80,7 +80,7 @@ jobs:
     if : ${{ inputs.export-github-sbom == true }}
     steps:
     - name: Checkout Code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Generate Filename Prefix and full JSON file name as environment variables for later steps
       run: |
@@ -188,7 +188,7 @@ jobs:
           echo "DETECT_PROJECT_VERSION_NAME: ${{ inputs.version }}"
          
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Configure git for private Go modules
         env:
@@ -224,7 +224,7 @@ jobs:
     if: ${{ inputs.generate-msft-sbom == true }}
     timeout-minutes: 5
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 # TODO: cache the sbom-tool binary
     - name: Set up Go
       uses: actions/setup-go@v5
@@ -266,7 +266,7 @@ jobs:
     if: ${{ inputs.license_scout == true }}
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       
       - name: Set up Go
         uses: actions/setup-go@v5

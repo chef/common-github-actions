@@ -90,7 +90,7 @@ jobs:
       continue-on-error: true
     - name: checkout
       # removed: if: ${{ inputs.perform-build == true && inputs.visibility == 'internal' }} -- this is internal, so always do checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0
 
@@ -133,7 +133,7 @@ jobs:
     # name: Coverage from chef-vault
     # runs-on: ubuntu-22.04
     # steps:
-    #   - uses: actions/checkout@v2
+    #   - uses: actions/checkout@v6
     #   - name: Set up ruby 3.1
     #     uses: ruby/setup-ruby@v1
     #     with:
@@ -156,7 +156,7 @@ jobs:
     steps:
     - name: checkout
       # removed: if: ${{ inputs.perform-build == true && inputs.visibility == 'internal' }} -- this is internal, so always do checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0
     - name: SonarQube Scan
