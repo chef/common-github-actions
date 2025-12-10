@@ -76,6 +76,11 @@ on:
         required: false
         type: string
         default: 'INTELLIGENT'
+      blackducksca_scan_full:
+        description: 'Scan Mode. (true for intelligent scan & false for rapid scan)'
+        required: false
+        type: boolean
+        default: false
       detect-version-source-type:  # options include "none" (do not detect), "file", "github-tag" or "github-release"
         description: 'flag to determine how to detect version dynamically'
         required: false
