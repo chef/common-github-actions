@@ -961,7 +961,6 @@ jobs:
       generate-msft-sbom: ${{ inputs.generate-msft-sbom }}
       license_scout: ${{ inputs.license_scout }}
       go-private-modules: ${{ inputs.go-private-modules }}
-      detect-blackduck-scan-mode: ${{ inputs.detect-blackduck-scan-mode }}
 
   quality-dashboard:
     name: 'Reporting to quality dashboard'
