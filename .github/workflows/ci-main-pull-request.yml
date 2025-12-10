@@ -76,7 +76,7 @@ on:
         required: false
         type: string
         default: 'INTELLIGENT'
-      blackducksca_scan_full:
+      blackducksca-scan-full:
         description: 'Scan Mode. (true for intelligent scan & false for rapid scan)'
         required: false
         type: boolean
