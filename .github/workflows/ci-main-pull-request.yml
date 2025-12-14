@@ -197,7 +197,7 @@ on:
         description: 'Build profile for SonarQube - application specific path'
         required: false
         type: string
-        default: 'default'
+        default: 'cli'
       report-unit-test-coverage: 
         description: 'Perform unit tests and report coverage to SonarQube'
         required: false
@@ -374,7 +374,7 @@ env:
   PIPELINE_VERSION: '1.0.7'  # version of this CI pipeline
   PRIMARY_APPLICATION: 'default'   # Custom repo property [primaryApplication]: chef360, automate, infra-server, habitat, supermarket, licensing, downloads, chef-client, inspec, chef-workstation (or derivatives like habitat-builder)
   GA_BUILD_LANGUAGE: ${{ inputs.language}}  # Custom repo property [GABuildLanguage]: go, ruby, erlang, rust (replaces Language input)
-  GA_BUILD_PROFILE: 'default'   # Custom repo property [GABuildProfile]: TBD
+  GA_BUILD_PROFILE: ${{ inputs.build-profile }}   # Custom repo property [GABuildProfile]: TBD
   # APP_VERSION: $(cat VERSION) 
   FILE_PREFIX: $(echo "${{ github.repository }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
   DEFAULT_FILE_EXTENSION: ".json"
