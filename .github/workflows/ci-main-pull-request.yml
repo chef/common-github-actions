@@ -589,21 +589,24 @@ jobs:
       - name: Go linting and security checks  
         if: env.GA_BUILD_LANGUAGE == 'go'
         run: echo "Running Go linting and security checks"
-      - name: Run golangci-lint
-        if: env.GA_BUILD_LANGUAGE == 'go'
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          args: --timeout=5m
-      - name: Run staticcheck
-        if: env.GA_BUILD_LANGUAGE == 'go'
-        uses: dominikh/staticcheck-action@v1
-        with:
-          version: latest
-      - name: Run Gosec Security Scanner
-        uses: securego/gosec@master
-        with:
-          args: ./...
+      # TODO: THESE DO NOT RUN IN CHEF ORG - need to create copies in common-github-actions/.github/actions/
+      # we can download and install them manually here if needed
+      # ERROR ON WORKFLOW: The actions golangci/golangci-lint-action@v6, dominikh/staticcheck-action@v1, and securego/gosec@master are not allowed in chef/arch-sample-cli because all actions must be from a repository owned by your enterprise, created by GitHub, verified in the GitHub Marketplace, or match one of the patterns: chef/*, chef/.github, chef/.github/workflows/*.
+      # - name: Run golangci-lint
+      #   if: env.GA_BUILD_LANGUAGE == 'go'
+      #   uses: golangci/golangci-lint-action@v6
+      #   with:
+      #     version: latest
+      #     args: --timeout=5m
+      # - name: Run staticcheck
+      #   if: env.GA_BUILD_LANGUAGE == 'go'
+      #   uses: dominikh/staticcheck-action@v1
+      #   with:
+      #     version: latest
+      # - name: Run Gosec Security Scanner
+      #   uses: securego/gosec@master
+      #   with:
+      #     args: ./...
 
         # TO GET OUTPUT AS ARTIFACT go install github.com/securego/gosec/v2/cmd/gosec@latest
         # gosec ./... >> ./bin/gosec.out
