@@ -706,6 +706,8 @@ jobs:
       - name: 'Go build'
         if: ${{ inputs.language == 'go' && env.GA_BUILD_PROFILE == 'cli' }}
         run: |
+          ls
+          pwd
           go mod tidy
           go build -o ./bin/${{ env.REPO_NAME }} .
       - name: 'Go unit tests'
