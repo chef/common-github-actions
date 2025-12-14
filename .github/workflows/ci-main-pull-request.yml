@@ -547,6 +547,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: checkout
     steps:
+      - name: echo language
+        run: |
+          echo "Build language is set to ${{ env.GA_BUILD_LANGUAGE }}"
+          echo "Build language passed in ${{ inputs.language }}"
       - name: Rust language checks
         if: env.GA_BUILD_LANGUAGE == 'rust' 
         run: echo 'crate linter'
