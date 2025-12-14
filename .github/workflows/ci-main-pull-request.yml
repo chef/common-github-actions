@@ -90,6 +90,7 @@ on:
         required: false
         type: boolean
         default: true
+
       perform-blackduck-polaris:
         description: 'Perform BlackDuck Polaris (SAST) scan'
         required: false
@@ -102,17 +103,80 @@ on:
       polaris-project-name:
         description: 'Polaris project name, typically the application name, followed by - and the repository name, for example Chef-Chef360-chef-vault'
         required: false
-        type: string     
+        default: "${{ github.event.repository.name }}"
+        type: string    
+      # polaris-server-url:
+      #   # should be obsolete with POLARIS_SERVER_URL secret
+      #   description: 'Polaris server URL'
+      #   required: false
+      #   default: 'https://polaris.blackduck.com'
+      #   type: string
+      polaris-working-directory:
+        # NEW IN 1.0.7
+        description: 'Working directory for the scan, defaults to . but usually lang-dependent like ./src'
+        required: false
+        default: '.'
+        type: string
+      polaris-config-path:
+        # NEW IN 1.0.7
+        description: 'Path to Detect configuration file, typically a file supplied at root level like ./detect-config.yml'
+        required: false
+        default: ''
+        type: string
+      polaris-coverity-config-path:
+        # NEW IN 1.0.7
+        description: 'Path to Coverity configuration file, typically a file supplied at root level like ./coverity.yml'
+        required: false
+        default: ''
+        type: string
+      polaris-coverity-build-command:
+        # NEW IN 1.0.7
+        description: 'Coverity build command, typically done in build stage by language or here as param 1-liner like "mvn clean install"'
+        required: false
+        default: ''
+        type: string
+      polaris-coverity-clean-command:
+        # NEW IN 1.0.7
+        description: 'Coverity clean command, typically done before build stage by language or here as param 1-liner like "mvn clean"'
+        required: false
+        default: ''
+        type: string
+      polaris-coverity-args:
+        # NEW IN 1.0.7
+        description: 'Additional Coverity arguments,can supply extra arguments like "--config-override capture.build.build-command=make'
+        required: false
+        default: ''
+        type: string
+      polaris-detect-search-depth:
+        # NEW IN 1.0.7 
+        description: 'Detect search depth, blank but can be set to "3" to search up to 3 levels of subdirectories for code to scan'
+        required: false
+        default: ''
+        type: string
+      polaris-detect-args:
+        # NEW IN 1.0.7
+        description: 'Additional Detect arguments, can supply extra arguments like "--detect.diagnostic=true"'
+        required: false
+        default: ''
+        type: string
+      polaris-assessment-mode:
+        # NEW IN 1.0.7
+        description: 'Assessment mode (CI or SOURCE_UPLOAD)'
+        required: false
+        default: 'CI'
+        type: string
+      wait-for-scan:
+        # NEW IN 1.0.7
+        description: 'Wait for scan completion'
+        required: false
+        default: true
+        type: boolean
+  
       build:
         description: 'CI Build (language-specific)'
         required: false
         type: boolean
         default: true
-      language:
-        description: 'Build language (Go, Ruby, Rust, etc.)'
-        required: false
-        type: string
-        default: 'Ruby'  # TODO: should be removed, we know this from custom repository properties
       unit-tests:
         description: 'Run unit tests (language-specific)'
         required: false
@@ -178,6 +242,52 @@ on:
         required: false
         type: boolean
         default: true
+      publish-habitat-packages:
+        # NEW IN 1.0.7
+        description: 'Publish Habitat packages to Builder'
+        required: false
+        type: boolean
+        default: false
+      publish-habitat-hab_package:
+        # NEW IN 1.0.7
+        description: "Chef Habitat package to install (e.g., core/nginx)"
+        required: false
+        type: string
+        default: "core/nginx"
+        # TODO: detect from plan file if not provided
+      publish-habitat-hab_version:
+        # NEW IN 1.0.7
+        description: "Chef Habitat package version (optional)"
+        required: false
+        type: string
+      publish-habitat-hab_release:
+        # NEW IN 1.0.7
+        description: "Chef Habitat package release (optional)"
+        required: false
+        type: string
+      publish-habitat-hab_channel:
+        # NEW IN 1.0.7
+        description: "Chef Habitat package channel (e.g., stable, base, base-2025); default is stable"
+        required: false
+        type: string
+        default: "stable"
+      publish-habitat-hab_auth_token:
+        # NEW IN 1.0.7
+        required: false
+        type: string
+        # TODO: use secret if not provided
+      publish-habitat-runner_os:
+        description: "Runner OS to use (ubuntu-latest or windows-latest)"
+        type: string
+        # TODO: these should be options: ubuntu-latest, windows-latest, both, and add MacOS support
+        required: false
+        default: ubuntu-latest
+      habitat-grype-scan:
+        # NEW IN 1.0.7
+        description: 'Scan built Habitat packages with Grype for vulnerabilities'
+        required: false
+        type: boolean
+        default: false
       publish-packages:
         description: 'Publish packages (e.g., container from Dockerfile to ECR, go-releaser binary to releases page, omnibus to artifactory, gems, choco, homebrew, other app stores)'
         required: false
@@ -208,12 +318,8 @@ on:
         required: false
         type: string
         default: ${{ github.event.repository.name }}
-      generate-blackduck-sbom:  # obsolete
-        description: 'Generate SBOM using BlackDuck polaris (OBSOLETE, use perform-blackduck-sca-scan instead)'
-        required: false
-        type: boolean
-        default: false 
       polaris-blackduck-executable: 
+        # TODO: this will be obsolete with built-in polaris in action
         description: 'Path to BlackDuck polaris executable after build or download step'
         required: false
         type: string
@@ -248,7 +354,19 @@ on:
         required: false
         type: string
         default: 'default'
-    
+      
+      #no longer used
+      language:
+        description: 'Build language (Go, Ruby, Rust, etc.)'
+        required: false
+        type: string
+        default: 'Ruby'  # TODO: should be removed, we know this from custom repository properties
+      generate-blackduck-sbom:  # obsolete
+        description: 'Generate SBOM using BlackDuck polaris (OBSOLETE, use perform-blackduck-sca-scan instead)'
+        required: false
+        type: boolean
+        default: false 
+        
 env:
   REPO_VISIBILITY: ${{ github.event.repository.visibility }}
   REPO_NAME: ${{ github.event.repository.name }}
@@ -470,22 +588,28 @@ jobs:
         run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
       - name: Go linting and security checks  
         if: env.GA_BUILD_LANGUAGE == 'go'
-        run: |
-          echo 'go linter'
-  
-        # TODO: https://github.com/marketplace/actions/gosec-security-checker      
-        # go install github.com/securego/gosec/v2/cmd/gosec@latest
-        # TODO: see scc install to get TEMP DIR
-        # GHA at https://github.com/securego/gosec
-        # gosec ./... >> ./bin/gosec.out
-        # https://go.googlesource.com/vuln - govulncheck
-        # go install golang.org/x/vuln/cmd/govulncheck@latest
-        # govulncheck ./... >> ./bin/security/govuln.out        
-        # go install honnef.co/go/tools/cmd/staticcheck@latest
-        # staticcheck ./... >> ./bin/staticcheck.out
+        run: echo "Running Go linting and security checks"
+      - name: Run golangci-lint
+        if: env.GA_BUILD_LANGUAGE == 'go'
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m
+      - name: Run staticcheck
+        if: env.GA_BUILD_LANGUAGE == 'go'
+        uses: dominikh/staticcheck-action@v1
+        with:
+          version: latest
+      - name: Run Gosec Security Scanner
+        uses: securego/gosec@master
+        with:
+          args: ./...
 
-  # https://github.com/marketplace/actions/dependency-check & https://owasp.org/www-project-dependency-check/ 
-  #     and flags at https://jeremylong.github.io/DependencyCheck/dependency-check-cli/arguments.html
+        # TO GET OUTPUT AS ARTIFACT go install github.com/securego/gosec/v2/cmd/gosec@latest
+        # gosec ./... >> ./bin/gosec.out
+
+        # https://go.googlesource.com/vuln - govulncheck is same as BlackDuck SCA backend, redundant to add it here
+
   language-agnostic-checks:
     name: 'Language-agnostic pre-compilation steps'
     if: inputs.perform-language-linting 
@@ -498,6 +622,8 @@ jobs:
         #       uses: dependency-check/Dependency-Check_Action@main
         # TODO: Dependency Check is not certified by GitHub. It is provided by a third-party and is governed by separate terms of service, privacy policy, and support documentation
         # create a copy in common-github-actions/.github/actions/owasp-dependency-check.yml
+        # https://github.com/marketplace/actions/dependency-check & https://owasp.org/www-project-dependency-check/ 
+        #     and flags at https://jeremylong.github.io/DependencyCheck/dependency-check-cli/arguments.html
         # - name: 'OWASP dependency check'
         #   uses: dependency-check/Dependency-Check_Action@v4.0.0
         #   with:
@@ -558,49 +684,51 @@ jobs:
   # ################################################################################################################
   
   ci-build:
-    name: 'Build and compilation'
-    # if : ${{ inputs.build == true }}
+    name: 'Build/compilation and unit tests (CI)'
+    if : ${{ inputs.build == true }}
     needs: checkout
+    timeout-minutes: 40 # Maximum allowed minutes for GitHub-hosted runners (6 hours = 360 minutes)
     runs-on: ubuntu-latest
+    # TODO: make this matrix strategy, and allow language compiler version overrides
     steps:
-      - name: BUILD
-        run: echo 'BUILD STEP'
-  #   runs-on: ubuntu-latest
-  #   needs: language-agnostic-precompilation-checks
-  #   name: 'CI build and compilation steps'  
-  #   steps:
-  #     - name: Build for Rust binary
-  #       if: ${{ inputs.language == 'Rust' }} -- switch to ${{ env.GA_BUILD_LANGUAGE }} 
-  #       run: echo 'hello world'
-  #       # cargo build --release --target-dir ./bin
-  #     - name: Build for Ruby binary
-  #       if: ${{ inputs.language == 'Ruby' }} -- switch to ${{ env.GA_BUILD_LANGUAGE }} 
-  #       run: echo 'hello world'
-  #       # bundle install --path vendor/bundle
-  #       # bundle exec rake build
-  #     - name: Build for Go binary
-  #       if: ${{ inputs.language == 'Go' }} -- switch to ${{ env.GA_BUILD_LANGUAGE }} 
-  #       run: echo 'hello world'
-  #       # go build -o ./bin/chef-api ./cmd/chef-api/main.go
+      - name: 'Build language: ${{ env.GA_BUILD_LANGUAGE }}'
+        run: echo "Building application in language ${{ env.GA_BUILD_LANGUAGE }}"
+      - name: 'Go build'
+        if: ${{ env.GA_BUILD_LANGUAGE == 'Go' && env.GA_BUILD_PROFILE == 'cli' }}
+        run: |
+          go mod tidy
+          go build -o ./bin/${{ env.REPO_NAME }} .
+      - name: 'Go unit tests'
+        if: ${{ env.GA_BUILD_LANGUAGE == 'Go' && inputs.unit-tests == true && env.GA_BUILD_PROFILE == 'cli' }}
+        run: |
+          go test -v ./...
+#   run: go test -v -coverprofile="coverage.out" ./... and upload artifact!
+      #     - name: Build for Rust binary
+      #       if: ${{ inputs.language == 'Rust' }} -- switch to ${{ env.GA_BUILD_LANGUAGE }} 
+      #       run: echo 'hello world'
+      #       # cargo build --release --target-dir ./bin
 
-  # - name: Set up Go
-    #   uses: actions/setup-go@v4
-    #   with:
-    #     go-version: 1.23.6
-    
+      #     - name: Build for Ruby binary 
+      # simple bundle install to generate gemlock(puts them in directory vendor/bundle, and uses actual gemspec for deployment to get multi-architecture ), then build gem
+      # https://bundler.io/man/bundle-install.1.html
+      - name: 'Ruby build'
+        if: ${{ env.GA_BUILD_LANGUAGE == 'Ruby' && env.GA_BUILD_PROFILE == 'cli' }}        
+        run: |
+          mkdir -p vendor
+          if [ -f "Gemfile.lock" ]; then
+            bundle install --deployment
+          else
+            echo "No .gemlock file found, creating it now"
+            bundle install --path vendor/bundle --deployment
+          fi
+          bundle exec rake build
+      
+   
     # - name: Configure git for private modules
     #   env:
     #     GOPRIVATE: github.com/progress-platform-services/*
     #   run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
     
-    # - name: Generate coverage files
-    #   run: go test -v -coverprofile="coverage.out" ./... 
-    # - name: Copy file
-    #   run: mkdir -p test/coverage; cp coverage.out test/coverage/coverage.out
-          
-      
-  # TODO: move this to after build or download step
-
   # TODO: dynamic version detection stepswith new flags ${{ detect-version-source-type: 'none' # options include "none" (do not detect), "file", "github-tag" or "github-release"
       # AND ${{ detect-version-source-parameter: '' # use for file name}}
 # version: ${{ github.workflow.env.APP_VERSION }}
@@ -833,36 +961,36 @@ jobs:
       
       - name: BlackDuck Polaris scan
         uses: blackduck-inc/black-duck-security-scan@v2
-        # was: uses: blackduck-inc/black-duck-security-scan@v2.1.1
+        # copied from uses: prgs-community/githubactions-securityscans/polaris@v0.5 in https://github.com/prgs-community/githubactions-securityscans/blob/main/polaris/README.md
         # uses: blackduck-inc/black-duck-security-scan@805cbd09e806b01907bbea0f990723c2bb85abe9 # 2.0.0 - Jan's version
         with:
           ### SCANNING: Required fields
           polaris_server_url: ${{ secrets.POLARIS_SERVER_URL }} # https://polaris.blackduck.com
           polaris_access_token: ${{ secrets.POLARIS_ACCESS_TOKEN }}
-          polaris_assessment_types: "SAST"
           polaris_application_name: "${{ inputs.polaris-application-name }}"  
-          # <Solution>-<Product>-<Module If Applicable>-<Optional Numeric Suffix If Needed>
-          polaris_project_name: ${{ inputs.polaris-project-name }}  
-          #typically GitHub repo name
+          # project name schema: <Solution>-<Product>-<Module If Applicable>-<Optional Numeric Suffix If Needed>
+          polaris_project_name: ${{ inputs.polaris-project-name }}  # typically GitHub repo name 
+          polaris_assessment_types: "SAST" # or "CI" or "SOURCE_UPLOAD", a license type
+          # new in 1.0.7, OPTIONAL FIELDS
+          project_directory: ${{ inputs.polaris-working-directory }}
+          detect_config_path: ${{ inputs.polaris-config-path != '' && inputs.polaris-config-path || null}}
+          coverity_config_path: ${{ inputs.polaris-coverity-config-path != '' && inputs.polaris-coverity-config-path || null }}
+          coverity_build_command: ${{ inputs.polaris-coverity-build-command != '' && inputs.polaris-coverity-build-command || null }}
+          coverity_clean_command: ${{ inputs.polaris-coverity-clean-command != '' && inputs.polaris-coverity-clean-command || null }}
+          coverity_args: ${{ inputs.polaris-coverity-args != '' && inputs.polaris-coverity-args || null }}
+          detect_search_depth: ${{ inputs.polaris-detect-search-depth != '' && inputs.polaris-detect-search-depth || null }}
+          detect_args: ${{ inputs.polaris-detect-args != '' && inputs.polaris-detect-args || null }}
+          polaris_assessment_mode: ${{ inputs.polaris-assessment-mode }}
+          polaris_waitForScan: 'true' #  ${{ inputs.polaris-wait-for-scan }} # defaults to true - is this a boolean or string?
+          # not yet enabled from https://github.com/prgs-community/githubactions-securityscans/blob/main/polaris/README.md 
+          # project_source_archive: ${{ inputs.polaris-source-archive != '' && inputs.polaris-source-archive || null }}
+          # project_source_excludes: ${{ inputs.polaris-source-excludes != '' && inputs.polaris-source-excludes || null }}
+          # project_source_preserveSymLinks: ${{ inputs.polaris-preserve-symlinks }}
+          # include_diagnostics: ${{ inputs.polaris-diagnostic }}
+          # mark_build_status: ${{ inputs.polaris-mark-build-status != '' && inputs.polaris-mark-build-status || null }}
+          # pr-comment-severities: "CRITICAL,HIGH"
           github_token: ${{ secrets.GITHUB_TOKEN }}
           
-          # from https://github.com/prgs-community/githubactions-securityscans/blob/main/polaris/action.yml
-          polaris_assessment_mode: 'CI' # ${{ inputs.assessment-mode }} CI or SOURCE_UPLOAD
-          polaris_waitForScan: 'true' # ${{ inputs.wait-for-scan }}
-          project_directory: '.'  # ${{ inputs.working-directory }}
-          project_source_archive: '' # ${{ inputs.source-archive != '' && inputs.source-archive || null }}
-          project_source_excludes: '' # ${{ inputs.source-excludes != '' && inputs.source-excludes || null }}
-          project_source_preserveSymLinks: 'false' # ${{ inputs.preserve-symlinks }}
-          detect_search_depth: '' # ${{ inputs.detect-search-depth != '' && inputs.detect-search-depth || null }}
-          detect_args: '' # ${{ inputs.detect-args != '' && inputs.detect-args || null }}
-          detect_config_path: '' # ${{ inputs.config-path != '' && inputs.config-path || null }}
-          coverity_build_command: '' # ${{ inputs.coverity-build-command != '' && inputs.coverity-build-command || null }}
-          coverity_clean_command: '' # ${{ inputs.coverity-clean-command != '' && inputs.coverity-clean-command || null }}
-          coverity_config_path: '' # ${{ inputs.coverity-config-path != '' && inputs.coverity-config-path || null }}
-          coverity_args: '' # ${{ inputs.coverity-args != '' && inputs.coverity-args || null }}
-          include_diagnostics: 'false' # ${{ inputs.diagnostic }}
-          mark_build_status: '' # ${{ inputs.mark-build-status != '' && inputs.mark-build-status || null }}
-          # github_token: ${{ github.token }}
           # options from Jan's (FlowMon. GitLab)
           #   polaris_prComment_enabled: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
           #   polaris_prComment_severities: "CRITICAL,HIGH"
@@ -876,7 +1004,7 @@ jobs:
        
   ################################################################################################################
   #
-  #    TODO: Add packaging steps – rpm, deb, MSI, dpkg + signing + SHA)
+  #    TODO: Add packaging steps – rpm, deb, MSI, dpkg + signing + SHA
   #
   ################################################################################################################
   package-binary:
@@ -891,7 +1019,7 @@ jobs:
 
   ################################################################################################################
   #
-  #    TODO: Add habitat build steps from plan.sh for various packages/platforms/machine archs, publish to Builder
+  #    TODO: Add habitat build steps from plan.sh for various packages/platforms/machine archs, optionally publish to Builder, then optionally test with grype
   #
   ################################################################################################################  
   habitat-build:
@@ -903,6 +1031,214 @@ jobs:
       - name: 'Create Habitat packages'
         run: echo "Creating Habitat packages"
   # TODO: add flag for any params needed
+  habitat-publish:
+    name: 'Publishing Habitat packages to Builder'
+    runs-on: ubuntu-latest
+    if: ${{ success() && inputs.publish-habitat-packages == true }}
+    needs: habitat-build
+    steps:
+      - name: 'Publishing Habitat packages to Builder'
+        run: echo "Publishing Habitat packages to Builder"
+  habitat-grype-scan-linux:
+    # this workflow installs a specified Chef Habitat package and runs a Grype security scan against it.
+    # It supports multiple OS runners (Linux, Windows, MacOS) and allows dynamic input of package details.
+    # The results of the Grype scan are uploaded as artifacts for further analysis.
+
+    # Example hab pkg install command:
+    # hab pkg install core/7zip/24.09/20250708070501 --channel base-2025 --auth HAB_PERSONAL_ACCESS_TOKEN 
+    # -z, --auth <AUTH_TOKEN>            Authentication token for Builder [env: HAB_AUTH_TOKEN=]
+    #     --binlink-dir <BINLINK_DIR>    Binlink all binaries from installed package(s) into BINLINK_DIR [env: HAB_BINLINK_DIR=]  [default: /bin]
+    # -u, --url <BLDR_URL>               Specify an alternate Builder endpoint. If not specified, the value will be taken from the HAB_BLDR_URL environment variable if defined. (default: https://bldr.habitat.sh)
+    # -c, --channel <CHANNEL>            Install from the specified release channel [env: HAB_BLDR_CHANNEL=]  [default: stable]
+
+    # Example hab pkg download command (we do not use this in the workflow but it's here for reference; allows --target):
+    # hab pkg download core/nginx/<VERSION>/<RELEASE> \
+    # --channel stable \  
+    # --target x86_64-linux \
+    # --download-directory /tmp/habitat_packages
+    name: 'Grype scan of Habitat packages'
+    runs-on: ubuntu-latest
+    if: ${{ success() && inputs.habitat-grype-scan == true && inputs.publish-habitat-runner_os == 'ubuntu-latest' }}
+    # TODO: make this a matrix operation 
+    needs: habitat-publish
+    steps:
+      - name: Install Chef Habitat (MacOS and Linux)
+        run: |
+          curl https://raw.githubusercontent.com/habitat-sh/habitat/main/components/hab/install.sh | sudo bash
+
+      - name: Configure Habitat (MacOS and Linux)
+        run: |
+          # Add Habitat to PATH (for current session and future steps if needed, though install.sh usually handles symlinks)
+          echo "/hab/bin" >> $GITHUB_PATH
+          
+          # Accept the license
+          echo "HAB_LICENSE=accept-no-persist" >> $GITHUB_ENV
+          
+          # Create the necessary directory structure for license file
+          sudo mkdir -p /hab/accepted-licenses/
+          sudo touch /hab/accepted-licenses/habitat
+
+      - name: Install Grype (Linux and MacOS)
+        continue-on-error: true
+        run: |
+          curl -sSfL https://get.anchore.io/grype | sh -s -- -b /usr/local/bin
+
+      - name: Install Habitat Package under test (example core/nginx on MacOS and Linux)
+        run: |
+          PACKAGE="${{ inputs.publish-habitat-hab_package }}"
+          if [ -n "${{ inputs.publish-habitat-hab_version }}" ]; then
+            PACKAGE="${PACKAGE}/${{ inputs.publish-habitat-hab_version }}"
+          fi
+          if [ -n "${{ inputs.publish-habitat-hab_release }}" ]; then
+            PACKAGE="${PACKAGE}/${{ inputs.publish-habitat-hab_release }}"
+          fi
+          
+          INSTALL_CMD="sudo hab pkg install ${PACKAGE}"
+          
+          if [ -n "${{ inputs.publish-habitat-hab_channel }}" ]; then
+            INSTALL_CMD="${INSTALL_CMD} --channel ${{ inputs.publish-habitat-hab_channel }}"
+          fi
+          
+          AUTH_TOKEN="${{ inputs.publish-habitat-hab_auth_token }}"
+          if [ -z "${AUTH_TOKEN}" ]; then
+            AUTH_TOKEN="${{ secrets.HAB_PUBLIC_BLDR_PAT }}"
+            echo "Using token from repository secret"
+          else
+            echo "Using token from workflow input"
+          fi
+          # if [ -n "${AUTH_TOKEN}" ]; then
+          #   INSTALL_CMD="${INSTALL_CMD} --auth ${AUTH_TOKEN}"
+          # fi
+          
+          echo "Installing: ${INSTALL_CMD}"
+          eval ${INSTALL_CMD}
+
+      - name: Run Grype Scan on Habitat Package
+        timeout-minutes: 15 # Sets a 15-minute timeout for this specific step
+        run: |
+          # Find the installed package path. 'hab pkg path' returns the path to the latest installed version.
+          PKG_PATH=$(hab pkg path ${{ inputs.publish-habitat-hab_package }})
+          # run grype in runner
+          grype dir:$PKG_PATH --name ${{ inputs.publish-habitat-hab_package }} 
+          # run grype to output to file (which is uploaded to the job as an artifact)
+          OUTPUT_FILE="grype-results-ubuntu-${{ inputs.publish-habitat-hab_package }}.txt"
+          OUTPUT_FILE="${OUTPUT_FILE//\//-}"
+          echo $OUTPUT_FILE
+          grype dir:$PKG_PATH --name ${{ inputs.publish-habitat-hab_package }} > $OUTPUT_FILE
+          echo "OUTPUT_FILE=$OUTPUT_FILE" >> $GITHUB_ENV
+          
+      - name: Upload Grype Scan Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: grype-results-ubuntu-${{ env.OUTPUT_FILE }}
+          path: ${{ env.OUTPUT_FILE }}
+
+  habitat-grype-scan-windows:
+    name: 'Grype scan of Habitat packages (Windows)'
+    runs-on: windows-latest
+    if: ${{ success() && inputs.habitat-grype-scan == true && inputs.publish-habitat-runner_os == 'windows-latest' }}
+    # TODO: make this a matrix operation 
+    needs: habitat-publish
+    steps:
+      - name: Install Chef Habitat (Windows)
+        run: |
+          choco install habitat
+
+          # Set-ExecutionPolicy Bypass -Scope Process -Force;
+          # [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072;
+          # iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/habitat-sh/habitat/main/components/hab/install.ps1'))
+          # $env:PATH += ";~\bin\hab-1.6.1245-20250905141844-x86_64-windows"
+          # Write-Host "one"
+          # ls ~/bin
+          # Write-Host "two"
+          # ls c:/users/runneradmin/bin
+          # Write-Host "three"
+          # ls c:/hab
+          # ls "~\bin\hab-1.6.1245-20250905141844-x86_64-windows"
+          
+          # Write-Host "end"
+          hab --version
+      
+      - name: Configure Habitat (Windows)
+        run: |
+          # Accept the license
+          echo "HAB_LICENSE=accept-no-persist" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          
+          # Create the necessary directory structure for license file
+          New-Item -ItemType Directory -Force -Path "C:\hab\accepted-licenses"
+          New-Item -ItemType File -Force -Path "C:\hab\accepted-licenses\habitat"
+          
+      - name: Install Grype (Windows)
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Download and install Grype for Windows
+          $grypeVersion = (Invoke-RestMethod -Uri "https://api.github.com/repos/anchore/grype/releases/latest").tag_name
+          $grypeUrl = "https://github.com/anchore/grype/releases/download/$grypeVersion/grype_$($grypeVersion.TrimStart('v'))_windows_amd64.zip"
+          $grypeZip = "$env:TEMP\grype.zip"
+          $grypeDir = "$env:TEMP\grype"
+          
+          # Download Grype
+          Invoke-WebRequest -Uri $grypeUrl -OutFile $grypeZip
+          
+          # Extract Grype
+          Expand-Archive -Path $grypeZip -DestinationPath $grypeDir -Force
+          
+          # Add Grype to PATH for subsequent steps
+          echo "$grypeDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          
+          # Verify installation
+          & "$grypeDir\grype.exe" version
+
+      - name: Install Habitat Package under test (Windows)
+        run: |
+          $Package = "${{ inputs.publish-habitat-hab_package }}"
+          if ("${{ inputs.publish-habitat-hab_version }}" -ne "") {
+            $Package = "${Package}/${{ inputs.publish-habitat-hab_version }}"
+          }
+          if ("${{ inputs.publish-habitat-hab_release }}" -ne "") {
+            $Package = "${Package}/${{ inputs.publish-habitat-hab_release }}"
+          }
+          
+          $InstallCmd = "hab pkg install ${Package}"
+          
+          if ("${{ inputs.publish-habitat-hab_channel }}" -ne "") {
+            $InstallCmd = "${InstallCmd} --channel ${{ inputs.publish-habitat-hab_channel }}"
+          }
+          
+          $AuthToken = "${{ inputs.publish-habitat-hab_auth_token }}"
+          if ([string]::IsNullOrEmpty($AuthToken)) {
+            $AuthToken = "${{ secrets.HAB_PUBLIC_BLDR_PAT }}"
+            Write-Host "Using token from repository secret"
+          } else {
+            Write-Host "Using token from workflow input"
+          }
+          # if (-not [string]::IsNullOrEmpty($AuthToken)) {
+          #   $InstallCmd = "${InstallCmd} --auth ${AuthToken}"
+          # }
+          
+          Write-Host "Installing: ${InstallCmd}"
+          Invoke-Expression $InstallCmd
+
+      - name: Run Grype Scan on Habitat Package (Windows)
+        timeout-minutes: 15 # Sets a 15-minute timeout for this specific step
+        run: |
+          # Find the installed package path. 'hab pkg path' returns the path to the latest installed version.
+          $PkgPath = hab pkg path ${{ inputs.publish-habitat-hab_package }}
+          # run grype in runner
+          grype dir:$PkgPath --name ${{ inputs.publish-habitat-hab_package }}
+          # run grype to output to file (which is uploaded to the job as an artifact)
+          $OutputFile = "grype-results-windows-${{ inputs.publish-habitat-hab_package }}.txt"
+          $OutputFile = $OutputFile -replace '/', '-'
+          Write-Host $OutputFile
+          grype dir:$PkgPath --name ${{ inputs.publish-habitat-hab_package }} | Out-File -FilePath $OutputFile -Encoding utf8
+          echo "OUTPUT_FILE=$OutputFile" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+                
+      - name: Upload Grype Scan Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: grype-results-windows-${{ env.OUTPUT_FILE }}
+          path: ${{ env.OUTPUT_FILE }}
 
   ################################################################################################################
   #

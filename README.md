@@ -8,12 +8,14 @@ Naming convention:
 <workflow type>-<application>-<language>[-<action> || -<branch>][-<stub>].yml
 
 - ci-utility-go-echo.yml
-- ci-utility-go-echo-stub.yml - place this in the using repo to call the shared workflow above
+- ci-utility-go-echo-stub.yml - place this in the calling repo
 
-- ci-agent-go-main.yml - does CI tasks (build, test, package) for Go-based agents on merges to main 
-- cd-cli-go-dev.yml
+The common GitHub Action with security checks for all Chef repos is 
+- ci-main-pull-request.yml (called by ci-main-pull-request-stub.yml)
 
-## Supporting files
+This performs CI actions - build, test, scan, package - and is described in DEV-README.md
 
-### License scout and SBOM
-- `.license_scout.yml` contains the default fallback licenses for common Courier items
+## Supporting files and templates
+In the `workflow-supporting-files` you will find the following files:
+- Sonar project templates for GoLang, Ruby and Rust, which can becopied as`sonar-project.properties` into the root of a repo and modified
+- `.license_scout.yml` contains the default/reference fallback licenses for common Courier items
