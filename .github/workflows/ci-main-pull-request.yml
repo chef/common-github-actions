@@ -703,6 +703,10 @@ jobs:
         run: |
           echo "Building application in language ${{ env.GA_BUILD_LANGUAGE }}"
           echo " passed in with ${{ inputs.language }}"
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - name: 'Go build'
         if: ${{ inputs.language == 'go' && env.GA_BUILD_PROFILE == 'cli' }}
         run: |
