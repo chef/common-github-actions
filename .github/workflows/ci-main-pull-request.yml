@@ -90,6 +90,17 @@ on:
         required: false
         type: boolean
         default: true
+        
+      build:
+        description: 'CI Build (language-specific)'
+        required: false
+        type: boolean
+        default: true
+      unit-tests:
+        description: 'Run unit tests (language-specific)'
+        required: false
+        type: boolean
+        default: true
 
       perform-blackduck-polaris:
         description: 'Perform BlackDuck Polaris (SAST) scan'
@@ -171,17 +182,7 @@ on:
         required: false
         default: true
         type: boolean
-  
-      build:
-        description: 'CI Build (language-specific)'
-        required: false
-        type: boolean
-        default: true
-      unit-tests:
-        description: 'Run unit tests (language-specific)'
-        required: false
-        type: boolean
-        default: true
+
       perform-sonarqube-scan: 
         description: 'Perform basic SonarQube scan'
         required: false
@@ -360,7 +361,7 @@ on:
         description: 'Build language (Go, Ruby, Rust, etc.)'
         required: false
         type: string
-        default: 'Ruby'  # TODO: should be removed, we know this from custom repository properties
+        default: 'ruby'  # TODO: should be removed, we know this from custom repository properties
       generate-blackduck-sbom:  # obsolete
         description: 'Generate SBOM using BlackDuck polaris (OBSOLETE, use perform-blackduck-sca-scan instead)'
         required: false
@@ -697,17 +698,17 @@ jobs:
       - name: 'Build language: ${{ env.GA_BUILD_LANGUAGE }}'
         run: echo "Building application in language ${{ env.GA_BUILD_LANGUAGE }}"
       - name: 'Go build'
-        if: ${{ env.GA_BUILD_LANGUAGE == 'Go' && env.GA_BUILD_PROFILE == 'cli' }}
+        if: ${{ env.GA_BUILD_LANGUAGE == 'go' && env.GA_BUILD_PROFILE == 'cli' }}
         run: |
           go mod tidy
           go build -o ./bin/${{ env.REPO_NAME }} .
       - name: 'Go unit tests'
-        if: ${{ env.GA_BUILD_LANGUAGE == 'Go' && inputs.unit-tests == true && env.GA_BUILD_PROFILE == 'cli' }}
+        if: ${{ env.GA_BUILD_LANGUAGE == 'go' && inputs.unit-tests == true && env.GA_BUILD_PROFILE == 'cli' }}
         run: |
           go test -v ./...
 #   run: go test -v -coverprofile="coverage.out" ./... and upload artifact!
       #     - name: Build for Rust binary
-      #       if: ${{ inputs.language == 'Rust' }} -- switch to ${{ env.GA_BUILD_LANGUAGE }} 
+      #       if: ${{ env.GA_BUILD_LANGUAGE == 'rust' }}  
       #       run: echo 'hello world'
       #       # cargo build --release --target-dir ./bin
 
@@ -715,7 +716,7 @@ jobs:
       # simple bundle install to generate gemlock(puts them in directory vendor/bundle, and uses actual gemspec for deployment to get multi-architecture ), then build gem
       # https://bundler.io/man/bundle-install.1.html
       - name: 'Ruby build'
-        if: ${{ env.GA_BUILD_LANGUAGE == 'Ruby' && env.GA_BUILD_PROFILE == 'cli' }}        
+        if: ${{ env.GA_BUILD_LANGUAGE == 'ruby' && env.GA_BUILD_PROFILE == 'cli' }}        
         run: |
           mkdir -p vendor
           if [ -f "Gemfile.lock" ]; then
@@ -984,6 +985,7 @@ jobs:
           detect_search_depth: ${{ inputs.polaris-detect-search-depth != '' && inputs.polaris-detect-search-depth || null }}
           detect_args: ${{ inputs.polaris-detect-args != '' && inputs.polaris-detect-args || null }}
           polaris_assessment_mode: ${{ inputs.polaris-assessment-mode }}
+          # TODO: warning in GA - polaris_assessment_mode is deprecated. Use polaris_test_sast_location=remote and/or polaris_test_sca_location=remote for source upload scans instead.
           polaris_waitForScan: 'true' #  ${{ inputs.polaris-wait-for-scan }} # defaults to true - is this a boolean or string?
           # not yet enabled from https://github.com/prgs-community/githubactions-securityscans/blob/main/polaris/README.md 
           # project_source_archive: ${{ inputs.polaris-source-archive != '' && inputs.polaris-source-archive || null }}
