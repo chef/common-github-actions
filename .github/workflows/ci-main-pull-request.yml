@@ -340,6 +340,11 @@ on:
         required: false
         type: boolean
         default: true
+      run-bundle-install:
+        description: 'Run bundle install before scanning to generate Gemfile.lock at runtime'
+        required: false
+        type: boolean
+        default: false
       udf1:
         description: 'User defined flag 1'
         required: false
@@ -1281,7 +1286,7 @@ jobs:
   generate-sbom:
     name: 'Generating SBOM'
     if: ${{ inputs.generate-sbom == true }}
-    uses: chef/common-github-actions/.github/workflows/sbom.yml@main
+    uses: chef/common-github-actions/.github/workflows/sbom.yml@nikhil/-create-lock-file-runtime
     needs: ci-build
     secrets: inherit
     with:
@@ -1294,6 +1299,7 @@ jobs:
       generate-msft-sbom: ${{ inputs.generate-msft-sbom }}
       license_scout: ${{ inputs.license_scout }}
       go-private-modules: ${{ inputs.go-private-modules }}
+      run-bundle-install: ${{ inputs.run-bundle-install }}
 
   quality-dashboard:
     name: 'Reporting to quality dashboard'
