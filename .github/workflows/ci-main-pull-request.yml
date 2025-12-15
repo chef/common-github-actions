@@ -733,22 +733,17 @@ jobs:
       # simple bundle install to generate gemlock(puts them in directory vendor/bundle, and uses actual gemspec for deployment to get multi-architecture ), then build gem
       # https://bundler.io/man/bundle-install.1.html
       - name: Set up Ruby
-        if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}
+        if: ${{ inputs.run-bundle-install == true }}
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.4'
           
-      - name: 'Ruby build'
-        if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}        
+      - name: 'Generate Gemfile.lock for SBOM scanning'
+        if: ${{ inputs.run-bundle-install == true }}        
         run: |
-          mkdir -p vendor
-          if [ -f "Gemfile.lock" ]; then
-            bundle install --deployment
-          else
-            echo "No .gemlock file found, creating it now"
-            bundle install --path vendor/bundle --deployment
-          fi
-          bundle exec rake build
+          echo "Generating Gemfile.lock for SBOM scanning"
+          bundle install
+        continue-on-error: true
       
    
     # - name: Configure git for private modules
