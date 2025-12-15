@@ -732,6 +732,12 @@ jobs:
       #     - name: Build for Ruby binary 
       # simple bundle install to generate gemlock(puts them in directory vendor/bundle, and uses actual gemspec for deployment to get multi-architecture ), then build gem
       # https://bundler.io/man/bundle-install.1.html
+      - name: Set up Ruby
+        if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          
       - name: 'Ruby build'
         if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}        
         run: |
