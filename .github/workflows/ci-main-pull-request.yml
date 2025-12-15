@@ -1286,7 +1286,7 @@ jobs:
   generate-sbom:
     name: 'Generating SBOM'
     if: ${{ inputs.generate-sbom == true }}
-    uses: chef/common-github-actions/.github/workflows/sbom.yml@nikhil/-create-lock-file-runtime
+    uses: chef/common-github-actions/.github/workflows/sbom.yml@nikhil/create-lock-file-runtime
     needs: ci-build
     secrets: inherit
     with:
