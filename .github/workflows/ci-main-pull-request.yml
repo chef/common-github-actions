@@ -340,7 +340,7 @@ on:
         required: false
         type: boolean
         default: true
-      run-bundle-install:
+      run-bundle-install: # Added to support projects without committed Gemfile.lock (e.g., chef-cli)
         description: 'Run bundle install before scanning to generate Gemfile.lock at runtime'
         required: false
         type: boolean
@@ -732,7 +732,7 @@ jobs:
       #     - name: Build for Ruby binary 
       # simple bundle install to generate gemlock(puts them in directory vendor/bundle, and uses actual gemspec for deployment to get multi-architecture ), then build gem
       # https://bundler.io/man/bundle-install.1.html
-      - name: Set up Ruby
+      - name: Set up Ruby # Fixed: Ruby setup was missing, causing "bundle: command not found" errors
         if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}
         uses: ruby/setup-ruby@v1
         with:
@@ -745,7 +745,7 @@ jobs:
             bundle install --deployment
           else
             echo "No Gemfile.lock found, creating it now"
-            bundle install --path vendor/bundle
+            bundle install --path vendor/bundle # Fixed: Removed --deployment flag when lockfile doesn't exist
           fi
           bundle exec rake build
       
@@ -1304,7 +1304,7 @@ jobs:
       generate-msft-sbom: ${{ inputs.generate-msft-sbom }}
       license_scout: ${{ inputs.license_scout }}
       go-private-modules: ${{ inputs.go-private-modules }}
-      run-bundle-install: ${{ inputs.run-bundle-install }}
+      run-bundle-install: ${{ inputs.run-bundle-install }} # Passed to sbom.yml to generate Gemfile.lock at runtime
 
   quality-dashboard:
     name: 'Reporting to quality dashboard'
