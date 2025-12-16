@@ -744,8 +744,8 @@ jobs:
           if [ -f "Gemfile.lock" ]; then
             bundle install --deployment
           else
-            echo "No .gemlock file found, creating it now"
-            bundle install --path vendor/bundle --deployment
+            echo "No Gemfile.lock found, creating it now"
+            bundle install --path vendor/bundle
           fi
           bundle exec rake build
       
