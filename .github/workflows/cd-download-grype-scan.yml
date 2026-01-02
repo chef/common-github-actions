@@ -385,7 +385,7 @@ jobs:
           }
   
           # Download the package
-          Invoke-WebRequest -Uri $DownloadUrl -OutFile "$env:TEMP\package_downloaded" -FollowRelocation
+          Invoke-WebRequest -Uri $DownloadUrl -OutFile "$env:TEMP\package_downloaded"
           
           # Handle package extraction/installation based on platform
           $ExtractPath = "$env:TEMP\extracted_packages"
