@@ -1,0 +1,468 @@
+# CD pipeline to download packages from Commercial and/or Community downloads API and run Grype security scan
+
+# called ad-hoc (dispatch) only
+#
+# performs the following actions:
+# 1. create the specified runner (Windows or ubuntu latest, later add specific OS versions to matrix)
+# 2. download grype
+# 3. download the specified product from https://chefdownload-community.chef.io/stable/<PRODUCT>/download?p=<PLATFORM>&pv=<PLATFORM_VERSION>&m=<ARCHITECTURE>&v=<PRODUCT_VERSION>
+#    OR https://chefdownload-commercial.chef.io/stable/chef/download?p=windows&pv=11&m=x86_64&v=25.12.1102&license_id=LICENSE_ID
+# 4. unzip or c:/tmp (Windows) or untar the downloaded package to to /tmp 
+# 5. grype dir:.
+# 6. upload the vulnerability scan artifact
+
+# secrets required (by step)
+# DOWNLOAD_LICENSE_TOKEN (provided in common-github-actions repo as organization level secret GA_DOWNLOAD_GRYPE_LICENSE_ID, 
+#    but can be overridden on inputs)
+
+# product versions can be listed with https://chefdownload-commercial.chef.io/<CHANNEL>/<PRODUCT>/versions/all?license_id=<LICENSE_ID>, or 
+# get latest with https://chefdownload-commercial.chef.io/<CHANNEL>/<PRODUCT>/versions/latest?license_id=<LICENSE_ID> (default)
+
+# platforms are hardcoded as a choice list but not tied to platform-version, so user must ensure they are compatible
+# see samples at https://chefdownload-commercial.chef.io/stable/chef/packages?license_id=LICENSE_ID
+
+# chef-client platform versions (broadest subset?) with architectures are
+# {
+#   "amazon": {
+#     "2": ["aarch64", "x86_64"],
+#     "2023": [ "aarch64", "x86_64"]
+#   },
+#   "debian": {
+#     "10": [ "x86_64" ],
+#     "11": [ "x86_64" ],
+#     "9": [ "x86_64" ]
+#   },
+#   "el": {
+#     "7": [ "aarch64", "ppc64", "ppc64le", "s390x", "x86_64"],
+#     "8": [ "aarch64", "s390x", "x86_64"], 
+#     "9": [ "aarch64", "x86_64"]
+#   },
+#   "freebsd": {
+#     "13": [ "x86_64" ]
+#   },
+#   "mac_os_x": {
+#     "12": [ "aarch64", "x86_64" ],
+#     "13": [ "aarch64" ],
+#     "14": [ "aarch64" ]
+#   },
+#   "rocky": {
+#     "8": [ "x86_64" ],
+#     "9": [ "x86_64" ]
+#   },
+#   "sles": {
+#     "12": [ "s390x", "x86_64" ],
+#     "15": [ "aarch64", "s390x", "x86_64" ]
+#   },
+#   "solaris2": {
+#     "5.11": [ "i386", "sparc"]
+#   },
+#   "ubuntu": {
+#     "16.04": [ "x86_64" ],
+#     "18.04": [ "aarch64", "x86_64" ], 
+#     "20.04": [ "aarch64", "x86_64" ], 
+#     "22.04": [ "aarch64", "x86_64" ],
+#     "24.04": [ "aarch64", "x86_64" ]
+#   },
+#   "windows": {
+#     "10": [ "x86_64" ],
+#     "11": [ "x86_64" ],
+#     "2016": [ "x86_64" ],
+#     "2019": [ "x86_64" ],
+#     "2022": [ "x86_64" ], 
+#     "2025": [ "x86_64" ]
+#   }
+# }
+
+name: CD Download Customer Packages and Grype Scan
+
+on:
+  workflow_dispatch:
+    inputs:
+      download-site:
+        description: 'Download site to use (commercial or community)'
+        required: false
+        type: choice
+        options:
+          - community
+          - commercial
+        default: 'commercial'
+        # https://chefdownload-commercial.chef.io/ (default)
+        # https://chefdownload-community.chef.io/ 
+      # GA_DOWNLOAD_GRYPE_LICENSE_ID
+      license-id:
+        description: 'License ID for commercial downloads'
+        required: false
+        type: string
+      product:
+        description: 'Specific product to download (e.g., chef, chef-infra-server, chef-automate, habitat, inspec, chef-workstation)'
+        required: true
+        type: choice
+        options:
+          - automate
+          - chef 
+          - chef-backend
+          - chef-server
+          - chef-workstation
+          - habitat
+          - inspec
+          - manage
+          - supermarket
+          - chef-360
+        default: 'chef'
+      product-version:
+        description: 'Product version to download (e.g., 25.12.1102 for chef workstation, 4.0.0 for automate, etc.)'
+        required: false
+        type: string
+      channel:
+        description: 'Release channel to use (stable or current)'
+        required: false
+        type: choice
+        options:
+          - stable
+          - current
+        default: 'stable'
+      architecture:
+        description: 'Hardware architecture'
+        required: false
+        type: choice
+        options:
+          - aarch64
+          - armv7l
+          - i386
+          - powerpc
+          - ppc64
+          - ppc64le
+          - s390x
+          - sparc
+          - universal
+          - x86_64
+        default: 'x86_64'
+      os-platform:
+        description: 'OS platform'
+        required: false
+        type: choice
+        options:
+          - aix
+          - amazon
+          - darwin
+          - debian
+          - el
+          - freebsd
+          - ios_xr
+          - linux
+          - linux-kernel2
+          - mac_os_x
+          - nexus
+          - rocky
+          - sles
+          - solaris2
+          - suse
+          - ubuntu
+          - windows
+        default: 'ubuntu'
+      os-platform-version:
+        description: 'OS platform version'  
+        required: false
+        type: string  
+      test-runner:
+        description: 'Test runner OS (windows-latest, ubuntu-latest, or both)'
+        required: false
+        type: choice
+        options:
+          - ubuntu-latest
+          - windows-latest
+          - both
+        default: 'ubuntu-latest'
+    
+env:
+  REPO_VISIBILITY: ${{ github.event.repository.visibility }}
+  REPO_NAME: ${{ github.event.repository.name }}
+  PIPELINE_VERSION: '1.0.0'  # version of this CD pipeline
+#   PRIMARY_APPLICATION: 'default'   # Custom repo property [primaryApplication]: chef360, automate, infra-server, habitat, supermarket, licensing, downloads, chef-client, inspec, chef-workstation (or derivatives like habitat-builder)
+#   GA_BUILD_LANGUAGE: ${{ inputs.language}}  # Custom repo property [GABuildLanguage]: go, ruby, erlang, rust (replaces Language input)
+#   GA_BUILD_PROFILE: ${{ inputs.build-profile }}   # Custom repo property [GABuildProfile]: TBD
+#   # APP_VERSION: $(cat VERSION) 
+  FILE_PREFIX: $(echo "${{ github.repository }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
+  DEFAULT_FILE_EXTENSION: ".json"
+  DEFAULT_SEPARATOR: "-"
+
+jobs:
+  precompilation-checks:
+    name: 'echo action parameters'
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "CD Download Customer Packages and Grype Scan Pipeline version $PIPELINE_VERSION"
+          echo "** INPUTS ***********************************************"
+          echo "  Download site: ${{ inputs.download-site }}"
+          echo "  Product: ${{ inputs.product }}"
+          echo "  Product version: ${{ inputs.product-version }}"
+          echo "  Channel: ${{ inputs.channel }}"
+          echo "  Architecture: ${{ inputs.architecture }}"
+          echo "  OS Platform: ${{ inputs.os-platform }}"
+          echo "  OS Platform Version: ${{ inputs.os-platform-version }}"
+          echo "  Test runner: ${{ inputs.test-runner }}"         
+          echo "*************************************************************"
+  generate-filename-slug:
+    name: Generate a slug based on repo and date for use in any output artifacts and set download location
+    runs-on: ubuntu-latest
+    steps:
+    - name: Generate Filename Prefix and full JSON file name as environment variables for later steps
+      run: |
+        FILE_PREFIX=$(echo "${{ inputs.product }}${{ env.DEFAULT_SEPARATOR }}${{ inputs.product-version }}${{ env.DEFAULT_SEPARATOR }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
+        echo "FILE_PREFIX=${FILE_PREFIX}" >> $GITHUB_ENV
+        echo "Generated FILE_PREFIX: ${FILE_PREFIX}"
+
+        DOWNLOAD_URL="https://chefdownload-commercial.chef.io"
+        if [ ${{ inputs.download-site }} = "community" ]; then
+            DOWNLOAD_URL="https://chefdownload-community.chef.io"
+        fi
+        echo "DOWNLOAD_URL=${DOWNLOAD_URL}" >> $GITHUB_ENV
+        echo "DOWNLOAD_URL is set to ${DOWNLOAD_URL}"
+
+        # get the license_id from input or secret
+        LICENSE_ID="${{ inputs.license-id }}"   
+        if [ -z "${LICENSE_ID}" ]; then
+          LICENSE_ID="${{ secrets.GA_DOWNLOAD_GRYPE_LICENSE_ID }}"
+          echo "Using license ID from repository secret"
+        else
+          echo "Using license ID from workflow input"
+        fi
+      
+  grype-scan-linux:
+    name: 'Grype scan of Habitat packages'
+    runs-on: ubuntu-latest  # TODO: make this a versioned OS strategy later
+    if: ${{ success() && (inputs.test-runner == 'ubuntu-latest'  || inputs.test-runner == 'both') }}
+    steps:
+    #   - name: Install Chef Habitat (MacOS and Linux)
+    #     run: |
+    #       curl https://raw.githubusercontent.com/habitat-sh/habitat/main/components/hab/install.sh | sudo bash
+
+    #   - name: Configure Habitat (MacOS and Linux)
+    #     run: |
+    #       # Add Habitat to PATH (for current session and future steps if needed, though install.sh usually handles symlinks)
+    #       echo "/hab/bin" >> $GITHUB_PATH
+          
+    #       # Accept the license
+    #       echo "HAB_LICENSE=accept-no-persist" >> $GITHUB_ENV
+          
+    #       # Create the necessary directory structure for license file
+    #       sudo mkdir -p /hab/accepted-licenses/
+    #       sudo touch /hab/accepted-licenses/habitat
+
+      - name: Install Grype (ubuntu-latest)
+        continue-on-error: true
+        run: |
+          curl -sSfL https://get.anchore.io/grype | sh -s -- -b /usr/local/bin
+
+      - name: Download package under test (ubuntu-latest)
+        run: |
+          # Example download URL construction
+          DOWNLOAD_URL="${{ env.DOWNLOAD_URL }}/${{ inputs.channel }}/${{ inputs.product }}/download?p=${{ inputs.os-platform }}&pv=${{ inputs.os-platform-version }}&m=${{ inputs.architecture }}"
+          if [ -n "${{ inputs.product-version }}" ]; then
+            DOWNLOAD_URL="${DOWNLOAD_URL}&v=${{ inputs.product-version }}"
+          fi
+          echo "Downloading package from: ${DOWNLOAD_URL}"
+          if [ "${{ inputs.download-site }}" = "commercial" ]; then
+              LICENSE_ID="${{ env.LICENSE_ID }}"
+              if [ -n "${LICENSE_ID}" ]; then
+                DOWNLOAD_URL="${DOWNLOAD_URL}&license_id=${LICENSE_ID}"
+                echo "Using license ID in download URL"
+              fi
+          fi
+
+          # download the specified product from https://chefdownload-community.chef.io/stable/<PRODUCT>/download?p=<PLATFORM>&pv=<PLATFORM_VERSION>&m=<ARCHITECTURE>&v=<PRODUCT_VERSION>
+          #    OR https://chefdownload-commercial.chef.io/stable/chef/download?p=windows&pv=11&m=x86_64&v=25.12.1102&license_id=LICENSE_ID
+          
+          # Download the package
+          curl -L -o /tmp/package_downloaded "${DOWNLOAD_URL}"
+          
+          # Extract the package based on its type (assuming .tar.gz for this example)
+          mkdir -p /tmp/extracted_packages
+          tar -xzf /tmp/package_downloaded -C /tmp/extracted_packages
+          echo "Package downloaded and extracted to /tmp/extracted_packages"
+          
+          ls -l /tmp/extracted_packages
+
+    #   - name: Install Habitat Package under test (example core/nginx on MacOS and Linux)
+    #     run: |
+    #       PACKAGE="${{ inputs.publish-habitat-hab_package }}"
+    #       if [ -n "${{ inputs.publish-habitat-hab_version }}" ]; then
+    #         PACKAGE="${PACKAGE}/${{ inputs.publish-habitat-hab_version }}"
+    #       fi
+    #       if [ -n "${{ inputs.publish-habitat-hab_release }}" ]; then
+    #         PACKAGE="${PACKAGE}/${{ inputs.publish-habitat-hab_release }}"
+    #       fi
+          
+    #       INSTALL_CMD="sudo hab pkg install ${PACKAGE}"
+          
+    #       if [ -n "${{ inputs.publish-habitat-hab_channel }}" ]; then
+    #         INSTALL_CMD="${INSTALL_CMD} --channel ${{ inputs.publish-habitat-hab_channel }}"
+    #       fi
+          
+    #       AUTH_TOKEN="${{ inputs.publish-habitat-hab_auth_token }}"
+    #       if [ -z "${AUTH_TOKEN}" ]; then
+    #         AUTH_TOKEN="${{ secrets.HAB_PUBLIC_BLDR_PAT }}"
+    #         echo "Using token from repository secret"
+    #       else
+    #         echo "Using token from workflow input"
+    #       fi
+    #       # if [ -n "${AUTH_TOKEN}" ]; then
+    #       #   INSTALL_CMD="${INSTALL_CMD} --auth ${AUTH_TOKEN}"
+    #       # fi
+          
+    #       echo "Installing: ${INSTALL_CMD}"
+    #       eval ${INSTALL_CMD}
+
+# 5. grype dir:.
+# 6. upload the vulnerability scan artifact
+
+      - name: Run Grype scan on extracted directory
+        timeout-minutes: 15 # Sets a 15-minute timeout for this specific step
+        run: |
+          # run grype in runner
+          grype dir:/tmp/extracted_packages --name ${{ inputs.product }} 
+          # run grype to output to file (which is uploaded to the job as an artifact)
+          OUTPUT_FILE="grype-results-ubuntu-${{ env.FILE_PREFIX }}.txt"
+          OUTPUT_FILE="${OUTPUT_FILE//\//-}"
+          echo $OUTPUT_FILE
+          grype dir:/tmp/extracted_packages --name ${{ inputs.product }} > $OUTPUT_FILE
+          echo "OUTPUT_FILE=$OUTPUT_FILE" >> $GITHUB_ENV
+
+    #   - name: Run Grype Scan on Habitat Package
+    #     timeout-minutes: 15 # Sets a 15-minute timeout for this specific step
+    #     run: |
+    #       # Find the installed package path. 'hab pkg path' returns the path to the latest installed version.
+    #       PKG_PATH=$(hab pkg path ${{ inputs.publish-habitat-hab_package }})
+    #       # run grype in runner
+    #       grype dir:$PKG_PATH --name ${{ inputs.publish-habitat-hab_package }} 
+    #       # run grype to output to file (which is uploaded to the job as an artifact)
+    #       OUTPUT_FILE="grype-results-ubuntu-${{ env.FILE_PREFIX }}.txt"
+    #       OUTPUT_FILE="${OUTPUT_FILE//\//-}"
+    #       echo $OUTPUT_FILE
+    #       grype dir:$PKG_PATH --name ${{ inputs.publish-habitat-hab_package }} > $OUTPUT_FILE
+    #       echo "OUTPUT_FILE=$OUTPUT_FILE" >> $GITHUB_ENV
+          
+      - name: Upload Grype Scan Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.OUTPUT_FILE }}
+          path: ${{ env.OUTPUT_FILE }}
+
+#  grype-scan-windows:
+    
+#   checkout:
+#     name: 'Checkout repository'
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v6
+#         with:
+#           fetch-depth: 0
+  
+#   habitat-grype-scan-windows:
+#     name: 'Grype scan of Habitat packages (Windows)'
+#     runs-on: windows-latest
+#     if: ${{ success() && inputs.habitat-grype-scan == true && inputs.publish-habitat-runner_os == 'windows-latest' }}
+#     # TODO: make this a matrix operation 
+#     needs: habitat-publish
+#     steps:
+#       - name: Install Chef Habitat (Windows)
+#         run: |
+#           choco install habitat
+
+#           # Set-ExecutionPolicy Bypass -Scope Process -Force;
+#           # [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072;
+#           # iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/habitat-sh/habitat/main/components/hab/install.ps1'))
+#           # $env:PATH += ";~\bin\hab-1.6.1245-20250905141844-x86_64-windows"
+#           # Write-Host "one"
+#           # ls ~/bin
+#           # Write-Host "two"
+#           # ls c:/users/runneradmin/bin
+#           # Write-Host "three"
+#           # ls c:/hab
+#           # ls "~\bin\hab-1.6.1245-20250905141844-x86_64-windows"
+          
+#           # Write-Host "end"
+#           hab --version
+      
+#       - name: Configure Habitat (Windows)
+#         run: |
+#           # Accept the license
+#           echo "HAB_LICENSE=accept-no-persist" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          
+#           # Create the necessary directory structure for license file
+#           New-Item -ItemType Directory -Force -Path "C:\hab\accepted-licenses"
+#           New-Item -ItemType File -Force -Path "C:\hab\accepted-licenses\habitat"
+          
+#       - name: Install Grype (Windows)
+#         continue-on-error: true
+#         run: |
+#           $ErrorActionPreference = 'Stop'
+#           # Download and install Grype for Windows
+#           $grypeVersion = (Invoke-RestMethod -Uri "https://api.github.com/repos/anchore/grype/releases/latest").tag_name
+#           $grypeUrl = "https://github.com/anchore/grype/releases/download/$grypeVersion/grype_$($grypeVersion.TrimStart('v'))_windows_amd64.zip"
+#           $grypeZip = "$env:TEMP\grype.zip"
+#           $grypeDir = "$env:TEMP\grype"
+          
+#           # Download Grype
+#           Invoke-WebRequest -Uri $grypeUrl -OutFile $grypeZip
+          
+#           # Extract Grype
+#           Expand-Archive -Path $grypeZip -DestinationPath $grypeDir -Force
+          
+#           # Add Grype to PATH for subsequent steps
+#           echo "$grypeDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          
+#           # Verify installation
+#           & "$grypeDir\grype.exe" version
+
+#       - name: Install Habitat Package under test (Windows)
+#         run: |
+#           $Package = "${{ inputs.publish-habitat-hab_package }}"
+#           if ("${{ inputs.publish-habitat-hab_version }}" -ne "") {
+#             $Package = "${Package}/${{ inputs.publish-habitat-hab_version }}"
+#           }
+#           if ("${{ inputs.publish-habitat-hab_release }}" -ne "") {
+#             $Package = "${Package}/${{ inputs.publish-habitat-hab_release }}"
+#           }
+          
+#           $InstallCmd = "hab pkg install ${Package}"
+          
+#           if ("${{ inputs.publish-habitat-hab_channel }}" -ne "") {
+#             $InstallCmd = "${InstallCmd} --channel ${{ inputs.publish-habitat-hab_channel }}"
+#           }
+          
+#           $AuthToken = "${{ inputs.publish-habitat-hab_auth_token }}"
+#           if ([string]::IsNullOrEmpty($AuthToken)) {
+#             $AuthToken = "${{ secrets.HAB_PUBLIC_BLDR_PAT }}"
+#             Write-Host "Using token from repository secret"
+#           } else {
+#             Write-Host "Using token from workflow input"
+#           }
+#           # if (-not [string]::IsNullOrEmpty($AuthToken)) {
+#           #   $InstallCmd = "${InstallCmd} --auth ${AuthToken}"
+#           # }
+          
+#           Write-Host "Installing: ${InstallCmd}"
+#           Invoke-Expression $InstallCmd
+
+#       - name: Run Grype Scan on Habitat Package (Windows)
+#         timeout-minutes: 15 # Sets a 15-minute timeout for this specific step
+#         run: |
+#           # Find the installed package path. 'hab pkg path' returns the path to the latest installed version.
+#           $PkgPath = hab pkg path ${{ inputs.publish-habitat-hab_package }}
+#           # run grype in runner
+#           grype dir:$PkgPath --name ${{ inputs.publish-habitat-hab_package }}
+#           # run grype to output to file (which is uploaded to the job as an artifact)
+#           $OutputFile = "grype-results-windows-${{ inputs.publish-habitat-hab_package }}.txt"
+#           $OutputFile = $OutputFile -replace '/', '-'
+#           Write-Host $OutputFile
+#           grype dir:$PkgPath --name ${{ inputs.publish-habitat-hab_package }} | Out-File -FilePath $OutputFile -Encoding utf8
+#           echo "OUTPUT_FILE=$OutputFile" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+                
+#       - name: Upload Grype Scan Results
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: grype-results-windows-${{ env.OUTPUT_FILE }}
+#           path: ${{ env.OUTPUT_FILE }}
