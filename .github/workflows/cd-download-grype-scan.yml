@@ -1,12 +1,12 @@
 # CD pipeline to download packages from Commercial and/or Community downloads API and run Grype security scan
 
 # test inputs:
-    # product: chef
-    # product-version: 19.0.6
+    # product: chef (or chef-workstation)
+    # product-version: 18.8.54 (for chef), 25.12.1102 (for chef-workstation)
     # channel: stable   
     # architecture: x86_64
     # os-platform: both (ubuntu and windows)
-    # os-platform-version: not specified
+    # os-platform-version: 24.04 (TODO: make this selectable by Windows and linux separately later)
     # download-site: commercial
     # license-id: (not specified, uses secret)
 
@@ -262,17 +262,39 @@ jobs:
                 echo "Using license ID in download URL"
               fi
           fi
+          echo "Full DOWNLOAD_URL: ${DOWNLOAD_URL}"
+          echo "DOWNLOAD_URL=${DOWNLOAD_URL}" >> $GITHUB_ENV
 
-          # download the specified product from https://chefdownload-community.chef.io/stable/<PRODUCT>/download?p=<PLATFORM>&pv=<PLATFORM_VERSION>&m=<ARCHITECTURE>&v=<PRODUCT_VERSION>
-          #    OR https://chefdownload-commercial.chef.io/stable/chef/download?p=windows&pv=11&m=x86_64&v=25.12.1102&license_id=LICENSE_ID
-          
           # Download the package
           curl -L -o /tmp/package_downloaded "${DOWNLOAD_URL}"
           
-          # Extract the package based on its type (assuming .tar.gz for this example)
-          mkdir -p /tmp/extracted_packages
-          tar -xzf /tmp/package_downloaded -C /tmp/extracted_packages
-          echo "Package downloaded and extracted to /tmp/extracted_packages"
+          # Handle package extraction based on platform
+          if [ "${{ inputs.os-platform }}" = "ubuntu" ]; then
+            # Ubuntu downloads are .deb packages - install them
+            echo "Installing .deb package..."
+            sudo dpkg -i /tmp/package_downloaded
+            
+            # Echo where it was installed
+            echo "Package installed. Listing installed files:"
+            dpkg -L ${{ inputs.product }} || dpkg -L $(dpkg -I /tmp/package_downloaded | grep Package: | awk '{print $2}')
+            
+            # Set extraction path for grype scan
+            mkdir -p /tmp/extracted_packages
+            # Copy installed files to extraction directory for scanning
+            echo "Copying installed files for scanning..."
+            if [ "${{ inputs.product }}" = "chef" ]; then
+              sudo cp -r /opt/chef /tmp/extracted_packages/ 2>/dev/null || true
+            elif [ "${{ inputs.product }}" = "chef-workstation" ]; then
+              sudo cp -r /opt/chef-workstation /tmp/extracted_packages/ 2>/dev/null || true
+            else
+              sudo cp -r /opt/${{ inputs.product }} /tmp/extracted_packages/ 2>/dev/null || true
+            fi
+          else
+            # Extract the package based on its type (assuming .tar.gz for non-Ubuntu)
+            mkdir -p /tmp/extracted_packages
+            tar -xzf /tmp/package_downloaded -C /tmp/extracted_packages
+            echo "Package downloaded and extracted to /tmp/extracted_packages"
+          fi
 
           ls -l /tmp/extracted_packages
 
@@ -365,11 +387,37 @@ jobs:
           # Download the package
           Invoke-WebRequest -Uri $DownloadUrl -OutFile "$env:TEMP\package_downloaded" -FollowRelLink
           
-          # Extract the package based on its type (assuming .zip for Windows)
+          # Handle package extraction/installation based on platform
           $ExtractPath = "$env:TEMP\extracted_packages"
           New-Item -ItemType Directory -Force -Path $ExtractPath
-          Expand-Archive -Path "$env:TEMP\package_downloaded" -DestinationPath $ExtractPath -Force
-          Write-Host "Package downloaded and extracted to $ExtractPath"
+          
+          if ("${{ inputs.os-platform }}" -eq "windows") {
+            # Windows downloads are .msi packages - install them
+            Write-Host "Installing .msi package..."
+            Start-Process msiexec.exe -ArgumentList "/i", "$env:TEMP\package_downloaded", "/qn", "/norestart" -Wait
+            
+            # Echo where it was installed
+            Write-Host "Package installed. Common installation paths:"
+            if (Test-Path "C:\opscode\chef") {
+              Write-Host "Found installation at: C:\opscode\chef"
+              Get-ChildItem -Path "C:\opscode\chef" -Recurse -Depth 1
+              Copy-Item -Path "C:\opscode\chef" -Destination $ExtractPath -Recurse -Force
+            }
+            if (Test-Path "C:\opscode\chef-workstation") {
+              Write-Host "Found installation at: C:\opscode\chef-workstation"
+              Get-ChildItem -Path "C:\opscode\chef-workstation" -Recurse -Depth 1
+              Copy-Item -Path "C:\opscode\chef-workstation" -Destination $ExtractPath -Recurse -Force
+            }
+            if (Test-Path "C:\opscode\${{ inputs.product }}") {
+              Write-Host "Found installation at: C:\opscode\${{ inputs.product }}"
+              Get-ChildItem -Path "C:\opscode\${{ inputs.product }}" -Recurse -Depth 1
+              Copy-Item -Path "C:\opscode\${{ inputs.product }}" -Destination $ExtractPath -Recurse -Force
+            }
+          } else {
+            # Extract the package based on its type (assuming .zip for non-Windows platforms)
+            Expand-Archive -Path "$env:TEMP\package_downloaded" -DestinationPath $ExtractPath -Force
+            Write-Host "Package downloaded and extracted to $ExtractPath"
+          }
 
           Get-ChildItem -Path $ExtractPath
 
