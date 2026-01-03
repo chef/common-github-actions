@@ -6,7 +6,7 @@
     # channel: stable   
     # architecture: x86_64
     # os-platform: run both ubuntu and windows
-    # os-platform-version: 24.04 (TODO: make this selectable by Windows and linux separately later)
+    # os-platform-version: 24.04 or 2022 
     # download-site: commercial
     # license-id: (not specified, uses secret)
 
@@ -429,11 +429,21 @@ jobs:
           if ("${{ inputs.os-platform }}" -eq "windows") {
             # Windows downloads are .msi packages - install them
             Write-Host "Installing .msi package..."
-            Start-Process msiexec.exe -ArgumentList "/i", ".\package.msi", "/qn", "/norestart" -Wait
+
+            # Create install directory
+            New-Item -ItemType Directory -Force -Path ".\install"
+            
+            Start-Process msiexec.exe -ArgumentList "/i", ".\package.msi", "TARGETDIR=\".\\install\"", "/qn", "/norestart" -Wait
             # Start-Process msiexec.exe -ArgumentList "/i", "$env:TEMP\package_downloaded", "/qn", "/norestart" -Wait
             
             # Echo where it was installed
-            Write-Host "Package installed. Common installation paths:"
+            Write-Host "Package installed."
+            Write-Host "Checking common installation paths:"
+            if (Test-Path ".\install") {
+              Write-Host "Found installation at: .\install"
+              Get-ChildItem -Path ".\install" -Recurse -Depth 3
+              # Copy-Item -Path ".\install" -Destination $ExtractPath -Recurse -Force
+            }
             if (Test-Path "C:\opscode\chef") {
               Write-Host "Found installation at: C:\opscode\chef"
               Get-ChildItem -Path "C:\opscode\chef" -Recurse -Depth 1
@@ -460,7 +470,8 @@ jobs:
       - name: Run Grype scan on extracted directory
         timeout-minutes: 15 # Sets a 15-minute timeout for this specific step
         run: |
-          $ExtractPath = "$env:TEMP\extracted_packages"
+          $ExtractPath = ".\install"
+          # $ExtractPath = "$env:TEMP\extracted_packages"
           
           # run grype in runner
           grype dir:$ExtractPath --name ${{ inputs.product }}
