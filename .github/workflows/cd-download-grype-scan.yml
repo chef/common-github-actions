@@ -445,7 +445,12 @@ jobs:
               Get-ChildItem -Path ".\bin" -Recurse -Depth 3
               # Copy-Item -Path ".\bin" -Destination $ExtractPath -Recurse -Force
             }
-            if (Test-Path "C:\opscode\chef") {
+            if (Test-Path "C:\hab\pkgs") {
+              Write-Host "Found installation at: C:\hab\pkgs"
+              Get-ChildItem -Path "C:\hab\pkgs" -Recurse -Depth 3
+              Copy-Item -Path "C:\hab\pkgs" -Destination $ExtractPath -Recurse -Force
+            }
+              if (Test-Path "C:\opscode\chef") {
               Write-Host "Found installation at: C:\opscode\chef"
               Get-ChildItem -Path "C:\opscode\chef" -Recurse -Depth 1
               Copy-Item -Path "C:\opscode\chef" -Destination $ExtractPath -Recurse -Force
