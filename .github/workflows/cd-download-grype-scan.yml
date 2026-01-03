@@ -5,7 +5,7 @@
     # product-version: 18.8.54 (for chef), 25.12.1102 (for chef-workstation)
     # channel: stable   
     # architecture: x86_64
-    # os-platform: both (ubuntu and windows)
+    # os-platform: run both ubuntu and windows
     # os-platform-version: 24.04 (TODO: make this selectable by Windows and linux separately later)
     # download-site: commercial
     # license-id: (not specified, uses secret)
@@ -82,6 +82,21 @@
 #     "2025": [ "x86_64" ]
 #   }
 # }
+
+# GitHub runners available: per https://github.com/actions/runner-images?tab=readme-ov-file#available-images
+# ubuntu-latest or ubuntu-24.04
+# ubuntu-22.04
+# ubuntu-slim
+# macos-26 (ARM64)
+# macos-15-intel
+# macOS-15-arm64
+# macos-14-large
+# macOS-14-arm64
+# windows-2025 or windows-latest
+# windows-2022
+# windows-2019 (deprecated)
+#
+# can add custom runner images per https://docs.github.com/en/actions/how-tos/manage-runners/larger-runners/use-custom-images on large self-hosted runners
 
 name: CD Scan downloadable customer packages with grype
 
@@ -174,16 +189,17 @@ on:
         description: 'OS platform version'  
         required: false
         type: string  
-      test-runner:
-        description: 'Test runner OS (windows-latest, ubuntu-latest, or both)'
-        required: false
-        type: choice
-        options:
-          - ubuntu-latest
-          - windows-latest
-          - both
-        default: 'ubuntu-latest'
+    #   test-runner:
+    #     description: 'Test runner OS (windows-latest, ubuntu-latest, or both)'
+    #     required: false
+    #     type: choice
+    #     options:
+    #       - ubuntu-latest
+    #       - windows-latest
+    #       - both
+    #     default: 'ubuntu-latest'
     
+# environment variables for the whole workflow (use jobs.<job_id>.env inside a specific job or .steps for a specific step); GITHUB_ENV exists only in single runner (job) context
 env:
   REPO_VISIBILITY: ${{ github.event.repository.visibility }}
   REPO_NAME: ${{ github.event.repository.name }}
@@ -197,7 +213,7 @@ env:
   DEFAULT_SEPARATOR: "-"
 
 jobs:
-  precompilation-checks:
+  echo-parameters:
     name: 'echo action parameters'
     runs-on: ubuntu-latest
     steps:
@@ -213,11 +229,24 @@ jobs:
           echo "  OS Platform Version: ${{ inputs.os-platform-version }}"
           echo "  Test runner: ${{ inputs.test-runner }}"         
           echo "*************************************************************"
-  
+ 
+  grpye-scan-other-platyforms:
+    name: 'Other platforms grype scan of customer-downloadable packages'
+    runs-on: ubuntu-latest  # TODO: make this a versioned OS strategy later
+    if: ${{ success() && inputs.os-platform != 'ubuntu' && inputs.os-platform != 'windows' }}
+    steps:
+      - name: Skip grype scan for unsupported platform
+        run: |
+          echo "Grype scan is currently only implemented for ubuntu and windows platforms."
+          echo "Skipping grype scan for platform: ${{ inputs.os-platform }}"
+      
+      - name: Exit workflow
+        run: exit 1
+    
   grype-scan-linux:
     name: 'Linux grype scan of customer-downloadable packages'
-    runs-on: ubuntu-latest  # TODO: make this a versioned OS strategy later
-    if: ${{ success() && (inputs.test-runner == 'ubuntu-latest'  || inputs.test-runner == 'both') }}
+    runs-on: ubuntu-latest  # TODO: make this a versioned OS strategy later - combine ${{ inputs.os-platform }} and os-platform version into runner selection?
+    if: ${{ success() && inputs.os-platform == 'ubuntu' }}
     steps:
       - name: Generate filename prefix, download URL and license-id as environment variables for later steps
         run: |
@@ -319,7 +348,7 @@ jobs:
   grype-scan-windows:
     name: 'Windows grype scan of customer-downloadable packages'
     runs-on: windows-latest  # TODO: make this a versioned OS strategy later
-    if: ${{ success() && (inputs.test-runner == 'windows-latest'  || inputs.test-runner == 'both') }}
+    if: ${{ success() && inputs.os-platform == 'windows' }}
     steps:
       - name: Generate filename prefix, download URL and license-id as environment variables for later steps
         shell: pwsh
@@ -385,16 +414,23 @@ jobs:
           }
   
           # Download the package
-          Invoke-WebRequest -Uri $DownloadUrl -OutFile "$env:TEMP\package_downloaded"
+          # DOWN TO HERE!!!!
+          Invoke-WebRequest -Uri $DownloadUrl -OutFile ".\package.msi"
+          # "$env:TEMP\package_downloaded"
+          
+          # List contents of current directory
+          Write-Host "Listing contents of current directory:"
+          Get-ChildItem -Path . -Force
           
           # Handle package extraction/installation based on platform
-          $ExtractPath = "$env:TEMP\extracted_packages"
-          New-Item -ItemType Directory -Force -Path $ExtractPath
+          #   $ExtractPath = "$env:TEMP\extracted_packages"
+          #   New-Item -ItemType Directory -Force -Path $ExtractPath
           
           if ("${{ inputs.os-platform }}" -eq "windows") {
             # Windows downloads are .msi packages - install them
             Write-Host "Installing .msi package..."
-            Start-Process msiexec.exe -ArgumentList "/i", "$env:TEMP\package_downloaded", "/qn", "/norestart" -Wait
+            Start-Process msiexec.exe -ArgumentList "/i", ".\package.msi", "/qn", "/norestart" -Wait
+            # Start-Process msiexec.exe -ArgumentList "/i", "$env:TEMP\package_downloaded", "/qn", "/norestart" -Wait
             
             # Echo where it was installed
             Write-Host "Package installed. Common installation paths:"
@@ -414,7 +450,7 @@ jobs:
               Copy-Item -Path "C:\opscode\${{ inputs.product }}" -Destination $ExtractPath -Recurse -Force
             }
           } else {
-            # Extract the package based on its type (assuming .zip for non-Windows platforms)
+            # Extract the package based on its type (assuming .zip for other Windows platforms)
             Expand-Archive -Path "$env:TEMP\package_downloaded" -DestinationPath $ExtractPath -Force
             Write-Host "Package downloaded and extracted to $ExtractPath"
           }
