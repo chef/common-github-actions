@@ -431,18 +431,19 @@ jobs:
             Write-Host "Installing .msi package..."
 
             # Create install directory
-            New-Item -ItemType Directory -Force -Path ".\install"
+            New-Item -ItemType Directory -Force -Path ".\bin"
             
-            Start-Process msiexec.exe -ArgumentList "/i", ".\package.msi", "TARGETDIR=\".\\install\"", "/qn", "/norestart" -Wait
+            Start-Process msiexec.exe -ArgumentList "/i", ".\package.msi", 'TARGETDIR=.\bin', "/qn", "/norestart" -Wait
+            # Start-Process msiexec.exe -ArgumentList "/i", ".\package.msi", "TARGETDIR=\".\\install\"", "/qn", "/norestart" -Wait
             # Start-Process msiexec.exe -ArgumentList "/i", "$env:TEMP\package_downloaded", "/qn", "/norestart" -Wait
             
             # Echo where it was installed
             Write-Host "Package installed."
             Write-Host "Checking common installation paths:"
-            if (Test-Path ".\install") {
-              Write-Host "Found installation at: .\install"
-              Get-ChildItem -Path ".\install" -Recurse -Depth 3
-              # Copy-Item -Path ".\install" -Destination $ExtractPath -Recurse -Force
+            if (Test-Path ".\bin") {
+              Write-Host "Found installation at: .\bin"
+              Get-ChildItem -Path ".\bin" -Recurse -Depth 3
+              # Copy-Item -Path ".\bin" -Destination $ExtractPath -Recurse -Force
             }
             if (Test-Path "C:\opscode\chef") {
               Write-Host "Found installation at: C:\opscode\chef"
@@ -470,7 +471,7 @@ jobs:
       - name: Run Grype scan on extracted directory
         timeout-minutes: 15 # Sets a 15-minute timeout for this specific step
         run: |
-          $ExtractPath = ".\install"
+          $ExtractPath = ".\bin"
           # $ExtractPath = "$env:TEMP\extracted_packages"
           
           # run grype in runner
