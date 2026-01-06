@@ -53,7 +53,7 @@
 #
 # can add custom runner images per https://docs.github.com/en/actions/how-tos/manage-runners/larger-runners/use-custom-images on large self-hosted runners
 
-name: Dispatch Grype Scan
+name: CD Grype Scan for public Habitat Packages (bldr.habitat.sh)
 
 on:
   workflow_dispatch:
@@ -97,9 +97,9 @@ on:
     
 jobs:
   habitat-grype-scan-linux:
-    name: 'Grype scan of Habitat packages (ubuntu-latest)'
+    name: 'Grype scan (ubuntu-latest)'
     runs-on: ubuntu-latest
-    if: ${{ success() && inputs.publish-habitat-runner_os == 'ubuntu-latest' }}
+    if: ${{ success() && inputs.runner_os == 'ubuntu-latest' }}
     steps:
       - name: Install Chef Habitat
         run: |
@@ -173,9 +173,9 @@ jobs:
             path: ${{ env.OUTPUT_FILE }}
 
   habitat-grype-scan-macos:
-    name: 'Grype scan of Habitat packages (macos-latest)'
+    name: 'Grype scan (macos-latest)'
     runs-on: macos-15-intel
-    if: ${{ success() && inputs.publish-habitat-runner_os == 'macos-15-intel' }}
+    if: ${{ success() && inputs.runner_os == 'macos-15-intel' }}
     steps:
       - name: Install Chef Habitat
         run: |
@@ -249,9 +249,9 @@ jobs:
             path: ${{ env.OUTPUT_FILE }}
 
   habitat-grype-scan-windows:
-    name: 'Grype scan of Habitat packages (windows-latest)'
+    name: 'Grype scan (windows-latest)'
     runs-on: windows-latest
-    if: ${{ success() && inputs.publish-habitat-runner_os == 'windows-latest' }}
+    if: ${{ success() && inputs.runner_os == 'windows-latest' }}
     steps:
       - name: Install Chef Habitat (Windows)
         run: |
