@@ -1,4 +1,4 @@
-# CD pipeline to download packages from Commercial and/or Community downloads API and run Grype security scan
+# CD pipeline to download packages from Omnitruck or package-router downloads API and run Grype security scan
 
 # test inputs:
     # product: chef (or chef-workstation)
@@ -14,12 +14,13 @@
 #
 # performs the following actions:
 # 1. create the specified runner (Windows or ubuntu latest, later add specific OS versions to matrix)
-# 2. download grype
+# 2. download grype & syft tools
 # 3. download the specified product from https://chefdownload-community.chef.io/stable/<PRODUCT>/download?p=<PLATFORM>&pv=<PLATFORM_VERSION>&m=<ARCHITECTURE>&v=<PRODUCT_VERSION>
 #    OR https://chefdownload-commercial.chef.io/stable/chef/download?p=windows&pv=11&m=x86_64&v=25.12.1102&license_id=LICENSE_ID
 # 4. unzip or c:/tmp (Windows) or untar the downloaded package to to /tmp 
-# 5. grype dir:.
-# 6. upload the vulnerability scan artifact
+# 5. syft dir:.
+# 5b. grype dir:. --output json > FILENAME.json
+# 6. upload the SBOM & vulnerability scan artifact
 
 # secrets required (by step)
 # DOWNLOAD_LICENSE_TOKEN (provided in common-github-actions repo as organization level secret GA_DOWNLOAD_GRYPE_LICENSE_ID, 
@@ -98,7 +99,7 @@
 #
 # can add custom runner images per https://docs.github.com/en/actions/how-tos/manage-runners/larger-runners/use-custom-images on large self-hosted runners
 
-name: CD Grype Scan for Downloadable Packages (downloads.chef.io)
+name: CD Grype Scan for Downloadable Packages (Omnitruck or package-router)
 
 on:
   workflow_dispatch:
