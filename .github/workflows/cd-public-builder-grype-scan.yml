@@ -180,6 +180,7 @@ jobs:
       - name: Install Chef Habitat
         run: |
             curl https://raw.githubusercontent.com/habitat-sh/habitat/main/components/hab/install.sh | sudo bash
+            hab license accept
             hab version
 
       - name: Configure Habitat
@@ -189,8 +190,7 @@ jobs:
             
             # Accept the license
             echo "HAB_LICENSE=accept-no-persist" >> $GITHUB_ENV
-            hab license accept
-
+            
             # Create the necessary directory structure for license file
             # sudo chmod -R 777 /hab
             # sudo mkdir -p /hab/accepted-licenses/

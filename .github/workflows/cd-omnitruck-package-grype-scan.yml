@@ -1,88 +1,40 @@
 # CD pipeline to download packages from Omnitruck or package-router downloads API and run Grype security scan
 
+# the Omnitruck repo: https://github.com/chef/omnitruck
+# Omnitruck API docs: https://github.com/chef/chef-web-docs/blob/main/content/api_omnitruck.md
+
 # test inputs:
     # product: chef (or chef-workstation)
-    # product-version: 18.8.54 (for chef), 25.12.1102 (for chef-workstation)
-    # channel: stable   
+    # product-version: 18.9.3 (for chef), 25.12.1102 (for chef-workstation)
+    # channel: current   
     # architecture: x86_64
     # os-platform: run both ubuntu and windows
-    # os-platform-version: 24.04 or 2022 
-    # download-site: commercial
-    # license-id: (not specified, uses secret)
+    # os-platform-version: 24.04 or 2025 
+    # download-site: packages.chef.io or omnitruck.chef.io
+    # package-file-name: chef_18.9.3-1_amd64.deb or chef-client-18.9.3-1-x64.msi (leave blank to compute from other inputs)  package-file-name
 
 # called ad-hoc (dispatch) only
 #
 # performs the following actions:
 # 1. create the specified runner (Windows or ubuntu latest, later add specific OS versions to matrix)
 # 2. download grype & syft tools
-# 3. download the specified product from https://chefdownload-community.chef.io/stable/<PRODUCT>/download?p=<PLATFORM>&pv=<PLATFORM_VERSION>&m=<ARCHITECTURE>&v=<PRODUCT_VERSION>
-#    OR https://chefdownload-commercial.chef.io/stable/chef/download?p=windows&pv=11&m=x86_64&v=25.12.1102&license_id=LICENSE_ID
+# 3. download the specified product from 
+#   https://packages.chef.io/files/current/chef/18.9.3/windows/2025/chef-client-18.9.3-1-x64.msi
+#   https://packages.chef.io/files/current/chef/18.9.3/ubuntu/24.04/chef_18.9.3-1_amd64.deb
+#
+#   https://omnitruck.chef.io/current/chef/packages?v=18.9.3
+#   https://omnitruck.chef.io/<CHANNEL>/<PRODUCT>/download?p=$PLATFORM&pv=$PLATFORM_VERSION&m=$MACHINE_ARCH&v=latest
+#   https://omnitruck.chef.io/<CHANNEL>/<PRODUCT>/metadata?p=$PLATFORM&pv=$PLATFORM_VERSION&m=$MACHINE_ARCH&v=latest
+
+#   https://omnitruck.chef.io/current/chef/metadata?p=windows&pv=2025&m=x86_64&v=18.9.3
+#   > Omnitruck just gives pointer to package-router https://packages.chef.io/files/current/chef/18.9.3/windows/2025/chef-client-18.9.3-1-x64.msi
+
 # 4. unzip or c:/tmp (Windows) or untar the downloaded package to to /tmp 
 # 5. syft dir:.
 # 5b. grype dir:. --output json > FILENAME.json
 # 6. upload the SBOM & vulnerability scan artifact
 
-# secrets required (by step)
-# DOWNLOAD_LICENSE_TOKEN (provided in common-github-actions repo as organization level secret GA_DOWNLOAD_GRYPE_LICENSE_ID, 
-#    but can be overridden on inputs)
-
-# product versions can be listed with https://chefdownload-commercial.chef.io/<CHANNEL>/<PRODUCT>/versions/all?license_id=<LICENSE_ID>, or 
-# get latest with https://chefdownload-commercial.chef.io/<CHANNEL>/<PRODUCT>/versions/latest?license_id=<LICENSE_ID> (default)
-
-# platforms are hardcoded as a choice list but not tied to platform-version, so user must ensure they are compatible
-# see samples at https://chefdownload-commercial.chef.io/stable/chef/packages?license_id=LICENSE_ID
-
-# chef-client platform versions (broadest subset?) with architectures are
-# {
-#   "amazon": {
-#     "2": ["aarch64", "x86_64"],
-#     "2023": [ "aarch64", "x86_64"]
-#   },
-#   "debian": {
-#     "10": [ "x86_64" ],
-#     "11": [ "x86_64" ],
-#     "9": [ "x86_64" ]
-#   },
-#   "el": {
-#     "7": [ "aarch64", "ppc64", "ppc64le", "s390x", "x86_64"],
-#     "8": [ "aarch64", "s390x", "x86_64"], 
-#     "9": [ "aarch64", "x86_64"]
-#   },
-#   "freebsd": {
-#     "13": [ "x86_64" ]
-#   },
-#   "mac_os_x": {
-#     "12": [ "aarch64", "x86_64" ],
-#     "13": [ "aarch64" ],
-#     "14": [ "aarch64" ]
-#   },
-#   "rocky": {
-#     "8": [ "x86_64" ],
-#     "9": [ "x86_64" ]
-#   },
-#   "sles": {
-#     "12": [ "s390x", "x86_64" ],
-#     "15": [ "aarch64", "s390x", "x86_64" ]
-#   },
-#   "solaris2": {
-#     "5.11": [ "i386", "sparc"]
-#   },
-#   "ubuntu": {
-#     "16.04": [ "x86_64" ],
-#     "18.04": [ "aarch64", "x86_64" ], 
-#     "20.04": [ "aarch64", "x86_64" ], 
-#     "22.04": [ "aarch64", "x86_64" ],
-#     "24.04": [ "aarch64", "x86_64" ]
-#   },
-#   "windows": {
-#     "10": [ "x86_64" ],
-#     "11": [ "x86_64" ],
-#     "2016": [ "x86_64" ],
-#     "2019": [ "x86_64" ],
-#     "2022": [ "x86_64" ], 
-#     "2025": [ "x86_64" ]
-#   }
-# }
+# no secrets are required
 
 # GitHub runners available: per https://github.com/actions/runner-images?tab=readme-ov-file#available-images
 # ubuntu-latest or ubuntu-24.04
@@ -105,47 +57,61 @@ on:
   workflow_dispatch:
     inputs:
       download-site:
-        description: 'Download site to use (commercial or community)'
+        description: 'Download site to use (packages.chef.io or omnitruck.chef.io)'
         required: false
         type: choice
         options:
-          - community
-          - commercial
-        default: 'commercial'
-        # https://chefdownload-commercial.chef.io/ (default)
-        # https://chefdownload-community.chef.io/ 
-      # GA_DOWNLOAD_GRYPE_LICENSE_ID
-      license-id:
-        description: 'License ID for commercial downloads'
-        required: false
-        type: string
-      product:
+          - packages.chef.io
+          - omnitruck.chef.io
+        default: 'packages.chef.io'
+    #   license-id: (not required for either packages or omnitruck)
+    #     description: 'License ID for commercial downloads'
+    #     required: false
+    #     type: string
+      product:  # from https://omnitruck.chef.io/products
         description: 'Specific product to download (e.g., chef, chef-infra-server, chef-automate, habitat, inspec, chef-workstation)'
         required: true
         type: choice
         options:
-          - automate
-          - chef 
-          - chef-backend
-          - chef-server
-          - chef-workstation
-          - habitat
-          - inspec
-          - manage
-          - supermarket
-          - chef-360
+            - analytics
+            - angry-omnibus-toolchain
+            - angrychef
+            - automate
+            - chef
+            - chef-foundation
+            - chef-universal
+            - chef-backend
+            - chef-server
+            - chef-server-ha-provisioning
+            - chef-workstation
+            - chefdk
+            - compliance
+            - delivery
+            - ha
+            - harmony
+            - habitat # only on packages.chef.io, not omnitruck
+            - inspec
+            - mac-bootstrapper
+            - manage
+            - marketplace
+            - omnibus-toolchain
+            - omnibus-gcc
+            - private-chef
+            - push-jobs-client
+            - push-jobs-server
+            - reporting
+            - supermarket
+            - sync
+            # - no chef-360 (only on commercial downloads)
         default: 'chef'
       product-version:
         description: 'Product version to download (e.g., 25.12.1102 for chef workstation, 4.0.0 for automate, etc.)'
         required: false
         type: string
       channel:
-        description: 'Release channel to use (stable or current)'
+        description: 'Release channel to use (stable, current, base-2025, etc.)'
         required: false
-        type: choice
-        options:
-          - stable
-          - current
+        type: string
         default: 'stable'
       architecture:
         description: 'Hardware architecture'
@@ -170,13 +136,13 @@ on:
         options:
           - aix
           - amazon
-          - darwin
+          # - darwin (not on omnitruck/platforms)
           - debian
           - el
           - freebsd
           - ios_xr
-          - linux
-          - linux-kernel2
+          # - linux
+          # - linux-kernel2
           - mac_os_x
           - nexus
           - rocky
@@ -187,18 +153,13 @@ on:
           - windows
         default: 'ubuntu'
       os-platform-version:
-        description: 'OS platform version'  
+        description: 'OS platform version (e.g., 24.04 for ubuntu, 2022 for windows, etc.)'  
         required: false
-        type: string  
-    #   test-runner:
-    #     description: 'Test runner OS (windows-latest, ubuntu-latest, or both)'
-    #     required: false
-    #     type: choice
-    #     options:
-    #       - ubuntu-latest
-    #       - windows-latest
-    #       - both
-    #     default: 'ubuntu-latest'
+        type: string 
+      package-file-name:
+        description: 'Optional specific package filename to download (overrides computed string for package-router; ex: chef_18.9.3-1_amd64.deb)'
+        required: false
+        type: string 
     
 # environment variables for the whole workflow (use jobs.<job_id>.env inside a specific job or .steps for a specific step); GITHUB_ENV exists only in single runner (job) context
 env:
@@ -228,10 +189,12 @@ jobs:
           echo "  Architecture: ${{ inputs.architecture }}"
           echo "  OS Platform: ${{ inputs.os-platform }}"
           echo "  OS Platform Version: ${{ inputs.os-platform-version }}"
-          echo "  Test runner: ${{ inputs.test-runner }}"         
+          if [ -n "${{ inputs.package-file-name }}" ]; then
+            echo "  Package File Name: ${{ inputs.package-file-name }}"
+          fi
           echo "*************************************************************"
- 
-  grpye-scan-other-platyforms:
+
+  grype-scan-other-platforms:
     name: 'Other platforms grype scan of customer-downloadable packages'
     runs-on: ubuntu-latest  # TODO: make this a versioned OS strategy later
     if: ${{ success() && inputs.os-platform != 'ubuntu' && inputs.os-platform != 'windows' }}
@@ -255,22 +218,13 @@ jobs:
           echo "FILE_PREFIX=${FILE_PREFIX}" >> $GITHUB_ENV
           echo "Generated FILE_PREFIX: ${FILE_PREFIX}"
 
-          DOWNLOAD_URL="https://chefdownload-commercial.chef.io"
-          if [ ${{ inputs.download-site }} = "community" ]; then
-            DOWNLOAD_URL="https://chefdownload-community.chef.io"
+          DOWNLOAD_URL="https://packages.chef.io"
+          if [ "${{ inputs.download-site }}" = "omnitruck.chef.io" ]; then
+            DOWNLOAD_URL="https://omnitruck.chef.io"
           fi
+
           echo "DOWNLOAD_URL=${DOWNLOAD_URL}" >> $GITHUB_ENV
           echo "DOWNLOAD_URL is set to ${DOWNLOAD_URL}"
-
-          # get the license_id from input or secret
-          LICENSE_ID="${{ inputs.license-id }}"   
-          if [ -z "${LICENSE_ID}" ]; then
-            LICENSE_ID="${{ secrets.GA_DOWNLOAD_GRYPE_LICENSE_ID }}"
-            echo "Using license ID from repository secret"
-          else
-            echo "Using license ID from workflow input"
-          fi
-          echo "LICENSE_ID=${LICENSE_ID}" >> $GITHUB_ENV
           
       - name: Install Grype (ubuntu-latest)
         continue-on-error: true
@@ -279,20 +233,35 @@ jobs:
 
       - name: Download package under test (ubuntu-latest)
         run: |
-          # Example download URL construction
-          DOWNLOAD_URL="${{ env.DOWNLOAD_URL }}/${{ inputs.channel }}/${{ inputs.product }}/download?p=${{ inputs.os-platform }}&pv=${{ inputs.os-platform-version }}&m=${{ inputs.architecture }}"
-          if [ -n "${{ inputs.product-version }}" ]; then
-            DOWNLOAD_URL="${DOWNLOAD_URL}&v=${{ inputs.product-version }}"
+          # Construct download URL based on download site
+          if [ "${{ inputs.download-site }}" = "packages.chef.io" ]; then
+            # packages.chef.io format: /files/<CHANNEL>/<PRODUCT>/<VERSION>/<PLATFORM>/<PLATFORM_VERSION>/<PACKAGE_FILE>
+            #  https://packages.chef.io/files/current/chef/18.9.3/windows/2025/chef-client-18.9.3-1-x64.msi
+            #  https://packages.chef.io/files/current/chef/18.9.3/ubuntu/24.04/chef_18.9.3-1_amd64.deb
+
+            if [ -n "${{ inputs.package-file-name }}" ]; then
+              PACKAGE_FILE="${{ inputs.package-file-name }}"
+            else
+              # Compute package filename for ubuntu (e.g., chef_18.9.3-1_amd64.deb)
+              PACKAGE_FILE="${{ inputs.product }}_${{ inputs.product-version }}-1_amd64.deb"
+            fi
+            DOWNLOAD_URL="${{ env.DOWNLOAD_URL }}/files/${{ inputs.channel }}/${{ inputs.product }}/${{ inputs.product-version }}/${{ inputs.os-platform }}/${{ inputs.os-platform-version }}/${PACKAGE_FILE}"
+          else
+            # omnitruck.chef.io format: /<CHANNEL>/<PRODUCT>/download?p=<PLATFORM>&pv=<PLATFORM_VERSION>&m=<ARCH>&v=<VERSION>
+            #   https://omnitruck.chef.io/<CHANNEL>/<PRODUCT>/metadata?p=$PLATFORM&pv=$PLATFORM_VERSION&m=$MACHINE_ARCH&v=latest
+            #   https://omnitruck.chef.io/current/chef/metadata?p=windows&pv=2025&m=x86_64&v=18.9.3
+            #   > Omnitruck just gives pointer to package-router https://packages.chef.io/files/current/chef/18.9.3/windows/2025/chef-client-18.9.3-1-x64.msi
+            #   > Omnitruck download? endpoint constructs this for you, so no need to call metadata, parse results, and then call package-router...
+            #   https://omnitruck.chef.io/current/chef/packages?v=18.9.3 -->
+            #   https://omnitruck.chef.io/current/chef/download?p=windows&pv=2025&m=x86_64&v=latest
+            #   https://omnitruck.chef.io/<CHANNEL>/<PRODUCT>/download?p=$PLATFORM&pv=$PLATFORM_VERSION&m=$MACHINE_ARCH&v=latest
+            
+            DOWNLOAD_URL="${{ env.DOWNLOAD_URL }}/${{ inputs.channel }}/${{ inputs.product }}/download?p=${{ inputs.os-platform }}&pv=${{ inputs.os-platform-version }}&m=${{ inputs.architecture }}"
+            if [ -n "${{ inputs.product-version }}" ]; then
+              DOWNLOAD_URL="${DOWNLOAD_URL}&v=${{ inputs.product-version }}"
+            fi
           fi
           echo "Downloading package from: ${DOWNLOAD_URL}"
-          if [ "${{ inputs.download-site }}" = "commercial" ]; then
-              LICENSE_ID="${{ env.LICENSE_ID }}"
-              if [ -n "${LICENSE_ID}" ]; then
-                DOWNLOAD_URL="${DOWNLOAD_URL}&license_id=${LICENSE_ID}"
-                echo "Using license ID in download URL"
-              fi
-          fi
-          echo "Full DOWNLOAD_URL: ${DOWNLOAD_URL}"
           echo "DOWNLOAD_URL=${DOWNLOAD_URL}" >> $GITHUB_ENV
 
           # Download the package
@@ -359,22 +328,13 @@ jobs:
           echo "FILE_PREFIX=$FilePrefix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "Generated FILE_PREFIX: $FilePrefix"
 
-          $DownloadUrl = "https://chefdownload-commercial.chef.io"
-          if ("${{ inputs.download-site }}" -eq "community") {
-            $DownloadUrl = "https://chefdownload-community.chef.io"
+          $DownloadUrl = "https://packages.chef.io"
+          if ("${{ inputs.download-site }}" -eq "omnitruck.chef.io") {
+            $DownloadUrl = "https://omnitruck.chef.io"
           }
+            
           echo "DOWNLOAD_URL=$DownloadUrl" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "DOWNLOAD_URL is set to $DownloadUrl"
-
-          # get the license_id from input or secret
-          $LicenseId = "${{ inputs.license-id }}"
-          if ([string]::IsNullOrEmpty($LicenseId)) {
-            $LicenseId = "${{ secrets.GA_DOWNLOAD_GRYPE_LICENSE_ID }}"
-            Write-Host "Using license ID from repository secret"
-          } else {
-            Write-Host "Using license ID from workflow input"
-          }
-          echo "LICENSE_ID=$LicenseId" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Install Grype (windows-latest)
         continue-on-error: true
@@ -400,32 +360,30 @@ jobs:
 
       - name: Download package under test (windows-latest)
         run: |
-          # Example download URL construction
-          $DownloadUrl = "${{ env.DOWNLOAD_URL }}/${{ inputs.channel }}/${{ inputs.product }}/download?p=${{ inputs.os-platform }}&pv=${{ inputs.os-platform-version }}&m=${{ inputs.architecture }}"
-          if ("${{ inputs.product-version }}" -ne "") {
-            $DownloadUrl = "${DownloadUrl}&v=${{ inputs.product-version }}"
+          # Construct download URL based on download site
+          if ("${{ inputs.download-site }}" -eq "packages.chef.io") {
+            if ("${{ inputs.package-file-name }}" -ne "") {
+              $PackageFile = "${{ inputs.package-file-name }}"
+            } else {
+              # Compute package filename for windows (e.g., chef-client-18.9.3-1-x64.msi)
+              $PackageFile = "${{ inputs.product }}-client-${{ inputs.product-version }}-1-x64.msi"
+            }
+            $DownloadUrl = "${{ env.DOWNLOAD_URL }}/files/${{ inputs.channel }}/${{ inputs.product }}/${{ inputs.product-version }}/${{ inputs.os-platform }}/${{ inputs.os-platform-version }}/${PackageFile}"
+          } else {
+            $DownloadUrl = "${{ env.DOWNLOAD_URL }}/${{ inputs.channel }}/${{ inputs.product }}/download?p=${{ inputs.os-platform }}&pv=${{ inputs.os-platform-version }}&m=${{ inputs.architecture }}"
+            if ("${{ inputs.product-version }}" -ne "") {
+              $DownloadUrl = "${DownloadUrl}&v=${{ inputs.product-version }}"
+            }
           }
           Write-Host "Downloading package from: ${DownloadUrl}"
-          if ("${{ inputs.download-site }}" -eq "commercial") {
-              $LicenseId = "${{ env.LICENSE_ID }}"
-              if (-not [string]::IsNullOrEmpty($LicenseId)) {
-                $DownloadUrl = "${DownloadUrl}&license_id=${LicenseId}"
-                Write-Host "Using license ID in download URL"
-              }
-          }
-  
+          echo "DOWNLOAD_URL=$DownloadUrl" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
           # Download the package
-          # DOWN TO HERE!!!!
           Invoke-WebRequest -Uri $DownloadUrl -OutFile ".\package.msi"
-          # "$env:TEMP\package_downloaded"
           
           # List contents of current directory
           Write-Host "Listing contents of current directory:"
           Get-ChildItem -Path . -Force
-          
-          # Handle package extraction/installation based on platform
-          #   $ExtractPath = "$env:TEMP\extracted_packages"
-          #   New-Item -ItemType Directory -Force -Path $ExtractPath
           
           if ("${{ inputs.os-platform }}" -eq "windows") {
             # Windows downloads are .msi packages - install them
@@ -435,8 +393,6 @@ jobs:
             New-Item -ItemType Directory -Force -Path ".\bin"
             
             Start-Process msiexec.exe -ArgumentList "/i", ".\package.msi", 'TARGETDIR=.\bin', "/qn", "/norestart" -Wait
-            # Start-Process msiexec.exe -ArgumentList "/i", ".\package.msi", "TARGETDIR=\".\\install\"", "/qn", "/norestart" -Wait
-            # Start-Process msiexec.exe -ArgumentList "/i", "$env:TEMP\package_downloaded", "/qn", "/norestart" -Wait
             
             # Echo where it was installed
             Write-Host "Package installed."

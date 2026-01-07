@@ -139,12 +139,9 @@ on:
         required: false
         type: string
       channel:
-        description: 'Release channel to use (stable or current)'
+        description: 'Release channel to use (stable, current, base-2025, etc.)'
         required: false
-        type: choice
-        options:
-          - stable
-          - current
+        type: string
         default: 'stable'
       architecture:
         description: 'Hardware architecture'
@@ -189,15 +186,6 @@ on:
         description: 'OS platform version'  
         required: false
         type: string  
-    #   test-runner:
-    #     description: 'Test runner OS (windows-latest, ubuntu-latest, or both)'
-    #     required: false
-    #     type: choice
-    #     options:
-    #       - ubuntu-latest
-    #       - windows-latest
-    #       - both
-    #     default: 'ubuntu-latest'
     
 # environment variables for the whole workflow (use jobs.<job_id>.env inside a specific job or .steps for a specific step); GITHUB_ENV exists only in single runner (job) context
 env:
@@ -230,7 +218,7 @@ jobs:
           echo "  Test runner: ${{ inputs.test-runner }}"         
           echo "*************************************************************"
  
-  grpye-scan-other-platyforms:
+  grype-scan-other-platforms:
     name: 'Other platforms grype scan of customer-downloadable packages'
     runs-on: ubuntu-latest  # TODO: make this a versioned OS strategy later
     if: ${{ success() && inputs.os-platform != 'ubuntu' && inputs.os-platform != 'windows' }}
