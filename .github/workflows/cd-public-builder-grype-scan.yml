@@ -53,7 +53,7 @@
 #
 # can add custom runner images per https://docs.github.com/en/actions/how-tos/manage-runners/larger-runners/use-custom-images on large self-hosted runners
 
-name: CD Grype Scan for public Habitat Packages (bldr.habitat.sh)
+name: CD grype for public Habitat Packages (bldr.habitat.sh)
 
 on:
   workflow_dispatch:
@@ -190,6 +190,7 @@ jobs:
             echo "HAB_LICENSE=accept-no-persist" >> $GITHUB_ENV
             
             # Create the necessary directory structure for license file
+            sudo chmod -R 777 /hab
             sudo mkdir -p /hab/accepted-licenses/
             sudo touch /hab/accepted-licenses/habitat
 
@@ -324,6 +325,7 @@ jobs:
         run: |
             # Find the installed package path. 'hab pkg path' returns the path to the latest installed version.
             $PkgPath = hab pkg path ${{ inputs.hab_package }}
+            Write-Host "Package Path: $PkgPath"
             # run grype in runner
             grype dir:$PkgPath --name ${{ inputs.hab_package }}
             # run grype to output to file (which is uploaded to the job as an artifact)

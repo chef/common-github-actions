@@ -98,7 +98,7 @@
 #
 # can add custom runner images per https://docs.github.com/en/actions/how-tos/manage-runners/larger-runners/use-custom-images on large self-hosted runners
 
-name: CD Grype Scan for Downloadable Packages (downloads.chef.io)
+name: CD grype for downloads.chef.io
 
 on:
   workflow_dispatch:

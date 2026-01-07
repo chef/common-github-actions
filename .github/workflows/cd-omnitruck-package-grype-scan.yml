@@ -99,7 +99,7 @@
 #
 # can add custom runner images per https://docs.github.com/en/actions/how-tos/manage-runners/larger-runners/use-custom-images on large self-hosted runners
 
-name: CD Grype Scan for Downloadable Packages (Omnitruck or package-router)
+name: CD grype for Omnitruck or package-router
 
 on:
   workflow_dispatch:
