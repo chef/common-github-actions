@@ -303,6 +303,8 @@ jobs:
               sudo cp -r /opt/chef /tmp/extracted_packages/ 2>/dev/null || true
             elif [ "${{ inputs.product }}" = "chef-workstation" ]; then
               sudo cp -r /opt/chef-workstation /tmp/extracted_packages/ 2>/dev/null || true
+            elif [ "${{ inputs.product }}" = "chef-server" ]; then
+              sudo cp -r /opt/opscode /tmp/extracted_packages/ 2>/dev/null || true
             else
               sudo cp -r /opt/${{ inputs.product }} /tmp/extracted_packages/ 2>/dev/null || true
             fi
