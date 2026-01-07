@@ -180,19 +180,21 @@ jobs:
       - name: Install Chef Habitat
         run: |
             curl https://raw.githubusercontent.com/habitat-sh/habitat/main/components/hab/install.sh | sudo bash
+            hab version
 
       - name: Configure Habitat
         run: |
             # Add Habitat to PATH (for current session and future steps if needed, though install.sh usually handles symlinks)
-            echo "/hab/bin" >> $GITHUB_PATH
+            # echo "/hab/bin" >> $GITHUB_PATH
             
             # Accept the license
             echo "HAB_LICENSE=accept-no-persist" >> $GITHUB_ENV
-            
+            hab license accept
+
             # Create the necessary directory structure for license file
-            sudo chmod -R 777 /hab
-            sudo mkdir -p /hab/accepted-licenses/
-            sudo touch /hab/accepted-licenses/habitat
+            # sudo chmod -R 777 /hab
+            # sudo mkdir -p /hab/accepted-licenses/
+            # sudo touch /hab/accepted-licenses/habitat
 
       - name: Install Grype
         continue-on-error: true
