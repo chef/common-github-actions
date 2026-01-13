@@ -1,0 +1,453 @@
+# CD pipeline to download packages from Omnitruck or package-router downloads API and run Grype security scan
+
+# the Omnitruck repo: https://github.com/chef/omnitruck
+# Omnitruck API docs: https://github.com/chef/chef-web-docs/blob/main/content/api_omnitruck.md
+
+# test inputs:
+    # product: chef (or chef-workstation)
+    # product-version: 18.9.3 (for chef), 25.12.1102 (for chef-workstation)
+    # channel: current   
+    # architecture: x86_64
+    # os-platform: run both ubuntu and windows
+    # os-platform-version: 24.04 or 2025 
+    # download-site: packages.chef.io or omnitruck.chef.io
+    # package-file-name: chef_18.9.3-1_amd64.deb or chef-client-18.9.3-1-x64.msi (leave blank to compute from other inputs)  package-file-name
+
+# called ad-hoc (dispatch) only
+#
+# performs the following actions:
+# 1. create the specified runner (Windows or ubuntu latest, later add specific OS versions to matrix)
+# 2. download grype & syft tools
+# 3. download the specified product from 
+#   https://packages.chef.io/files/current/chef/18.9.3/windows/2025/chef-client-18.9.3-1-x64.msi
+#   https://packages.chef.io/files/current/chef/18.9.3/ubuntu/24.04/chef_18.9.3-1_amd64.deb
+#
+#   https://omnitruck.chef.io/current/chef/packages?v=18.9.3
+#   https://omnitruck.chef.io/<CHANNEL>/<PRODUCT>/download?p=$PLATFORM&pv=$PLATFORM_VERSION&m=$MACHINE_ARCH&v=latest
+#   https://omnitruck.chef.io/<CHANNEL>/<PRODUCT>/metadata?p=$PLATFORM&pv=$PLATFORM_VERSION&m=$MACHINE_ARCH&v=latest
+
+#   https://omnitruck.chef.io/current/chef/metadata?p=windows&pv=2025&m=x86_64&v=18.9.3
+#   > Omnitruck just gives pointer to package-router https://packages.chef.io/files/current/chef/18.9.3/windows/2025/chef-client-18.9.3-1-x64.msi
+
+# 4. unzip or c:/tmp (Windows) or untar the downloaded package to to /tmp 
+# 5. syft dir:.
+# 5b. grype dir:. --output json > FILENAME.json
+# 6. upload the SBOM & vulnerability scan artifact
+
+# no secrets are required
+
+# GitHub runners available: per https://github.com/actions/runner-images?tab=readme-ov-file#available-images
+# ubuntu-latest or ubuntu-24.04
+# ubuntu-22.04
+# ubuntu-slim
+# macos-26 (ARM64)
+# macos-15-intel
+# macOS-15-arm64
+# macos-14-large
+# macOS-14-arm64
+# windows-2025 or windows-latest
+# windows-2022
+# windows-2019 (deprecated)
+#
+# can add custom runner images per https://docs.github.com/en/actions/how-tos/manage-runners/larger-runners/use-custom-images on large self-hosted runners
+
+name: CD grype for Omnitruck or package-router
+
+on:
+  workflow_dispatch:
+    inputs:
+      download-site:
+        description: 'Download site to use (packages.chef.io or omnitruck.chef.io)'
+        required: false
+        type: choice
+        options:
+          - packages.chef.io
+          - omnitruck.chef.io
+        default: 'packages.chef.io'
+    #   license-id: (not required for either packages or omnitruck)
+    #     description: 'License ID for commercial downloads'
+    #     required: false
+    #     type: string
+      product:  # from https://omnitruck.chef.io/products
+        description: 'Specific product to download (e.g., chef, chef-infra-server, chef-automate, habitat, inspec, chef-workstation)'
+        required: true
+        type: choice
+        options:
+            - analytics
+            - angry-omnibus-toolchain
+            - angrychef
+            - automate
+            - chef
+            - chef-foundation
+            - chef-universal
+            - chef-backend
+            - chef-server
+            - chef-server-ha-provisioning
+            - chef-workstation
+            - chefdk
+            - compliance
+            - delivery
+            - ha
+            - harmony
+            - habitat # only on packages.chef.io, not omnitruck
+            - inspec
+            - mac-bootstrapper
+            - manage
+            - marketplace
+            - omnibus-toolchain
+            - omnibus-gcc
+            - private-chef
+            - push-jobs-client
+            - push-jobs-server
+            - reporting
+            - supermarket
+            - sync
+            # - no chef-360 (only on commercial downloads)
+        default: 'chef'
+      product-version:
+        description: 'Product version to download (e.g., 25.12.1102 for chef workstation, 4.0.0 for automate, etc.)'
+        required: false
+        type: string
+      channel:
+        description: 'Release channel to use (stable, current, base-2025, etc.)'
+        required: false
+        type: string
+        default: 'stable'
+      architecture:
+        description: 'Hardware architecture'
+        required: false
+        type: choice
+        options:
+          - aarch64
+          - armv7l
+          - i386
+          - powerpc
+          - ppc64
+          - ppc64le
+          - s390x
+          - sparc
+          - universal
+          - x86_64
+        default: 'x86_64'
+      os-platform:
+        description: 'OS platform'
+        required: false
+        type: choice
+        options:
+          - aix
+          - amazon
+          # - darwin (not on omnitruck/platforms)
+          - debian
+          - el
+          - freebsd
+          - ios_xr
+          # - linux
+          # - linux-kernel2
+          - mac_os_x
+          - nexus
+          - rocky
+          - sles
+          - solaris2
+          - suse
+          - ubuntu
+          - windows
+        default: 'ubuntu'
+      os-platform-version:
+        description: 'OS platform version (e.g., 24.04 for ubuntu, 2022 for windows, etc.)'  
+        required: false
+        type: string 
+      package-file-name:
+        description: 'Optional specific package filename to download (overrides computed string for package-router; ex: chef_18.9.3-1_amd64.deb)'
+        required: false
+        type: string 
+    
+# environment variables for the whole workflow (use jobs.<job_id>.env inside a specific job or .steps for a specific step); GITHUB_ENV exists only in single runner (job) context
+env:
+  REPO_VISIBILITY: ${{ github.event.repository.visibility }}
+  REPO_NAME: ${{ github.event.repository.name }}
+  PIPELINE_VERSION: '1.0.0'  # version of this CD pipeline
+#   PRIMARY_APPLICATION: 'default'   # Custom repo property [primaryApplication]: chef360, automate, infra-server, habitat, supermarket, licensing, downloads, chef-client, inspec, chef-workstation (or derivatives like habitat-builder)
+#   GA_BUILD_LANGUAGE: ${{ inputs.language}}  # Custom repo property [GABuildLanguage]: go, ruby, erlang, rust (replaces Language input)
+#   GA_BUILD_PROFILE: ${{ inputs.build-profile }}   # Custom repo property [GABuildProfile]: TBD
+#   # APP_VERSION: $(cat VERSION) 
+  FILE_PREFIX: $(echo "${{ github.repository }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
+  DEFAULT_FILE_EXTENSION: ".json"
+  DEFAULT_SEPARATOR: "-"
+
+jobs:
+  echo-parameters:
+    name: 'echo action parameters'
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "CD Download Customer Packages and Grype Scan Pipeline version $PIPELINE_VERSION"
+          echo "** INPUTS ***********************************************"
+          echo "  Download site: ${{ inputs.download-site }}"
+          echo "  Product: ${{ inputs.product }}"
+          echo "  Product version: ${{ inputs.product-version }}"
+          echo "  Channel: ${{ inputs.channel }}"
+          echo "  Architecture: ${{ inputs.architecture }}"
+          echo "  OS Platform: ${{ inputs.os-platform }}"
+          echo "  OS Platform Version: ${{ inputs.os-platform-version }}"
+          if [ -n "${{ inputs.package-file-name }}" ]; then
+            echo "  Package File Name: ${{ inputs.package-file-name }}"
+          fi
+          echo "*************************************************************"
+
+  grype-scan-other-platforms:
+    name: 'Other platforms grype scan of customer-downloadable packages'
+    runs-on: ubuntu-latest  # TODO: make this a versioned OS strategy later
+    if: ${{ success() && inputs.os-platform != 'ubuntu' && inputs.os-platform != 'windows' }}
+    steps:
+      - name: Skip grype scan for unsupported platform
+        run: |
+          echo "Grype scan is currently only implemented for ubuntu and windows platforms."
+          echo "Skipping grype scan for platform: ${{ inputs.os-platform }}"
+      
+      - name: Exit workflow
+        run: exit 1
+    
+  grype-scan-linux:
+    name: 'Linux grype scan of customer-downloadable packages'
+    runs-on: ubuntu-latest  # TODO: make this a versioned OS strategy later - combine ${{ inputs.os-platform }} and os-platform version into runner selection?
+    if: ${{ success() && inputs.os-platform == 'ubuntu' }}
+    steps:
+      - name: Generate filename prefix, download URL and license-id as environment variables for later steps
+        run: |
+          FILE_PREFIX=$(echo "grype${{ env.DEFAULT_SEPARATOR }}${{ inputs.product }}${{ env.DEFAULT_SEPARATOR }}${{ inputs.product-version }}${{ env.DEFAULT_SEPARATOR }}ubuntu" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
+          echo "FILE_PREFIX=${FILE_PREFIX}" >> $GITHUB_ENV
+          echo "Generated FILE_PREFIX: ${FILE_PREFIX}"
+
+          DOWNLOAD_URL="https://packages.chef.io"
+          if [ "${{ inputs.download-site }}" = "omnitruck.chef.io" ]; then
+            DOWNLOAD_URL="https://omnitruck.chef.io"
+          fi
+
+          echo "DOWNLOAD_URL=${DOWNLOAD_URL}" >> $GITHUB_ENV
+          echo "DOWNLOAD_URL is set to ${DOWNLOAD_URL}"
+          
+      - name: Install Grype (ubuntu-latest)
+        continue-on-error: true
+        run: |
+          curl -sSfL https://get.anchore.io/grype | sh -s -- -b /usr/local/bin
+
+      - name: Download package under test (ubuntu-latest)
+        run: |
+          # Construct download URL based on download site
+          if [ "${{ inputs.download-site }}" = "packages.chef.io" ]; then
+            # packages.chef.io format: /files/<CHANNEL>/<PRODUCT>/<VERSION>/<PLATFORM>/<PLATFORM_VERSION>/<PACKAGE_FILE>
+            #  https://packages.chef.io/files/current/chef/18.9.3/windows/2025/chef-client-18.9.3-1-x64.msi
+            #  https://packages.chef.io/files/current/chef/18.9.3/ubuntu/24.04/chef_18.9.3-1_amd64.deb
+
+            if [ -n "${{ inputs.package-file-name }}" ]; then
+              PACKAGE_FILE="${{ inputs.package-file-name }}"
+            else
+              # Compute package filename for ubuntu (e.g., chef_18.9.3-1_amd64.deb)
+              PACKAGE_FILE="${{ inputs.product }}_${{ inputs.product-version }}-1_amd64.deb"
+            fi
+            DOWNLOAD_URL="${{ env.DOWNLOAD_URL }}/files/${{ inputs.channel }}/${{ inputs.product }}/${{ inputs.product-version }}/${{ inputs.os-platform }}/${{ inputs.os-platform-version }}/${PACKAGE_FILE}"
+          else
+            # omnitruck.chef.io format: /<CHANNEL>/<PRODUCT>/download?p=<PLATFORM>&pv=<PLATFORM_VERSION>&m=<ARCH>&v=<VERSION>
+            #   https://omnitruck.chef.io/<CHANNEL>/<PRODUCT>/metadata?p=$PLATFORM&pv=$PLATFORM_VERSION&m=$MACHINE_ARCH&v=latest
+            #   https://omnitruck.chef.io/current/chef/metadata?p=windows&pv=2025&m=x86_64&v=18.9.3
+            #   > Omnitruck just gives pointer to package-router https://packages.chef.io/files/current/chef/18.9.3/windows/2025/chef-client-18.9.3-1-x64.msi
+            #   > Omnitruck download? endpoint constructs this for you, so no need to call metadata, parse results, and then call package-router...
+            #   https://omnitruck.chef.io/current/chef/packages?v=18.9.3 -->
+            #   https://omnitruck.chef.io/current/chef/download?p=windows&pv=2025&m=x86_64&v=latest
+            #   https://omnitruck.chef.io/<CHANNEL>/<PRODUCT>/download?p=$PLATFORM&pv=$PLATFORM_VERSION&m=$MACHINE_ARCH&v=latest
+            
+            DOWNLOAD_URL="${{ env.DOWNLOAD_URL }}/${{ inputs.channel }}/${{ inputs.product }}/download?p=${{ inputs.os-platform }}&pv=${{ inputs.os-platform-version }}&m=${{ inputs.architecture }}"
+            if [ -n "${{ inputs.product-version }}" ]; then
+              DOWNLOAD_URL="${DOWNLOAD_URL}&v=${{ inputs.product-version }}"
+            fi
+          fi
+          echo "Downloading package from: ${DOWNLOAD_URL}"
+          echo "DOWNLOAD_URL=${DOWNLOAD_URL}" >> $GITHUB_ENV
+
+          # Download the package
+          curl -L -o /tmp/package_downloaded "${DOWNLOAD_URL}"
+          
+          # Handle package extraction based on platform
+          if [ "${{ inputs.os-platform }}" = "ubuntu" ]; then
+            # Ubuntu downloads are .deb packages - install them
+            echo "Installing .deb package..."
+            sudo dpkg -i /tmp/package_downloaded
+            
+            # Echo where it was installed
+            echo "Package installed. Listing installed files:"
+            dpkg -L ${{ inputs.product }} || dpkg -L $(dpkg -I /tmp/package_downloaded | grep Package: | awk '{print $2}')
+            
+            # Set extraction path for grype scan
+            mkdir -p /tmp/extracted_packages
+            # Copy installed files to extraction directory for scanning
+            echo "Copying installed files for scanning..."
+            if [ "${{ inputs.product }}" = "chef" ]; then
+              sudo cp -r /opt/chef /tmp/extracted_packages/ 2>/dev/null || true
+            elif [ "${{ inputs.product }}" = "chef-workstation" ]; then
+              sudo cp -r /opt/chef-workstation /tmp/extracted_packages/ 2>/dev/null || true
+            else
+              sudo cp -r /opt/${{ inputs.product }} /tmp/extracted_packages/ 2>/dev/null || true
+            fi
+          else
+            # Extract the package based on its type (assuming .tar.gz for non-Ubuntu)
+            mkdir -p /tmp/extracted_packages
+            tar -xzf /tmp/package_downloaded -C /tmp/extracted_packages
+            echo "Package downloaded and extracted to /tmp/extracted_packages"
+          fi
+
+          ls -l /tmp/extracted_packages
+
+      - name: Run Grype scan on extracted directory
+        timeout-minutes: 15 # Sets a 15-minute timeout for this specific step
+        run: |
+          # run grype in runner
+          grype dir:/tmp/extracted_packages --name ${{ inputs.product }} 
+          # run grype to output to file (which is uploaded to the job as an artifact)
+          OUTPUT_FILE="${{ env.FILE_PREFIX }}.txt"
+          OUTPUT_FILE="${OUTPUT_FILE//\//-}"
+          echo $OUTPUT_FILE
+          grype dir:/tmp/extracted_packages --name ${{ inputs.product }} > $OUTPUT_FILE
+          echo "OUTPUT_FILE=$OUTPUT_FILE" >> $GITHUB_ENV
+
+      - name: Upload Grype Scan Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.OUTPUT_FILE }}
+          path: ${{ env.OUTPUT_FILE }}
+
+  grype-scan-windows:
+    name: 'Windows grype scan of customer-downloadable packages'
+    runs-on: windows-latest  # TODO: make this a versioned OS strategy later
+    if: ${{ success() && inputs.os-platform == 'windows' }}
+    steps:
+      - name: Generate filename prefix, download URL and license-id as environment variables for later steps
+        shell: pwsh
+        run: |
+          $FilePrefix = "grype${{ env.DEFAULT_SEPARATOR }}${{ inputs.product }}${{ env.DEFAULT_SEPARATOR }}${{ inputs.product-version }}${{ env.DEFAULT_SEPARATOR }}windows" -replace '/', '-'
+          $FilePrefix = "${FilePrefix}-$(Get-Date -Format 'yyyyMMddHHmmss')"
+          echo "FILE_PREFIX=$FilePrefix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Generated FILE_PREFIX: $FilePrefix"
+
+          $DownloadUrl = "https://packages.chef.io"
+          if ("${{ inputs.download-site }}" -eq "omnitruck.chef.io") {
+            $DownloadUrl = "https://omnitruck.chef.io"
+          }
+            
+          echo "DOWNLOAD_URL=$DownloadUrl" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "DOWNLOAD_URL is set to $DownloadUrl"
+
+      - name: Install Grype (windows-latest)
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Download and install Grype for Windows
+          $grypeVersion = (Invoke-RestMethod -Uri "https://api.github.com/repos/anchore/grype/releases/latest").tag_name
+          $grypeUrl = "https://github.com/anchore/grype/releases/download/$grypeVersion/grype_$($grypeVersion.TrimStart('v'))_windows_amd64.zip"
+          $grypeZip = "$env:TEMP\grype.zip"
+          $grypeDir = "$env:TEMP\grype"
+          
+          # Download Grype
+          Invoke-WebRequest -Uri $grypeUrl -OutFile $grypeZip
+          
+          # Extract Grype
+          Expand-Archive -Path $grypeZip -DestinationPath $grypeDir -Force
+          
+          # Add Grype to PATH for subsequent steps
+          echo "$grypeDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          
+          # Verify installation
+          & "$grypeDir\grype.exe" version
+
+      - name: Download package under test (windows-latest)
+        run: |
+          # Construct download URL based on download site
+          if ("${{ inputs.download-site }}" -eq "packages.chef.io") {
+            if ("${{ inputs.package-file-name }}" -ne "") {
+              $PackageFile = "${{ inputs.package-file-name }}"
+            } else {
+              # Compute package filename for windows (e.g., chef-client-18.9.3-1-x64.msi)
+              $PackageFile = "${{ inputs.product }}-client-${{ inputs.product-version }}-1-x64.msi"
+            }
+            $DownloadUrl = "${{ env.DOWNLOAD_URL }}/files/${{ inputs.channel }}/${{ inputs.product }}/${{ inputs.product-version }}/${{ inputs.os-platform }}/${{ inputs.os-platform-version }}/${PackageFile}"
+          } else {
+            $DownloadUrl = "${{ env.DOWNLOAD_URL }}/${{ inputs.channel }}/${{ inputs.product }}/download?p=${{ inputs.os-platform }}&pv=${{ inputs.os-platform-version }}&m=${{ inputs.architecture }}"
+            if ("${{ inputs.product-version }}" -ne "") {
+              $DownloadUrl = "${DownloadUrl}&v=${{ inputs.product-version }}"
+            }
+          }
+          Write-Host "Downloading package from: ${DownloadUrl}"
+          echo "DOWNLOAD_URL=$DownloadUrl" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          # Download the package
+          Invoke-WebRequest -Uri $DownloadUrl -OutFile ".\package.msi"
+          
+          # List contents of current directory
+          Write-Host "Listing contents of current directory:"
+          Get-ChildItem -Path . -Force
+          
+          if ("${{ inputs.os-platform }}" -eq "windows") {
+            # Windows downloads are .msi packages - install them
+            Write-Host "Installing .msi package..."
+
+            # Create install directory
+            New-Item -ItemType Directory -Force -Path ".\bin"
+            
+            Start-Process msiexec.exe -ArgumentList "/i", ".\package.msi", 'TARGETDIR=.\bin', "/qn", "/norestart" -Wait
+            
+            # Echo where it was installed
+            Write-Host "Package installed."
+            Write-Host "Checking common installation paths:"
+            if (Test-Path ".\bin") {
+              Write-Host "Found installation at: .\bin"
+              Get-ChildItem -Path ".\bin" -Recurse -Depth 3
+              # Copy-Item -Path ".\bin" -Destination $ExtractPath -Recurse -Force
+            }
+            if (Test-Path "C:\hab\pkgs") {
+              Write-Host "Found installation at: C:\hab\pkgs"
+              Get-ChildItem -Path "C:\hab\pkgs" -Recurse -Depth 3
+              Copy-Item -Path "C:\hab\pkgs" -Destination $ExtractPath -Recurse -Force
+            }
+              if (Test-Path "C:\opscode\chef") {
+              Write-Host "Found installation at: C:\opscode\chef"
+              Get-ChildItem -Path "C:\opscode\chef" -Recurse -Depth 1
+              Copy-Item -Path "C:\opscode\chef" -Destination $ExtractPath -Recurse -Force
+            }
+            if (Test-Path "C:\opscode\chef-workstation") {
+              Write-Host "Found installation at: C:\opscode\chef-workstation"
+              Get-ChildItem -Path "C:\opscode\chef-workstation" -Recurse -Depth 1
+              Copy-Item -Path "C:\opscode\chef-workstation" -Destination $ExtractPath -Recurse -Force
+            }
+            if (Test-Path "C:\opscode\${{ inputs.product }}") {
+              Write-Host "Found installation at: C:\opscode\${{ inputs.product }}"
+              Get-ChildItem -Path "C:\opscode\${{ inputs.product }}" -Recurse -Depth 1
+              Copy-Item -Path "C:\opscode\${{ inputs.product }}" -Destination $ExtractPath -Recurse -Force
+            }
+          } else {
+            # Extract the package based on its type (assuming .zip for other Windows platforms)
+            Expand-Archive -Path "$env:TEMP\package_downloaded" -DestinationPath $ExtractPath -Force
+            Write-Host "Package downloaded and extracted to $ExtractPath"
+          }
+
+          Get-ChildItem -Path $ExtractPath
+
+      - name: Run Grype scan on extracted directory
+        timeout-minutes: 15 # Sets a 15-minute timeout for this specific step
+        run: |
+          $ExtractPath = ".\bin"
+          # $ExtractPath = "$env:TEMP\extracted_packages"
+          
+          # run grype in runner
+          grype dir:$ExtractPath --name ${{ inputs.product }}
+          
+          # run grype to output to file (which is uploaded to the job as an artifact)
+          $OutputFile = "${{ env.FILE_PREFIX }}.txt"
+          $OutputFile = $OutputFile -replace '/', '-'
+          Write-Host $OutputFile
+          grype dir:$ExtractPath --name ${{ inputs.product }} | Out-File -FilePath $OutputFile -Encoding utf8
+          echo "OUTPUT_FILE=$OutputFile" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+                
+      - name: Upload Grype Scan Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.OUTPUT_FILE }}
+          path: ${{ env.OUTPUT_FILE }}

@@ -140,17 +140,17 @@ on:
         required: false
         default: ''
         type: string
-      polaris-coverity-build-command:
-        # NEW IN 1.0.7
-        description: 'Coverity build command, typically done in build stage by language or here as param 1-liner like "mvn clean install"'
-        required: false
-        default: ''
-        type: string
       polaris-coverity-clean-command:
         # NEW IN 1.0.7
         description: 'Coverity clean command, typically done before build stage by language or here as param 1-liner like "mvn clean"'
         required: false
-        default: ''
+        default: 'go clean'
+        type: string
+      polaris-coverity-build-command:
+        # NEW IN 1.0.7
+        description: 'Coverity build command, typically done in build stage by language or here as param 1-liner like "mvn clean install"'
+        required: false
+        default: 'go build'
         type: string
       polaris-coverity-args:
         # NEW IN 1.0.7
