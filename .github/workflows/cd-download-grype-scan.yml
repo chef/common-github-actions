@@ -295,6 +295,7 @@ jobs:
             echo "Package installed. Listing installed files:"
             dpkg -L ${{ inputs.product }} || dpkg -L $(dpkg -I /tmp/package_downloaded | grep Package: | awk '{print $2}')
             
+            
             # Set extraction path for grype scan
             mkdir -p /tmp/extracted_packages
             # Copy installed files to extraction directory for scanning
