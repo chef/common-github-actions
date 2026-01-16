@@ -717,7 +717,16 @@ jobs:
       - name: 'Go unit tests'
         if: ${{ inputs.language == 'go' && inputs.unit-tests == true && inputs.build-profile == 'cli' }}
         run: |
-          go test -v ./...
+          go test -v ./... > ${{ inputs.quality-junit-report }}
+
+      - name: Upload test coverage artifact
+        if: ${{ inputs.language == 'go' && inputs.unit-tests == true && inputs.build-profile == 'cli' }}
+        uses: actions/upload-artifact@v4
+        with:
+            # Name of the artifact to upload.
+            name: test-coverage.out
+            # A file, directory or wildcard pattern that describes what to upload
+            path: ${{ inputs.quality-junit-report }}
 #   run: go test -v -coverprofile="coverage.out" ./... and upload artifact!
       #     - name: Build for Rust binary
       #       if: ${{ env.GA_BUILD_LANGUAGE == 'rust' }}  
