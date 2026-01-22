@@ -77,15 +77,41 @@ if resolve_ver == "latest" or not resolved_version:
         else:
             resolved_version = str(ver_doc)
     except RuntimeError as e:
-        if "403" in str(e) or "401" in str(e):
-            raise RuntimeError(
-                f"Failed to fetch version from {ver_url.split('?')[0]} (status 403/401).\n"
-                f"This may indicate:\n"
-                f"  1. Missing or invalid license_id (both commercial and community sites require it)\n"
-                f"  2. For 'community' site: requires a 'Free' license type, not a commercial license\n"
-                f"  3. The product '{product}' or channel '{channel}' doesn't exist or isn't accessible\n"
-                f"Solution: Provide appropriate LICENSE_ID for the download site type"
-            ) from e
+        error_msg = str(e)
+        if "403" in error_msg or "401" in error_msg or "Missing license_id" in error_msg or "License Id is not valid" in error_msg or "Only Free license" in error_msg:
+            site_type = "commercial" if download_site == "commercial" else "community"
+            license_secret = "GA_DOWNLOAD_GRYPE_LICENSE_ID" if download_site == "commercial" else "GA_DOWNLOAD_GRYPE_LICENSE_ID_FREE"
+            
+            if "Missing license_id" in error_msg:
+                raise RuntimeError(
+                    f"LICENSE ERROR ({site_type}): Missing license_id parameter.\n"
+                    f"  Download site: {download_site}\n"
+                    f"  Required secret: {license_secret}\n"
+                    f"  Solution: Ensure the {license_secret} secret is set in the orchestrator repository"
+                ) from e
+            elif "License Id is not valid" in error_msg or "403" in error_msg:
+                raise RuntimeError(
+                    f"LICENSE ERROR ({site_type}): Invalid or expired license_id.\n"
+                    f"  Download site: {download_site}\n"
+                    f"  Product: {product}, Channel: {channel}\n"
+                    f"  Secret used: {license_secret}\n"
+                    f"  Solution: Update the {license_secret} secret with a valid {'commercial' if download_site == 'commercial' else 'Free'} license"
+                ) from e
+            elif "Only Free license" in error_msg:
+                raise RuntimeError(
+                    f"LICENSE ERROR (community): Wrong license type provided.\n"
+                    f"  Download site: community\n"
+                    f"  Error: Community downloads require a 'Free' license, but a commercial license was provided\n"
+                    f"  Solution: Update GA_DOWNLOAD_GRYPE_LICENSE_ID_FREE secret with a valid Free license (not commercial)"
+                ) from e
+            else:
+                raise RuntimeError(
+                    f"LICENSE ERROR ({site_type}): Authentication failed.\n"
+                    f"  Download site: {download_site}\n"
+                    f"  Product: {product}, Channel: {channel}\n"
+                    f"  Secret used: {license_secret}\n"
+                    f"  Solution: Verify the {license_secret} secret contains a valid license for {download_site} downloads"
+                ) from e
         raise
 
 # Construct download URL
@@ -104,7 +130,24 @@ write_text(os.path.join(out_dir, "_download_url_redacted.txt"), download_url_red
 
 # Download package
 pkg_path = os.path.join(work_dir, "package_downloaded.deb")
-run(["bash","-lc", f"curl -fsSL -o '{pkg_path}' '{download_url}'"], check=True)
+try:
+    run(["bash","-lc", f"curl -fsSL -o '{pkg_path}' '{download_url}'"], check=True)
+except RuntimeError as e:
+    if "403" in str(e) or "401" in str(e):
+        site_type = "commercial" if download_site == "commercial" else "community"
+        license_secret = "GA_DOWNLOAD_GRYPE_LICENSE_ID" if download_site == "commercial" else "GA_DOWNLOAD_GRYPE_LICENSE_ID_FREE"
+        raise RuntimeError(
+            f"DOWNLOAD ERROR ({site_type}): Failed to download package.\n"
+            f"  Product: {product} v{resolved_version}\n"
+            f"  Channel: {channel}, OS: {os_name} {os_ver}\n"
+            f"  Download site: {download_site}\n"
+            f"  This may indicate:\n"
+            f"    1. Invalid or expired {license_secret} secret\n"
+            f"    2. Package not available for this OS/version combination\n"
+            f"    3. Version {resolved_version} doesn't exist in {channel} channel\n"
+            f"  Solution: Verify license and that the product/version/platform combination is valid"
+        ) from e
+    raise
 
 # Extract deterministically (pilot assumes Ubuntu .deb)
 extract_dir = os.path.join(work_dir, "extracted")
