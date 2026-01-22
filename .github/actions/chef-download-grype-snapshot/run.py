@@ -58,21 +58,36 @@ base = "https://chefdownload-commercial.chef.io" if download_site == "commercial
 # Resolve version
 resolved_version = pinned_ver
 if resolve_ver == "latest" or not resolved_version:
+    # Note: Community downloads may not support /versions/latest endpoint or may require different auth
+    # Try fetching latest version; if it fails, we'll need to fallback or error clearly
     ver_url = f"{base}/{channel}/{product}/versions/latest"
-    if download_site == "commercial" and license_id:
+    if license_id:
         ver_url += f"?license_id={license_id}"
-    ver_doc = http_json(ver_url)
-    if isinstance(ver_doc, dict):
-        resolved_version = (
-            ver_doc.get("version")
-            or ver_doc.get("latest")
-            or ver_doc.get("artifact_version")
-            or ver_doc.get("value")
-        )
-        if not resolved_version:
+    
+    try:
+        ver_doc = http_json(ver_url)
+        if isinstance(ver_doc, dict):
+            resolved_version = (
+                ver_doc.get("version")
+                or ver_doc.get("latest")
+                or ver_doc.get("artifact_version")
+                or ver_doc.get("value")
+            )
+            if not resolved_version:
+                resolved_version = str(ver_doc)
+        else:
             resolved_version = str(ver_doc)
-    else:
-        resolved_version = str(ver_doc)
+    except RuntimeError as e:
+        if "403" in str(e) or "401" in str(e):
+            raise RuntimeError(
+                f"Failed to fetch version from {ver_url.split('?')[0]} (status 403/401).\n"
+                f"This may indicate:\n"
+                f"  1. The '{download_site}' download site requires authentication even for version lookup\n"
+                f"  2. The product '{product}' or channel '{channel}' doesn't exist or isn't accessible\n"
+                f"  3. For 'community' site: the /versions/latest endpoint may not be supported\n"
+                f"Solution: Either provide a PINNED_VERSION in targets.yml or switch DOWNLOAD_SITE to 'commercial' with a valid LICENSE_ID"
+            ) from e
+        raise
 
 # Construct download URL
 download_url = f"{base}/{channel}/{product}/download?p={os_name}&pv={os_ver}&m={arch}&v={resolved_version}"
