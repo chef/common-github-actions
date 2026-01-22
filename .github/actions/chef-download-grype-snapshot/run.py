@@ -119,7 +119,9 @@ run(["bash","-lc", "command -v grype >/dev/null 2>&1 || (curl -sSfL https://get.
 latest_json_path = os.path.join(out_dir, "latest.json")
 run(["bash","-lc", f"grype dir:'{extract_dir}' --name '{product}' --output json > '{latest_json_path}'"], check=True)
 
-# Parse counts
+# Parse counts and rewrite with pretty formatting
+doc = json.load(open(latest_json_path, "r", encoding="utf-8"))
+json.dump(doc, open(latest_json_path, "w", encoding="utf-8"), indent=2)
 doc = json.load(open(latest_json_path, "r", encoding="utf-8"))
 matches = doc.get("matches", []) or []
 
