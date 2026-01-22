@@ -61,7 +61,7 @@ if resolve_ver == "latest" or not resolved_version:
     # Note: Community downloads may not support /versions/latest endpoint or may require different auth
     # Try fetching latest version; if it fails, we'll need to fallback or error clearly
     ver_url = f"{base}/{channel}/{product}/versions/latest"
-    if license_id:
+    if download_site == "commercial" and license_id:
         ver_url += f"?license_id={license_id}"
     
     try:
