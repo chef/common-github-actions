@@ -62,13 +62,16 @@ if resolve_ver == "latest" or not resolved_version:
     if download_site == "commercial" and license_id:
         ver_url += f"?license_id={license_id}"
     ver_doc = http_json(ver_url)
-    resolved_version = (
-        ver_doc.get("version")
-        or ver_doc.get("latest")
-        or ver_doc.get("artifact_version")
-        or ver_doc.get("value")
-    )
-    if not resolved_version:
+    if isinstance(ver_doc, dict):
+        resolved_version = (
+            ver_doc.get("version")
+            or ver_doc.get("latest")
+            or ver_doc.get("artifact_version")
+            or ver_doc.get("value")
+        )
+        if not resolved_version:
+            resolved_version = str(ver_doc)
+    else:
         resolved_version = str(ver_doc)
 
 # Construct download URL
