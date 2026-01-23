@@ -1,0 +1,91 @@
+name: "Chef Download + Grype Snapshot"
+description: "Resolve latest version, download package, extract, run Grype JSON scan, and generate metadata.json"
+inputs:
+  product:
+    required: true
+    description: "Chef product (chef, chef-workstation, chef-server, etc.)"
+  channel:
+    required: true
+    description: "Release channel (stable, current)"
+  download_site:
+    required: true
+    description: "commercial or community"
+    default: "commercial"
+  os:
+    required: true
+    description: "OS platform (ubuntu)"
+    default: "ubuntu"
+  os_version:
+    required: true
+    description: "OS version (e.g., 24.04)"
+  arch:
+    required: true
+    description: "Architecture (x86_64)"
+    default: "x86_64"
+  scan_mode:
+    required: true
+    description: "native|habitat (native for pilot)"
+    default: "native"
+  scan_root:
+    required: true
+    description: "Expected install root (for metadata; e.g., /opt/chef)"
+  resolve_version:
+    required: true
+    description: "latest|pinned"
+    default: "latest"
+  pinned_version:
+    required: false
+    description: "Version to scan when resolve_version=pinned"
+    default: ""
+  license_id:
+    required: false
+    description: "License ID for commercial downloads (pass via secrets)"
+    default: ""
+  out_dir:
+    required: false
+    description: "Output directory"
+    default: "out"
+  work_dir:
+    required: false
+    description: "Working directory"
+    default: "work"
+
+outputs:
+  resolved_version:
+    description: "Resolved version string"
+    value: ${{ steps.run.outputs.resolved_version }}
+  download_url_redacted:
+    description: "Download URL with license_id stripped"
+    value: ${{ steps.run.outputs.download_url_redacted }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run snapshot logic
+      id: run
+      shell: bash
+      env:
+        PRODUCT: ${{ inputs.product }}
+        CHANNEL: ${{ inputs.channel }}
+        DOWNLOAD_SITE: ${{ inputs.download_site }}
+        OS: ${{ inputs.os }}
+        OS_VERSION: ${{ inputs.os_version }}
+        ARCH: ${{ inputs.arch }}
+        SCAN_MODE: ${{ inputs.scan_mode }}
+        SCAN_ROOT: ${{ inputs.scan_root }}
+        RESOLVE_VERSION: ${{ inputs.resolve_version }}
+        PINNED_VERSION: ${{ inputs.pinned_version }}
+        LICENSE_ID: ${{ inputs.license_id }}
+        OUT_DIR: ${{ inputs.out_dir }}
+        WORK_DIR: ${{ inputs.work_dir }}
+      run: |
+        set -euo pipefail
+        if [ -n "${LICENSE_ID:-}" ]; then
+          echo "::add-mask::${LICENSE_ID}"
+        fi
+
+        python "${GITHUB_ACTION_PATH}/run.py"
+
+        # expose outputs for calling workflow
+        echo "resolved_version=$(cat ${OUT_DIR}/_resolved_version.txt)" >> "$GITHUB_OUTPUT"
+        echo "download_url_redacted=$(cat ${OUT_DIR}/_download_url_redacted.txt)" >> "$GITHUB_OUTPUT"
