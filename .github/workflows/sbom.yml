@@ -202,7 +202,7 @@ jobs:
         # echo "BLACKDUCK_SBOM_API_KEY: ${{ secrets.BLACKDUCK_SBOM_API_KEY }}" no longer used, see BLACKDUCK_SCA_TOKEN
 
       - name: BlackDuck SBOM scan
-        uses: blackduck-inc/black-duck-security-scan@v2.1.1
+        uses: blackduck-inc/black-duck-security-scan@v2.6.0
         continue-on-error: true  # Allow pipeline to continue even with policy violations
         env: 
           GOPRIVATE: ${{ inputs.go-private-modules }}

@@ -56,6 +56,31 @@ on:
         required: false
         type: string
         default: '1.0.0'
+      detect-policy-check-fail-on-severities:
+        description: 'Detect policy check on failure of prior steps, prevents an upload of SBOM or BlackDuck SCA scan if prior steps failed'
+        required: false
+        type: string
+        default: 'ALL'
+      blackduck-break-build:
+        description: 'Break the build if BlackDuck SCA scan finds new high or critical vulnerabilities'
+        required: false
+        type: boolean
+        default: true
+      bridge-break:
+        description: 'Break the build if BlackDuck SCA scan finds new bridge vulnerabilities'
+        required: false
+        type: boolean
+        default: true
+      detect-blackduck-scan-mode:
+        description: 'Mode for BlackDuck SCA scan detection - options include RAPID,STATELESS,INTELLIGENT'
+        required: false
+        type: string
+        default: 'INTELLIGENT'
+      blackducksca_scan_full:
+        description: 'Scan Mode. (true for intelligent scan & false for rapid scan)'
+        required: false
+        type: boolean
+        default: false
       detect-version-source-type:  # options include "none" (do not detect), "file", "github-tag" or "github-release"
         description: 'flag to determine how to detect version dynamically'
         required: false
@@ -1290,7 +1315,7 @@ jobs:
   generate-sbom:
     name: 'Generating SBOM'
     if: ${{ inputs.generate-sbom == true }}
-    uses: chef/common-github-actions/.github/workflows/sbom.yml@main
+    uses: chef/common-github-actions/.github/workflows/sbom.yml@chef-19
     needs: ci-build
     secrets: inherit
     with:
