@@ -470,7 +470,7 @@ jobs:
             echo   "** BUILD AND UNIT TEST *************************************************************"
             echo   "   Repository build profile $GA_BUILD_PROFILE [${{ inputs.build-profile }}]"
             if [ ${{ inputs.unit-tests }} ]; then
-              echo "   Unit testing to ${{ unit-test-output-path }} with override command ${{ unit-test-command-override }}"
+              echo "   Unit testing to ${{ inputs.unit-test-output-path }} with override command ${{ inputs.unit-test-command-override }}"
             fi
           fi
 
@@ -479,7 +479,7 @@ jobs:
             echo   "   Polaris application name ${{ inputs.polaris-application-name }}"
             echo   "   Polaris project name     ${{ inputs.polaris-project-name }}"
             echo   "   Working directory        ${{ inputs.polaris-working-directory }}"
-            echo   "   Config path              ${{ inputs.polaris-config-path }} (Coverity ${{ polaris-coverity-config-path }})"
+            echo   "   Config path              ${{ inputs.polaris-config-path }} (Coverity ${{ inputs.polaris-coverity-config-path }})"
             echo   "   Clean command            ${{ inputs.polaris-coverity-clean-command }}"
             echo   "   Build command            ${{ inputs.polaris-coverity-build-command }}"
             echo   "   Args                     ${{ inputs.polaris-coverity-args }}"
