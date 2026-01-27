@@ -57,8 +57,9 @@ if scan_mode == "habitat":
             "Habitat scan_mode requires HAB_IDENT (e.g., 'core/chef-infra-client') or HAB_ORIGIN (e.g., 'chef'). "
             "Set one in the target configuration."
         )
+    
     # Ensure hab CLI is available
-    run(["bash", "-lc", "command -v hab >/dev/null 2>&1 || (curl -fsSL https://raw.githubusercontent.com/habitat-sh/habitat/master/components/hab/install.sh | bash)"], check=True)
+    run(["bash", "-lc", "command -v hab >/dev/null 2>&1 || (curl -fsSL https://raw.githubusercontent.com/habitat-sh/habitat/master/components/hab/install.sh | sudo bash)"], check=True)
     
     # Determine package identifier
     pkg_to_install = hab_ident if hab_ident else f"{hab_origin}/{product}"
