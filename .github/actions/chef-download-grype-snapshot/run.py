@@ -71,9 +71,9 @@ if scan_mode == "habitat":
     install_cmd = f"hab pkg install {pkg_to_install}"
     if hab_channel and hab_channel != "stable":
         install_cmd += f" --channel {hab_channel}"
-    if license_id:
-        # Set HAB_AUTH_TOKEN for licensed channels
-        install_cmd = f"HAB_AUTH_TOKEN={license_id} {install_cmd}"
+        # Only set HAB_AUTH_TOKEN for non-stable channels (licensed/private channels)
+        if license_id:
+            install_cmd = f"HAB_AUTH_TOKEN={license_id} {install_cmd}"
     
     run(["bash", "-lc", install_cmd], check=True)
     
