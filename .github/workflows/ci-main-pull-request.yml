@@ -375,18 +375,19 @@ on:
         required: false
         type: string
         default: 'default'
-        # no longer used (retained just for older stub versions)
-        # generate-blackduck-sbom:  # obsolete
-        #   description: 'Generate SBOM using BlackDuck polaris (OBSOLETE, use perform-blackduck-sca-scan instead)'
-        #   required: false
-        #   type: boolean
-        #   default: false 
-        # polaris-server-url:
-        #   # should be obsolete with POLARIS_SERVER_URL secret
-        #   description: 'Polaris server URL'
-        #   required: false
-        #   default: 'https://polaris.blackduck.com'
-        #   type: string
+      
+      # no longer used (retained just for older stub versions)
+      generate-blackduck-sbom:  # obsolete
+        description: 'Generate SBOM using BlackDuck polaris (OBSOLETE, use perform-blackduck-sca-scan instead)'
+        required: false
+        type: boolean
+        default: false 
+      # polaris-server-url:
+      #   # should be obsolete with POLARIS_SERVER_URL secret
+      #   description: 'Polaris server URL'
+      #   required: false
+      #   default: 'https://polaris.blackduck.com'
+      #   type: string
         
 env:
   PRIMARY_APPLICATION: ${{ inputs.application }} # was 'default'   # Custom repo property [primaryApplication]: chef360, automate, infra-server, habitat, supermarket, licensing, downloads, chef-client, inspec, chef-workstation (or derivatives like habitat-builder)
