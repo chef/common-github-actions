@@ -61,8 +61,8 @@ if scan_mode == "habitat":
     # Ensure hab CLI is available
     run(["bash", "-lc", "command -v hab >/dev/null 2>&1 || (curl -fsSL https://raw.githubusercontent.com/habitat-sh/habitat/master/components/hab/install.sh | sudo bash)"], check=True)
     
-    # Accept the Chef License for Habitat (required for non-interactive use)
-    run(["bash", "-lc", "hab license accept"], check=True)
+    # Accept the Chef License for Habitat (CI environment - create marker file for root)
+    run(["bash", "-lc", "sudo mkdir -p /hab/accepted-licenses && sudo touch /hab/accepted-licenses/habitat"], check=True)
     
     # Determine package identifier
     pkg_to_install = hab_ident if hab_ident else f"{hab_origin}/{product}"
