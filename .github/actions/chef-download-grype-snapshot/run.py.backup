@@ -57,6 +57,18 @@ if scan_mode == "habitat":
             "Habitat scan_mode requires HAB_IDENT (e.g., 'core/chef-infra-client') or HAB_ORIGIN (e.g., 'chef'). "
             "Set one in the target configuration."
         )
+
+else:
+    # NATIVE MODE: Original download + extract + scan logic
+    
+    # Guard: commercial downloads require a license_id (fail fast with a clear error)
+    if download_site == "commercial" and not license_id.strip():
+        raise RuntimeError(
+            "Commercial download_site requires LICENSE_ID, but it was empty. "
+            "Fix by scoping GA_DOWNLOAD_GRYPE_LICENSE_ID to the orchestrator repo and passing it into the composite action, "
+            "or switch DOWNLOAD_SITE to 'community' for targets that do not require licensing."
+        )
+    
     # Ensure hab CLI is available
     run(["bash", "-lc", "command -v hab >/dev/null 2>&1 || (curl -fsSL https://raw.githubusercontent.com/habitat-sh/habitat/master/components/hab/install.sh | bash)"], check=True)
     
@@ -283,14 +295,6 @@ if scan_mode == "habitat":
 
 else:
     # NATIVE MODE: Original download + extract + scan logic
-    
-    # Guard: commercial downloads require a license_id (fail fast with a clear error)
-    if download_site == "commercial" and not license_id.strip():
-        raise RuntimeError(
-            "Commercial download_site requires LICENSE_ID, but it was empty. "
-            "Fix by scoping GA_DOWNLOAD_GRYPE_LICENSE_ID to the orchestrator repo and passing it into the composite action, "
-            "or switch DOWNLOAD_SITE to 'community' for targets that do not require licensing."
-        )
     
     # Choose base URL
     base = "https://chefdownload-commercial.chef.io" if download_site == "commercial" else "https://chefdownload-community.chef.io"
