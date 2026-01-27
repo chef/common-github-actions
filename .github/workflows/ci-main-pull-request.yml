@@ -428,10 +428,9 @@ jobs:
           
       - name: generate-filename-slug
         # description: Generate a simple slug based on repo and date for use in any output artifacts
-        steps:
-        - run: |
-            FILE_PREFIX=$(echo "${{ github.repository }}${{ env.DEFAULT_SEPARATOR }}${{ github.ref_name }}${{ env.DEFAULT_SEPARATOR }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
-            echo "FILE_PREFIX=${FILE_PREFIX}" >> $GITHUB_ENV
+        run: |
+          FILE_PREFIX=$(echo "${{ github.repository }}${{ env.DEFAULT_SEPARATOR }}${{ github.ref_name }}${{ env.DEFAULT_SEPARATOR }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
+          echo "FILE_PREFIX=${FILE_PREFIX}" >> $GITHUB_ENV
         # FILE_NAME=$(echo "${{ env.FILE_PREFIX }}${{ env.DEFAULT_SEPARATOR }}${{ env.DEFAULT_FILE_NAME }}${{ env.DEFAULT_FILE_EXTENSION }}")
     
       - name: 'Echo inputs'
