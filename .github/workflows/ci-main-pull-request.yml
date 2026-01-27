@@ -443,7 +443,7 @@ jobs:
           echo "  Repository build profile $GA_BUILD_PROFILE [workflow param was: ${{ inputs.build-profile }}]"
           echo "  Computed file name prefix $FILE_PREFIX"
           if [ ${{ inputs.version }} ]; then
-            echo "  Repository version ${{ inputs.version }} from parameter ${{ detect-version-source-parameter }} and type ${{ detect-version-source-type }}"
+            echo "  Repository version ${{ inputs.version }} from parameter ${{ inputs.detect-version-source-parameter }} and type ${{ inputs.detect-version-source-type }}"
           fi  
           if [ ${{ inputs.go-private-modules }} ]; then
             echo "  GOPRIVATE ${{ inputs.go-private-modules }}"
