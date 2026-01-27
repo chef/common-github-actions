@@ -4,14 +4,14 @@
 #
 # performs the following actions:
 # 1. run source code complexity checks (SCC) using scc
-# 2. run language-specific pre-compilation checks (e.g., gosec, rubocop, etc.)
-# 3. run language-agnostic pre-compilation checks (e.g., OWASP dependency or top 10 checks,trufflehog)
-# 4. run security static application security tests (SAST, e.g. Sonar or BlackDuck Polaris)
-# 5. run source composition analysis (SCA) scans (e.g., dependabot, blackduck)
-# 6. run build and packaging steps (e.g., go build, cargo build, etc.)
-# 7. run unit tests (e.g., go test, cargo test, etc.) - integration tests are in CD pipeline
-# 7. run security DAST tests and scans (e.g., Veracode or BlackDuck coverity)
+# 2. run language-specific pre-compilation checks and linting (e.g., gosec, rubocop, etc.)
+# 3. run language-agnostic pre-compilation checks and secret scans (e.g., OWASP dependency or top 10 checks, trufflehog)
+# 4. build and unit test the application (e.g., go test, cargo test, etc.) - integration tests are in CD pipeline
+# 5. run static application security tests (SAST, e.g. Sonar, Docker Scout or BlackDuck Polaris)
+# 6. report to central dashboards such as harness or Irfan's quality dashboard
+# 7. run packaging steps (e.g., go build, cargo build, hab build, go-releaser, etc.), publishing and optional grype scan on output
 # 8. generate software bill-of-materials (SBOM) using SPDX format and lookup licenses (GitHub SBOM, Micrsosoft SBOM, license_scout, and/or BlackDuck SBOM)
+# 9. run source composition analysis (SCA) scans (e.g., blackduck SCA / "purple" as a replacement to dependabot)
 # 
 # See DEV-README.md for more details on the steps and how to use this action, or the confluence page at <TODO: URL>
 #
@@ -41,6 +41,11 @@ name: CI flow containing PR checks for main & release, v2
 on:
   workflow_call:
     inputs:
+      application:
+        # NEW IN 1.0.7 
+        description: 'Application set in repository custom properties, typically primaryApplication'
+        required: false
+        type: string
       visibility:
         description: 'Visibility of the repository'
         required: false
@@ -65,6 +70,12 @@ on:
         required: false
         type: string
         default: ''
+      language:
+        description: 'Build language (Go, Ruby, Rust, etc.), typically from the repository custom property GABuildLanguage'
+        required: false
+        type: string
+        default: 'ruby'  
+      
       perform-complexity-checks: 
         description: 'Perform complexity checks with SCC'
         required: false
@@ -96,11 +107,28 @@ on:
         required: false
         type: boolean
         default: true
+      build-profile:
+        # NEW IN 1.0.7 
+        description: 'Build profile for build step and Sonar, typically from the custom property GABuildProfile on the repository'
+        required: false
+        type: string
+        default: 'cli'
       unit-tests:
         description: 'Run unit tests (language-specific)'
         required: false
         type: boolean
         default: true
+      unit-test-output-path: 
+        # NEW IN 1.0.7 
+        description: "Path to test results folder"
+        required: false
+        type: string
+        default: "test/unittest"
+      unit-test-command-override:
+        # NEW IN 1.0.7 
+        description: "Command line for running tests in this repo, if not the language default"
+        required: false 
+        type: string
 
       perform-blackduck-polaris:
         description: 'Perform BlackDuck Polaris (SAST) scan'
@@ -116,12 +144,6 @@ on:
         required: false
         default: "${{ github.event.repository.name }}"
         type: string    
-      # polaris-server-url:
-      #   # should be obsolete with POLARIS_SERVER_URL secret
-      #   description: 'Polaris server URL'
-      #   required: false
-      #   default: 'https://polaris.blackduck.com'
-      #   type: string
       polaris-working-directory:
         # NEW IN 1.0.7
         description: 'Working directory for the scan, defaults to . but usually lang-dependent like ./src'
@@ -193,11 +215,6 @@ on:
         required: false
         type: boolean
         default: false
-      build-profile: 
-        description: 'Build profile for SonarQube - application specific path'
-        required: false
-        type: string
-        default: 'cli'
       report-unit-test-coverage: 
         description: 'Perform unit tests and report coverage to SonarQube'
         required: false
@@ -294,6 +311,7 @@ on:
         required: false
         type: boolean
         default: true
+
       generate-sbom:
         description: 'Generate software bill-of-materials (SPDX SBOM)'
         required: false
@@ -304,6 +322,17 @@ on:
         required: false
         type: boolean
         default: true
+      generate-msft-sbom:
+        description: 'Generate SBOM using MSFT tools'
+        required: false
+        type: boolean
+        default: true
+      license_scout:
+        description: 'Run license scout for license compliance'
+        required: false
+        type: boolean
+        default: true
+
       perform-blackduck-sca-scan: # combined with generate sbom below, also needs version above
         description: 'Perform BlackDuck SCA scan'
         required: false
@@ -330,16 +359,7 @@ on:
         required: false
         type: string
         default: 'path/to/detect'
-      generate-msft-sbom:
-        description: 'Generate SBOM using MSFT tools'
-        required: false
-        type: boolean
-        default: true
-      license_scout:
-        description: 'Run license scout for license compliance'
-        required: false
-        type: boolean
-        default: true
+
       udf1:
         description: 'User defined flag 1'
         required: false
@@ -355,24 +375,24 @@ on:
         required: false
         type: string
         default: 'default'
-      
-      #no longer used
-      language:
-        description: 'Build language (Go, Ruby, Rust, etc.)'
-        required: false
-        type: string
-        default: 'ruby'  # TODO: should be removed, we know this from custom repository properties
-      generate-blackduck-sbom:  # obsolete
-        description: 'Generate SBOM using BlackDuck polaris (OBSOLETE, use perform-blackduck-sca-scan instead)'
-        required: false
-        type: boolean
-        default: false 
+        # no longer used (retained just for older stub versions)
+        # generate-blackduck-sbom:  # obsolete
+        #   description: 'Generate SBOM using BlackDuck polaris (OBSOLETE, use perform-blackduck-sca-scan instead)'
+        #   required: false
+        #   type: boolean
+        #   default: false 
+        # polaris-server-url:
+        #   # should be obsolete with POLARIS_SERVER_URL secret
+        #   description: 'Polaris server URL'
+        #   required: false
+        #   default: 'https://polaris.blackduck.com'
+        #   type: string
         
 env:
+  PRIMARY_APPLICATION: ${{ inputs.application }} # was 'default'   # Custom repo property [primaryApplication]: chef360, automate, infra-server, habitat, supermarket, licensing, downloads, chef-client, inspec, chef-workstation (or derivatives like habitat-builder)
   REPO_VISIBILITY: ${{ github.event.repository.visibility }}
   REPO_NAME: ${{ github.event.repository.name }}
   PIPELINE_VERSION: '1.0.7'  # version of this CI pipeline
-  PRIMARY_APPLICATION: 'default'   # Custom repo property [primaryApplication]: chef360, automate, infra-server, habitat, supermarket, licensing, downloads, chef-client, inspec, chef-workstation (or derivatives like habitat-builder)
   GA_BUILD_LANGUAGE: ${{ inputs.language}}  # Custom repo property [GABuildLanguage]: go, ruby, erlang, rust (replaces Language input)
   GA_BUILD_PROFILE: ${{ inputs.build-profile }}   # Custom repo property [GABuildProfile]: TBD
   # APP_VERSION: $(cat VERSION) 
@@ -385,131 +405,160 @@ jobs:
     name: 'Pre-compilation checks'
     runs-on: ubuntu-latest
     steps:
-      - name: 'Detect environment variables from repository custom properties'
-      # GH API returns something like [{"property_name":"GABuildLanguage","value":"go"},{"property_name":"GABuildProfile","value":"cli"},{"property_name":"primaryApplication","value":"chef-360"}]'
+      - detect-custom-properties:
+        description: 'Detect app, language, and build profile environment variables from repository custom properties'
+        # GH API returns something like [{"property_name":"GABuildLanguage","value":"go"},{"property_name":"GABuildProfile","value":"cli"},{"property_name":"primaryApplication","value":"chef-360"}]'
         run: |
           response=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/${{ github.repository }}/properties/values) 
-
-          # | jq -r '.primaryApplication.value')
-          # custom_property_value=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/${{ github.repository }}/properties/values" ) 
-          # echo "chef-application-name=$custom_property_value" >> $GITHUB_ENV
-          # #  | jq -r '.primary-application.value') 
 
           primaryApplication=$(echo "$response" | jq -r '.[] | select(.property_name=="primaryApplication") | .value')
           GABuildLanguage=$(echo "$response" | jq -r '.[] | select(.property_name=="GABuildLanguage") | .value')
           GABuildProfile=$(echo "$response" | jq -r '.[] | select(.property_name=="GABuildProfile") | .value')
-          
-          # echo $response 
-          # response=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/${{ github.repository }}/properties/values | jq -r '.GABuildLanguage.value')
-          # echo $response 
-          # response=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/${{ github.repository }}/properties/values | jq -r '.GABuildProfile.value')
-          # echo $response 
-
-          # custom_property_value=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          #   "https://api.github.com/repos/${{ github.repository }}/properties/values" | jq -r '.ga-build-language.value') 
-          # echo "chef-ga-build-language=$custom_property_value" >> $GITHUB_ENV
-
-          # custom_property_value=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          #   "https://api.github.com/repos/${{ github.repository }}/properties/values" | jq -r '.ga-build-profile.value') 
-          # echo "chef-ga-build-profile=$custom_property_value" >> $GITHUB_ENV
           
           echo "PRIMARY APP... $primaryApplication"
           echo "BUILD LANG... $GABuildLanguage"
           echo "BUILD PROFILE... $GABuildProfile"
           
           echo "PRIMARY_APPLICATION=$primaryApplication" >> $GITHUB_ENV
-
           echo "GA_BUILD_LANGUAGE=$GABuildLanguage" >> $GITHUB_ENV
           echo "GA_BUILD_PROFILE=$GABuildProfile" >> $GITHUB_ENV
-          # echo "chef-ga-build-language=${{ env.GA_BUILD_LANGUAGE }}" >> $GITHUB_ENV
-          # echo "chef-ga-build-profile=${{ env.GA_BUILD_PROFILE }}" >> $GITHUB_ENV
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
           
-      - name: 'Echo version of pipeline and inputs'
+      - generate-filename-slug:
+        description: Generate a simple slug based on repo and date for use in any output artifacts
+        runs-on: ubuntu-latest
+        steps:
+        - run: |
+            FILE_PREFIX=$(echo "${{ github.repository }}${{ env.DEFAULT_SEPARATOR }}${{ github.ref_name }}${{ env.DEFAULT_SEPARATOR }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
+            echo "FILE_PREFIX=${FILE_PREFIX}" >> $GITHUB_ENV
+        # FILE_NAME=$(echo "${{ env.FILE_PREFIX }}${{ env.DEFAULT_SEPARATOR }}${{ env.DEFAULT_FILE_NAME }}${{ env.DEFAULT_FILE_EXTENSION }}")
+    
+      - name: 'Echo inputs'
         run: |
-          echo "CI pipeline execution plan for [$REPO_NAME] version $PIPELINE_VERSION"
-          echo "  Repository visibility set to $REPO_VISIBILITY [ ${{ inputs.visibility }} ]"
-          echo "  Repository belongs to application $PRIMARY_APPLICATION"
-          echo "  Build language set to $GA_BUILD_LANGUAGE [ input: ${{ inputs.language }} ]"
-          echo "  Build profile set to $GA_BUILD_PROFILE"
-          echo "  GOPRIVATE for Go private modules set to ${{ inputs.go-private-modules }}"
-          echo "** PRE-CHECKS ***********************************************"
+          echo "CI pipeline execution plan for repository [$REPO_NAME] with pipeline version $PIPELINE_VERSION"
+          echo "Environment variables"
+          echo "  Repository visibility $REPO_VISIBILITY [workflow param was: ${{ inputs.visibility }}]"
+          echo "  Repository primary application $PRIMARY_APPLICATION [workflow param was: ${{ inputs.application }}]"
+          echo "  Repository build language $GA_BUILD_LANGUAGE [workflow param was: ${{ inputs.language }}]"
+          echo "  Repository build profile $GA_BUILD_PROFILE [workflow param was: ${{ inputs.build-profile }}]"
+          echo "  Computed file name prefix $FILE_PREFIX"
+          if [ ${{ inputs.version }} ]; then
+            echo "  Repository version ${{ inputs.version }} from parameter ${{ detect-version-source-parameter }} and type ${{ detect-version-source-type }}"
+          fi  
+          if [ ${{ inputs.go-private-modules }} ]; then
+            echo "  GOPRIVATE ${{ inputs.go-private-modules }}"
+          fi
+          echo "  Pipeline executing on ubuntu-latest"
+
+          echo   "** SOURCE CODE COMPLEXITY AND LINTING ***********************************************"
           if [ ${{ inputs.perform-complexity-checks }} ]; then
-            echo "  Perform complexity checks set to ${{ inputs.perform-complexity-checks }}"
-            echo "  SCC output filename set to ${{ inputs.scc-output-filename }} "
+            echo "   SCC: performing complexity checks with output filename ${{ inputs.scc-output-filename }} "
           fi
           if [ ${{ inputs.perform-language-linting }} ]; then
-            echo "  Perform language-specific linting set to ${{ inputs.perform-language-linting }}"
+            echo "   Linting: performing language-specific linting"
           fi
-          echo "** SECURITY *************************************************"
+
+          echo   "** TRUFFLEHOG (SECRETS) AND TRIVY (DEP SCAN) ****************************************"
           if [ ${{ inputs.perform-trufflehog-scan }} ]; then
-            echo "  Perform trufflehog scan set to ${{ inputs.perform-trufflehog-scan }}"
+            echo "   Trufflehog"
           fi
           if [ ${{ inputs.perform-trivy-scan }} ]; then
-            echo "  Perform Trivy scan set to ${{ inputs.perform-trivy-scan }}"
+            echo "   trivy"
           fi
-          if [ ${{ inputs.perform-blackduck-polaris }} ]; then
-            echo "  Perform BlackDuck polaris scan set to ${{ inputs.perform-blackduck-polaris }}"
-            echo "  Polaris application name set to ${{ inputs.polaris-application-name }}"
-            echo "  Polaris project name set to ${{ inputs.polaris-project-name }}"
-          fi
-          echo "** BUILD AND UNIT TEST *************************************"
+
           if [ ${{ inputs.build }} ]; then
-            echo "  BUILD set to ${{ inputs.build }}"
-            echo "  Language set to ${{ env.GA_BUILD_LANGUAGE }} "
-            echo "  passed in as LANGUAGE = ${{ inputs.language }}"
-          fi
-          if [ ${{ inputs.unit-tests }} ]; then
-            echo "  Unit tests set to ${{ inputs.unit-tests }}"
-          fi
-          echo "** SONAR ***************************************************"
-          echo "  Perform SonarQube scan set to ${{ inputs.perform-sonarqube-scan }}"
-          echo "  Perform Sonar build set to ${{ inputs.build }}"
-          echo "  Sonar unit test inclusion set to ${{ inputs.report-unit-test-coverage }}"
-          echo "** DEV DASHBOARD *******************************************"
-          echo "  Report to Atlassian dashboard set to ${{ inputs.report-to-atlassian-dashboard }}"
-          echo "  Quality product name set to ${{ inputs.quality-product-name }}"
-          echo "** PACKAGING ***********************************************"
-          echo "  Package binaries set to ${{ inputs.package-binaries }}"
-          echo "  Habitat build set to ${{ inputs.habitat-build }}"
-          echo "  Publish packages set to ${{ inputs.publish-packages }}"
-          echo "** SBOM ****************************************************"
-          if [ ${{ inputs.generate-sbom }} ]; then
-            echo "  Generate SBOM set to ${{ inputs.generate-sbom }}"
-            echo "  SBOM application version set to ${{ inputs.version }}"
-            echo "    SBOM version detection type set to ${{ inputs.detect-version-source-type }} (if version not specified)"
-            echo "    SBOM file name set to ${{ inputs.detect-version-source-parameter }} (if detection type is [file])"
-            echo "  Export SBOM from GitHub set to ${{ inputs.export-github-sbom }}"
-            if [ ${{ inputs.perform-blackduck-sca-scan }} ]; then
-              echo "  Perform BlackDuck SCA scan set to ${{ inputs.perform-blackduck-sca-scan }}"
-              echo "    output will be located at https://progresssoftware.app.blackduck.com/api/project-groups/fc6da208-79a9-4c47-a14d-6cfdf26bcfd5 (Chef)"
-              echo "    BlackDuck project group name set to ${{ inputs.blackduck-project-group-name }}"
-              echo "    BlackDuck project name set to ${{ inputs.blackduck-project-name }}"
-              echo "    Polaris BlackDuck executable set to ${{ inputs.polaris-blackduck-executable }}"
-              echo "    Polaris executable detect path set to ${{ inputs.polaris-executable-detect-path }}"
+            echo   "** BUILD AND UNIT TEST *************************************************************"
+            echo   "   Repository build profile $GA_BUILD_PROFILE [${{ inputs.build-profile }}]"
+            if [ ${{ inputs.unit-tests }} ]; then
+              echo "   Unit testing to ${{ unit-test-output-path }} with override command ${{ unit-test-command-override }}"
             fi
-            echo "    Generate BlackDuck SBOM set to ${{ inputs.generate-blackduck-sbom }} OBSOLETE, NO EFFECT"
-            echo "  Generate MSFT SBOM set to ${{ inputs.generate-msft-sbom }}"
-            echo "  License scout set to ${{ inputs.license_scout }}"
           fi
+
+          if [ ${{ inputs.perform-blackduck-polaris }} ]; then
+            echo   "** POLARIS (SAST) TESTING *************************************************************"
+            echo   "   Polaris application name ${{ inputs.polaris-application-name }}"
+            echo   "   Polaris project name     ${{ inputs.polaris-project-name }}"
+            echo   "   Working directory        ${{ inputs.polaris-working-directory }}"
+            echo   "   Config path              ${{ inputs.polaris-config-path }} (Coverity ${{ polaris-coverity-config-path }})"
+            echo   "   Clean command            ${{ inputs.polaris-coverity-clean-command }}"
+            echo   "   Build command            ${{ inputs.polaris-coverity-build-command }}"
+            echo   "   Args                     ${{ inputs.polaris-coverity-args }}"
+            echo   "   Detect search depth      ${{ inputs.polaris-detect-search-depth }}"
+            echo   "   Detect args              ${{ inputs.polaris-detect-args }}"
+            echo   "   Assessment mode          ${{ inputs.polaris-assessment-mode }}"
+            echo   "   Wait for scan            ${{ inputs.wait-for-scan }}"
+          fi
+      
+          if [ ${{ inputs.perform-sonarqube-scan }} ]; then
+            echo   "** SONARQUBE ******************************************************************"
+          fi
+          if [ ${{ inputs.perform-docker-scan }} ]; then
+            echo   "** DOCKER SCOUT ***************************************************************"
+          fi
+
+          if [ ${{ inputs.report-unit-test-coverage }} ]; then
+            echo   "** QUALITY DASHBOARD UNIT TEST COVERAGE REPORT ********************************"
+            # ignored for now - report-to-atlassian-dashboard, quality-product-name, quality-sonar-app-name, quality-testing-type, quality-service-name, quality-junit-report
+          fi
+      
+          if [ ${{ inputs.package-binaries }} ]; then
+            echo   "** PACKAGING ******************************************************************"
+            if [ ${{ inputs.habitat-build }} ]; then
+              echo "** HABITAT BUILD **************************************************************"
+              echo "   Publish Habitat packages      ${{ inputs.publish-habitat-packages }}"
+              echo "   Habitat package name          ${{ inputs.publish-habitat-hab_package }}"
+              echo "   Habitat package version       ${{ inputs.publish-habitat-hab_version }}"
+              echo "   Habitat package release       ${{ inputs.publish-habitat-hab_release }}"
+              echo "   Habitat package channel       ${{ inputs.publish-habitat-hab_channel }}"
+              echo "   Auth token (overrides secret) ${{ inputs.publish-habitat-hab_auth_token }}"
+              echo "   Publish operating system      ${{ inputs.publish-habitat-runner_os }}"
+            fi
+            if [ ${{ inputs.habitat-grype-scan }} ]; then
+              echo "   Performing grype scan on published package"
+            fi  
+            if [ ${{ inputs.publish-packages }} ]; then
+              echo "   PUBLISHING PACKAGES TO ECR, BLDR, RUBYGEMS NOT YET SUPPORTED"
+            fi              
+          fi
+
+          if [ ${{ inputs.generate-sbom }} ]; then
+            echo   "** SOFTWARE BILL OF MATERIALS FILE GENERATION ****************************************"
+            if [ ${{ inputs.export-github-sbom }} ]; then
+              echo "   GitHub SBOM export"
+            fi
+            if [ ${{ inputs.generate-msft-sbom }} ]; then
+              echo "   Microsoft SBOM file"
+            fi
+            if [ ${{ inputs.license_scout }} ]; then
+              echo "   License scout"
+            fi
+          fi
+          # Generate BlackDuck SBOM set to ${{ inputs.generate-blackduck-sbom }} OBSOLETE, NO EFFECT
+
+          if [ ${{ inputs.perform-blackduck-sca-scan }} ]; then
+            echo   "** BLACKDUCK SCAN AND REPORT ***********************************************"
+            echo   "   Chef is located at https://progresssoftware.app.blackduck.com/api/project-groups/fc6da208-79a9-4c47-a14d-6cfdf26bcfd5"
+            echo   "   BlackDuck project group name     ${{ inputs.blackduck-project-group-name }}"
+            echo   "   BlackDuck project name           ${{ inputs.blackduck-project-name }}"
+            echo   "   Polaris BlackDuck executable     ${{ inputs.polaris-blackduck-executable }}"
+            echo   "   Polaris executable detect path   ${{ inputs.polaris-executable-detect-path }}"
+          fi
+              
           echo "** USER DEFINED FLAGS ***************************************"
-          if [ -n "$${{ inputs.udf1 }}" ]; then  # or == 'true' or = " some value" or -z (empty string)
-            echo "  UDF1 set to ${{ inputs.udf1 }}"
+          if [ -n "$${{ inputs.udf1 }}" ]; then  
+            echo "  UDF1 ${{ inputs.udf1 }}"
           fi
           if [ -n "$${{ inputs.udf2 }}" ]; then 
-            echo "  UDF1 set to ${{ inputs.udf2 }}"
+            echo "  UDF2 ${{ inputs.udf2 }}"
           fi
           if [ -n "$${{ inputs.udf3 }}" ]; then  
-            echo "  UDF1 set to ${{ inputs.udf3 }}"
+            echo "  UDF3 ${{ inputs.udf3 }}"
           fi
-          echo "*************************************************************"
-        # echo "The job_id is: $GITHUB_JOB"   
-        # echo ${{ secrets.GITHUB_TOKEN }} DO NOT ECHO THIS
-
-        # also echo when used - go-private-modules, quality-sonar-app-name, quality-testing-type, quality-service-name, quality-junit-report
-      
+          # echo "The job_id is: $GITHUB_JOB"   
+          # echo ${{ secrets.GITHUB_TOKEN }} DO NOT ECHO THIS
+     
   checkout:
     name: 'Checkout repository'
     runs-on: ubuntu-latest
@@ -518,17 +567,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-
-  generate-filename-slug:
-    name: Generate a simple slug based on repo and date for use in any output artifacts
-    runs-on: ubuntu-latest
-    steps:
-    - name: Generate Filename Prefix and full JSON file name as environment variables for later steps
-      run: |
-        FILE_PREFIX=$(echo "${{ github.repository }}${{ env.DEFAULT_SEPARATOR }}${{ github.ref_name }}${{ env.DEFAULT_SEPARATOR }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
-        echo "FILE_PREFIX=${FILE_PREFIX}" >> $GITHUB_ENV
-      # FILE_NAME=$(echo "${{ env.FILE_PREFIX }}${{ env.DEFAULT_SEPARATOR }}${{ env.DEFAULT_FILE_NAME }}${{ env.DEFAULT_FILE_EXTENSION }}")
-      
+     
   scc:
     name: 'Source code complexity checks'
     if: ${{ inputs.perform-complexity-checks == true }}
@@ -537,12 +576,13 @@ jobs:
     with:
       outputfilename: ${{ inputs.scc-output-filename }}
      
-# TODO: make three separate flows, by language with all steps (as oposed to one file per step with language-branching in each)
-# language specific tests (gosec, rubocop, linters, etc.)
-# ${{ inputs.language == 'rust' && inputs.perform-language-linting == true }}
-# TODO: note you cannot do a conditional on the job, only on the step if using an ENV VAR
   language-specific-checks:
     name: 'Language-specific pre-compilation steps and linting'  
+    # TODO: make three separate flows, by language with all steps (as oposed to one file per step with language-branching in each)
+    # language specific tests (gosec, rubocop, linters, etc.)
+    # ${{ inputs.language == 'rust' && inputs.perform-language-linting == true }}
+    # TODO: note you cannot do a conditional on the job, only on the step if using an ENV VAR
+
     if: inputs.perform-language-linting 
     runs-on: ubuntu-latest
     needs: checkout
@@ -594,24 +634,24 @@ jobs:
       - name: Go linting and security checks  
         if: inputs.language == 'go'
         run: echo "Running Go linting and security checks"
-      # TODO: THESE DO NOT RUN IN CHEF ORG - need to create copies in common-github-actions/.github/actions/
-      # we can download and install them manually here if needed
-      # ERROR ON WORKFLOW: The actions golangci/golangci-lint-action@v6, dominikh/staticcheck-action@v1, and securego/gosec@master are not allowed in chef/arch-sample-cli because all actions must be from a repository owned by your enterprise, created by GitHub, verified in the GitHub Marketplace, or match one of the patterns: chef/*, chef/.github, chef/.github/workflows/*.
-      # - name: Run golangci-lint
-      #   if: env.GA_BUILD_LANGUAGE == 'go'
-      #   uses: golangci/golangci-lint-action@v6
-      #   with:
-      #     version: latest
-      #     args: --timeout=5m
-      # - name: Run staticcheck
-      #   if: env.GA_BUILD_LANGUAGE == 'go'
-      #   uses: dominikh/staticcheck-action@v1
-      #   with:
-      #     version: latest
-      # - name: Run Gosec Security Scanner
-      #   uses: securego/gosec@master
-      #   with:
-      #     args: ./...
+        # TODO: THESE DO NOT RUN IN CHEF ORG - need to create copies in common-github-actions/.github/actions/
+        # we can download and install them manually here if needed
+        # ERROR ON WORKFLOW: The actions golangci/golangci-lint-action@v6, dominikh/staticcheck-action@v1, and securego/gosec@master are not allowed in chef/arch-sample-cli because all actions must be from a repository owned by your enterprise, created by GitHub, verified in the GitHub Marketplace, or match one of the patterns: chef/*, chef/.github, chef/.github/workflows/*.
+        # - name: Run golangci-lint
+        #   if: env.GA_BUILD_LANGUAGE == 'go'
+        #   uses: golangci/golangci-lint-action@v6
+        #   with:
+        #     version: latest
+        #     args: --timeout=5m
+        # - name: Run staticcheck
+        #   if: env.GA_BUILD_LANGUAGE == 'go'
+        #   uses: dominikh/staticcheck-action@v1
+        #   with:
+        #     version: latest
+        # - name: Run Gosec Security Scanner
+        #   uses: securego/gosec@master
+        #   with:
+        #     args: ./...
 
         # TO GET OUTPUT AS ARTIFACT go install github.com/securego/gosec/v2/cmd/gosec@latest
         # gosec ./... >> ./bin/gosec.out
@@ -652,19 +692,13 @@ jobs:
         # TODO: add flag --failOnCVSS 7
         # TODO: integrate with SonarQube
         # TODO: correct artifact upload names like Sonu's in sbom.yml
-              
-  ################################################################################################################
-  #
-  #    Security source and repo secret scans
-  #
-  ################################################################################################################
-  
-  # # security scans
+                
   run-trufflehog:
     name: 'Trufflehog scan'
     if: ${{ inputs.perform-trufflehog-scan }}
     uses: chef/common-github-actions/.github/workflows/trufflehog.yml@main
     needs: checkout
+
   run-trivy:
     name: 'Trivy scan'
     if: ${{ inputs.perform-trivy-scan }}
@@ -673,24 +707,17 @@ jobs:
     with:
       version: ${{ inputs.version }}
   
-      # run-srcclr:
-  #   if: ${{ inputs.perform-srcclr-scan == true }}
-  #   uses: chef/common-github-actions/.github/workflows/srcclr.yml@main
-  #   needs: run-scc
+    # run-srcclr:
+    #   if: ${{ inputs.perform-srcclr-scan == true }}
+    #   uses: chef/common-github-actions/.github/workflows/srcclr.yml@main
+    #   needs: run-scc
 
-  # run-veracode-sca:
-  #   if: ${{ inputs.perform-veracode-sca-scan == true }}
-  #   uses: chef/common-github-actions/.github/workflows/veracode-sca.yml@main
-  #   needs: run-scc
-  #   secrets: inherit
+    # run-veracode-sca:
+    #   if: ${{ inputs.perform-veracode-sca-scan == true }}
+    #   uses: chef/common-github-actions/.github/workflows/veracode-sca.yml@main
+    #   needs: run-scc
+    #   secrets: inherit
     
-  
-  # ################################################################################################################
-  # #
-  # #    Build and packaging steps
-  # #
-  # ################################################################################################################
-  
   ci-build:
     name: 'Build/compilation and unit tests (CI)'
     if : ${{ inputs.build == true }}
@@ -709,6 +736,8 @@ jobs:
           fetch-depth: 0
       - name: 'Go build'
         if: ${{ inputs.language == 'go' && env.GA_BUILD_PROFILE == 'cli' }}
+        # TODO: make this a matrix on WIndows/Mac/Linux
+        # TODO: parameterize build output path
         run: |
           ls
           pwd
@@ -717,25 +746,28 @@ jobs:
       - name: 'Go unit tests'
         if: ${{ inputs.language == 'go' && inputs.unit-tests == true && inputs.build-profile == 'cli' }}
         run: |
-          go test -v ./... > ${{ inputs.quality-junit-report }}
+          go test -v ./... > ${{ inputs.unit-test-output-path }}
+
+      # TODO: add unit-test-command-override if go test is not desired        
 
       - name: Upload test coverage artifact
         if: ${{ inputs.language == 'go' && inputs.unit-tests == true && inputs.build-profile == 'cli' }}
         uses: actions/upload-artifact@v4
+        # TODO: parameterize the unit test and coverage report names
         with:
             # Name of the artifact to upload.
             name: test-coverage.out
             # A file, directory or wildcard pattern that describes what to upload
-            path: ${{ inputs.quality-junit-report }}
-#   run: go test -v -coverprofile="coverage.out" ./... and upload artifact!
-      #     - name: Build for Rust binary
-      #       if: ${{ env.GA_BUILD_LANGUAGE == 'rust' }}  
-      #       run: echo 'hello world'
-      #       # cargo build --release --target-dir ./bin
+            path: ${{ inputs.unit-test-output-path }}
+        #   run: go test -v -coverprofile="coverage.out" ./... and upload artifact!
+        #     - name: Build for Rust binary
+        #       if: ${{ env.GA_BUILD_LANGUAGE == 'rust' }}  
+        #       run: echo 'hello world'
+        #       # cargo build --release --target-dir ./bin
 
-      #     - name: Build for Ruby binary 
-      # simple bundle install to generate gemlock(puts them in directory vendor/bundle, and uses actual gemspec for deployment to get multi-architecture ), then build gem
-      # https://bundler.io/man/bundle-install.1.html
+        #     - name: Build for Ruby binary 
+        # simple bundle install to generate gemlock(puts them in directory vendor/bundle, and uses actual gemspec for deployment to get multi-architecture ), then build gem
+        # https://bundler.io/man/bundle-install.1.html
       - name: 'Ruby build'
         if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}        
         run: |
@@ -748,23 +780,22 @@ jobs:
           fi
           bundle exec rake build
       
-   
     # - name: Configure git for private modules
     #   env:
     #     GOPRIVATE: github.com/progress-platform-services/*
     #   run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
     
-  # TODO: dynamic version detection stepswith new flags ${{ detect-version-source-type: 'none' # options include "none" (do not detect), "file", "github-tag" or "github-release"
-      # AND ${{ detect-version-source-parameter: '' # use for file name}}
-# version: ${{ github.workflow.env.APP_VERSION }}
-      # version: ${{ needs.set-app-version.outputs.app-version }}
+    # TODO: dynamic version detection stepswith new flags ${{ detect-version-source-type: 'none' # options include "none" (do not detect), "file", "github-tag" or "github-release"
+    # AND ${{ detect-version-source-parameter: '' # use for file name}}
+    # version: ${{ github.workflow.env.APP_VERSION }}
+    # version: ${{ needs.set-app-version.outputs.app-version }}
       
-      # if you have a version file, you can read it in to an environment variable with
-  #     - name: Set variables
-  #       run: |
-  #         VER=$(cat VERSION)
-  #         echo "VERSION=$VER" >> $GITHUB_ENV
-  #   then ${{ env.VERSION }}
+    # if you have a version file, you can read it in to an environment variable with
+    #     - name: Set variables
+    #       run: |
+    #         VER=$(cat VERSION)
+    #         echo "VERSION=$VER" >> $GITHUB_ENV
+    #   then ${{ env.VERSION }}
   
   set-application-version:
     runs-on: ubuntu-latest
@@ -805,14 +836,8 @@ jobs:
       # - name: Use the latest tag
       #   run: echo "The latest tag is ${{ steps.latest_tag.outputs.tag }}"
 
-  # ################################################################################################################
-  # #
-  # #    Unit tests and code quality checks
-  # #
-  # ################################################################################################################
-  
   ci-unit-test: # FROM CHEF-VAULT
-  # TODO: add language-specific unit tests
+    # TODO: add language-specific unit tests
     name: 'Unit tests'
     if: ${{ inputs.unit-tests == true && success() && inputs.language == 'Ruby' }}
     needs:  ci-build
@@ -838,47 +863,41 @@ jobs:
       #     failedThreshold: 90
       #     resultPath: coverage/.last_run.json
 
-  #   runs-on: ubuntu-latest
-  #   needs: ci-package-binary
-  #   name: 'CI unit tests'
-  #   steps:
-  #     - name: Build for Rust binary
-  #       if: ${{ inputs.language == 'Rust' }}
-  #       run: echo 'hello world'
-  #       # cargo test --target-dir ./bin OR
-  # - name: Run cargo-tarpaulin
-  # shell: bash
-  # run: |
-  #   RUN_MODE=local cargo tarpaulin --ignore-tests --all-features --release --out Lcov
-  #   sonar-scanner -Dcommunity.rust.lcov.reportPaths=lcov.info -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+      #   runs-on: ubuntu-latest
+      #   needs: ci-package-binary
+      #   name: 'CI unit tests'
+      #   steps:
+      #     - name: Build for Rust binary
+      #       if: ${{ inputs.language == 'Rust' }}
+      #       run: echo 'hello world'
+      #       # cargo test --target-dir ./bin OR
+      # - name: Run cargo-tarpaulin
+      # shell: bash
+      # run: |
+      #   RUN_MODE=local cargo tarpaulin --ignore-tests --all-features --release --out Lcov
+      #   sonar-scanner -Dcommunity.rust.lcov.reportPaths=lcov.info -Dsonar.login=${{ secrets.SONAR_TOKEN }}
 
-  #     - name: Build for Ruby binary
-  #       if: ${{ inputs.language == 'Ruby' }}
-  #       run: echo 'hello world'
-  #       # bundle exec rake test
-  #       # bundle exec rake test:unit
-  #       # bundle exec rake test:integration
-  #       # bundle exec rake test:unit:rubocop
+      #     - name: Build for Ruby binary
+      #       if: ${{ inputs.language == 'Ruby' }}
+      #       run: echo 'hello world'
+      #       # bundle exec rake test
+      #       # bundle exec rake test:unit
+      #       # bundle exec rake test:integration
+      #       # bundle exec rake test:unit:rubocop
 
-  #     - name: Build for Go binary
-  #       if: ${{ inputs.language == 'Go' }}
-  #       run: echo 'hello world'
-  #       # go test -v ./... > ./bin/test.out
+      #     - name: Build for Go binary
+      #       if: ${{ inputs.language == 'Go' }}
+      #       run: echo 'hello world'
+      #       # go test -v ./... > ./bin/test.out
 
-   # - name: Upload test coverage artifact
-    #   uses: actions/upload-artifact@v4
-    #   with:
-    #     # Name of the artifact to upload.
-    #     name: test-coverage.out
-    #     # A file, directory or wildcard pattern that describes what to upload
-    #     path: test/unittest/coverage.out
+      # - name: Upload test coverage artifact
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     # Name of the artifact to upload.
+      #     name: test-coverage.out
+      #     # A file, directory or wildcard pattern that describes what to upload
+      #     path: test/unittest/coverage.out
          
-  # ################################################################################################################
-  # #
-  # #    Security SAST tests and scans (SonarQube and Blackduck SAST)
-  # #
-  # ################################################################################################################
-  
   Sonar-public-repo:
     name: 'PUBLIC Sonar SAST scan'
     needs: ci-build
@@ -947,20 +966,19 @@ jobs:
       udf2: ${{ inputs.udf2 }}
       udf3: ${{ inputs.udf3 }}
       
-  # TODO: add new flags to BLACKDUCK ${{ polaris-blackduck-executable }} && ${{ polaris-executable-detect-path }}
-
-  # NOW THE LATEST COMMUNITY - https://github.com/prgs-community/githubactions-securityscans/blob/main/polaris/action.yml 
-  # # updated to https://documentation.blackduck.com/bundle/bridge/page/documentation/c_download.html#polaris-download
-  # # https://github.com/marketplace/actions/black-duck-security-scan
-  # NOT USED - from https://documentation.blackduck.com/bundle/bridge/page/documentation/t_github-polaris-quickstart.html
-  # parameters @ https://documentation.blackduck.com/bundle/bridge/page/documentation/c_github-polaris.html
-  # internal confluence https://progresssoftware.atlassian.net/wiki/spaces/TCE/pages/1010336076/Polaris#Examples
-  #   and https://progresssoftware.atlassian.net/wiki/spaces/TCE/pages/1010303415/Polaris+-+Github+Actions+Templates
-  # chef-vault at https://polaris.blackduck.com/portfolio/portfolios/8b7ad6f7-6dcb-49ec-bded-bfc4f190d4f8/portfolio-items/fe369baf-11d2-4989-bcb7-045577856dcc/projects/2460eabd-d033-48a1-a378-6cadd49be6d1/tests/sast?branchId=a6d2c02a-05f8-4557-bfa1-c40e9337ee5d
   BlackDuck-Polaris-SAST:
     # branding: applied at action.yml level, not workflow, see https://docs.github.com/en/actions/reference/workflows-and-actions/metadata-syntax#branding
     #   icon: 'shield'
     #   color: 'red'
+    # TODO: add new flags to BLACKDUCK ${{ polaris-blackduck-executable }} && ${{ polaris-executable-detect-path }}
+    # NOW THE LATEST COMMUNITY - https://github.com/prgs-community/githubactions-securityscans/blob/main/polaris/action.yml 
+    # # updated to https://documentation.blackduck.com/bundle/bridge/page/documentation/c_download.html#polaris-download
+    # # https://github.com/marketplace/actions/black-duck-security-scan
+    # NOT USED - from https://documentation.blackduck.com/bundle/bridge/page/documentation/t_github-polaris-quickstart.html
+    # parameters @ https://documentation.blackduck.com/bundle/bridge/page/documentation/c_github-polaris.html
+    # internal confluence https://progresssoftware.atlassian.net/wiki/spaces/TCE/pages/1010336076/Polaris#Examples
+    #   and https://progresssoftware.atlassian.net/wiki/spaces/TCE/pages/1010303415/Polaris+-+Github+Actions+Templates
+    # chef-vault at https://polaris.blackduck.com/portfolio/portfolios/8b7ad6f7-6dcb-49ec-bded-bfc4f190d4f8/portfolio-items/fe369baf-11d2-4989-bcb7-045577856dcc/projects/2460eabd-d033-48a1-a378-6cadd49be6d1/tests/sast?branchId=a6d2c02a-05f8-4557-bfa1-c40e9337ee5d
     if: ${{ inputs.perform-blackduck-polaris == true }}
     runs-on: ubuntu-latest
     needs: checkout # TODO: fix set-application-version
@@ -1028,26 +1046,17 @@ jobs:
           #   mark_build_status: 'success'
         continue-on-error: true
        
-  ################################################################################################################
-  #
-  #    TODO: Add packaging steps – rpm, deb, MSI, dpkg + signing + SHA
-  #
-  ################################################################################################################
   package-binary:
     name: 'Creating packaged binaries'
+    # TODO: Add packaging steps – rpm, deb, MSI, dpkg + signing + SHA
     runs-on: ubuntu-latest
     if: ${{ success() && inputs.package-binaries == true }}
     needs: ci-build
     steps:
       - name: 'Create packaged binaries'
         run: echo "Creating packaged binaries"
-  # TODO: add flag for any params needed
 
-  ################################################################################################################
-  #
-  #    TODO: Add habitat build steps from plan.sh for various packages/platforms/machine archs, optionally publish to Builder, then optionally test with grype
-  #
-  ################################################################################################################  
+   #    TODO: Add habitat build steps from plan.sh for various packages/platforms/machine archs, optionally publish to Builder, then optionally test with grype
   habitat-build:
     name: 'Creating Habitat packages'
     runs-on: ubuntu-latest
@@ -1056,7 +1065,7 @@ jobs:
     steps:
       - name: 'Create Habitat packages'
         run: echo "Creating Habitat packages"
-  # TODO: add flag for any params needed
+    # TODO: add flag for any params needed
   habitat-publish:
     name: 'Publishing Habitat packages to Builder'
     runs-on: ubuntu-latest
@@ -1065,6 +1074,7 @@ jobs:
     steps:
       - name: 'Publishing Habitat packages to Builder'
         run: echo "Publishing Habitat packages to Builder"
+
   habitat-grype-scan-linux:
     # this workflow installs a specified Chef Habitat package and runs a Grype security scan against it.
     # It supports multiple OS runners (Linux, Windows, MacOS) and allows dynamic input of package details.
@@ -1266,29 +1276,20 @@ jobs:
           name: grype-results-windows-${{ env.OUTPUT_FILE }}
           path: ${{ env.OUTPUT_FILE }}
 
-  ################################################################################################################
-  #
-  #    TODO: Add binary publishing steps – container from Dockerfile to ECR, go-releaser binary to releases page, 
-  #       omnibus to artifactory, gems, choco, homebrew, other app stores
-  #
-  ################################################################################################################
   publish:
     name: 'Publishing packages'
+    #    TODO: Add binary publishing steps – container from Dockerfile to ECR, go-releaser binary to releases page, 
+    #       omnibus to artifactory, gems, choco, homebrew, other app stores
     runs-on: ubuntu-latest
     if: ${{ success() && inputs.publish-packages == true }}
     needs: habitat-build
     steps:
       - name: 'Publishing packages'
         run: echo "Publishing packages"
-  # TODO: add flag for any params needed
-
-  ################################################################################################################
-  #
-  #    Create software bill-of-materials (SBOM) using SPDX format
-  #
-  ################################################################################################################
+  
   generate-sbom:
     name: 'Generating SBOM'
+    #    Create software bill-of-materials (SBOM) using SPDX format
     if: ${{ inputs.generate-sbom == true }}
     uses: chef/common-github-actions/.github/workflows/sbom.yml@main
     needs: ci-build
@@ -1329,4 +1330,3 @@ jobs:
       udf1: ${{ inputs.udf1 }}
       udf2: ${{ inputs.udf2 }}
       udf3: ${{ inputs.udf3 }}
-
