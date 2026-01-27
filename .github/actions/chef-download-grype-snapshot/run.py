@@ -65,7 +65,7 @@ if scan_mode == "habitat":
     pkg_to_install = hab_ident if hab_ident else f"{hab_origin}/{product}"
     
     # Install the package (with channel if specified)
-    install_cmd = f"hab pkg install {pkg_to_install}"
+    install_cmd = f"hab pkg install {pkg_to_install} --license accept"
     if hab_channel and hab_channel != "stable":
         install_cmd += f" --channel {hab_channel}"
     if license_id:
