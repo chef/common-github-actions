@@ -770,14 +770,15 @@ jobs:
       - name: 'Ruby build'
         if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}        
         run: |
-          mkdir -p vendor
-          if [ -f "Gemfile.lock" ]; then
-            bundle install --deployment
-          else
-            echo "No .gemlock file found, creating it now"
-            bundle install --path vendor/bundle --deployment
-          fi
-          bundle exec rake build
+          echo "Ruby bundle here"
+          # mkdir -p vendor
+          # if [ -f "Gemfile.lock" ]; then
+          #   bundle install --deployment
+          # else
+          #   echo "No .gemlock file found, creating it now"
+          #   bundle install --path vendor/bundle --deployment
+          # fi
+          # bundle exec rake build
       
     # - name: Configure git for private modules
     #   env:
