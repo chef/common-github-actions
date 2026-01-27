@@ -67,18 +67,18 @@ if scan_mode == "habitat":
     # Determine package identifier
     pkg_to_install = hab_ident if hab_ident else f"{hab_origin}/{product}"
     
-    # Install the package (with channel if specified)
-    install_cmd = f"hab pkg install {pkg_to_install}"
+    # Install the package (with channel if specified) - requires sudo for /hab/pkgs/ access
+    install_cmd = f"sudo hab pkg install {pkg_to_install}"
     if hab_channel and hab_channel != "stable":
         install_cmd += f" --channel {hab_channel}"
         # Only set HAB_AUTH_TOKEN for non-stable channels (licensed/private channels)
         if license_id:
-            install_cmd = f"HAB_AUTH_TOKEN={license_id} {install_cmd}"
+            install_cmd = f"sudo HAB_AUTH_TOKEN={license_id} hab pkg install {pkg_to_install} --channel {hab_channel}"
     
     run(["bash", "-lc", install_cmd], check=True)
     
     # Get installed package details
-    rc, out, err = run(["bash", "-lc", f"hab pkg path {pkg_to_install}"], check=True)
+    rc, out, err = run(["bash", "-lc", f"sudo hab pkg path {pkg_to_install}"], check=True)
     installed_path = out.strip()
     
     # Parse origin/name/version/release from path
