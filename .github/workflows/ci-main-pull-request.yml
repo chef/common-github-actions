@@ -405,7 +405,7 @@ jobs:
     name: 'Pre-compilation checks'
     runs-on: ubuntu-latest
     steps:
-      - detect-custom-properties:
+      - name: detect-custom-properties
         # 'Detect app, language, and build profile environment variables from repository custom properties'
         # GH API returns something like [{"property_name":"GABuildLanguage","value":"go"},{"property_name":"GABuildProfile","value":"cli"},{"property_name":"primaryApplication","value":"chef-360"}]'
         run: |
@@ -426,7 +426,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
           
-      - generate-filename-slug:
+      - name: generate-filename-slug
         # description: Generate a simple slug based on repo and date for use in any output artifacts
         runs-on: ubuntu-latest
         steps:
