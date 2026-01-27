@@ -91,15 +91,19 @@ if scan_mode == "habitat":
         raise RuntimeError(f"Unable to parse habitat package path: {installed_path}")
     
     # Enumerate dependencies
-    deps_cmd = f"hab pkg deps {pkg_to_install}"
     if transitive_deps:
-        # Include transitive dependencies
-        rc, out, err = run(["bash", "-lc", deps_cmd], check=True)
+        # Include transitive dependencies (full tree via hab pkg deps)
+        rc, out, err = run(["bash", "-lc", f"sudo hab pkg deps {pkg_to_install}"], check=True)
+        dep_idents = [line.strip() for line in out.split("\n") if line.strip() and "/" in line]
     else:
-        # Direct dependencies only (tdeps output minus package itself)
-        rc, out, err = run(["bash", "-lc", f"hab pkg deps -r {pkg_to_install}"], check=True)
-    
-    dep_idents = [line.strip() for line in out.split("\n") if line.strip() and "/" in line]
+        # Direct dependencies only (read from DEPS file)
+        deps_file = f"{installed_path}/DEPS"
+        rc, out, err = run(["bash", "-lc", f"sudo cat {deps_file} 2>/dev/null || echo ''"], check=False)
+        if rc == 0 and out.strip():
+            dep_idents = [line.strip() for line in out.split("\n") if line.strip() and "/" in line]
+        else:
+            # No DEPS file or empty - package has no dependencies
+            dep_idents = []
     
     # Always include the main package itself
     main_ident = f"{origin}/{name}/{version}/{release}"
