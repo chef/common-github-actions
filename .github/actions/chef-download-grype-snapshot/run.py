@@ -93,7 +93,7 @@ if scan_mode == "habitat":
     # Enumerate dependencies
     if transitive_deps:
         # Include transitive dependencies (full tree via hab pkg deps)
-        rc, out, err = run(["bash", "-lc", f"sudo hab pkg deps {pkg_to_install}"], check=True)
+        rc, out, err = run(["bash", "-lc", f"sudo hab pkg dependencies -t {pkg_to_install}"], check=True)
         dep_idents = [line.strip() for line in out.split("\n") if line.strip() and "/" in line]
     else:
         # Direct dependencies only (read from DEPS file)
