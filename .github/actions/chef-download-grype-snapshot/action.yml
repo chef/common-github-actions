@@ -57,6 +57,10 @@ inputs:
     required: false
     description: "Include transitive dependencies in habitat scan (true/false)"
     default: "false"
+  hab_auth_token:
+    required: false
+    description: "Habitat Builder Personal Access Token for protected channels (pass via secrets)"
+    default: ""
   out_dir:
     required: false
     description: "Output directory"
@@ -96,6 +100,7 @@ runs:
         HAB_CHANNEL: ${{ inputs.hab_channel }}
         HAB_ORIGIN: ${{ inputs.hab_origin }}
         TRANSITIVE_DEPS: ${{ inputs.transitive_deps }}
+        HAB_AUTH_TOKEN: ${{ inputs.hab_auth_token }}
         OUT_DIR: ${{ inputs.out_dir }}
         WORK_DIR: ${{ inputs.work_dir }}
       run: |

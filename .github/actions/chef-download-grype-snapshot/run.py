@@ -42,6 +42,7 @@ work_dir      = env("WORK_DIR", "work")
 hab_ident     = env("HAB_IDENT", "")
 hab_channel   = env("HAB_CHANNEL", "stable")
 hab_origin    = env("HAB_ORIGIN", "")
+hab_auth_token = env("HAB_AUTH_TOKEN", "")
 transitive_deps = env("TRANSITIVE_DEPS", "false").lower() == "true"
 
 ensure_dir(out_dir)
@@ -71,9 +72,9 @@ if scan_mode == "habitat":
     install_cmd = f"sudo hab pkg install {pkg_to_install}"
     if hab_channel and hab_channel != "stable":
         install_cmd += f" --channel {hab_channel}"
-        # Only set HAB_AUTH_TOKEN for non-stable channels (licensed/private channels)
-        if license_id:
-            install_cmd = f"sudo HAB_AUTH_TOKEN={license_id} hab pkg install {pkg_to_install} --channel {hab_channel}"
+        # Set HAB_AUTH_TOKEN for non-stable channels if provided (for protected/private channels)
+        if hab_auth_token:
+            install_cmd = f"sudo HAB_AUTH_TOKEN={hab_auth_token} hab pkg install {pkg_to_install} --channel {hab_channel}"
     
     run(["bash", "-lc", install_cmd], check=True)
     
