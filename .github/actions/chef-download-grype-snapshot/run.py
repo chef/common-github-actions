@@ -113,9 +113,13 @@ if scan_mode == "habitat":
     # Ensure grype
     run(["bash", "-lc", "command -v grype >/dev/null 2>&1 || (curl -sSfL https://get.anchore.io/grype | sh -s -- -b /usr/local/bin)"], check=True)
     
+    # Create main package directory structure: {origin}/{name}/{version}/
+    main_pkg_dir = os.path.join(out_dir, origin, name, version)
+    ensure_dir(main_pkg_dir)
+    
     # Scan each dependency separately
     dep_results = []
-    deps_dir = os.path.join(out_dir, "deps")
+    deps_dir = os.path.join(main_pkg_dir, "deps")
     ensure_dir(deps_dir)
     
     for dep_ident in dep_idents:
@@ -133,8 +137,15 @@ if scan_mode == "habitat":
         else:
             dep_scan_path = f"/hab/pkgs/{dep_origin}/{dep_name}/{dep_version}/{dep_release}"
         
-        # Create output directory structure: deps/<origin>/<name>/<version>/
-        dep_out_dir = os.path.join(deps_dir, dep_origin, dep_name, dep_version)
+        # Determine output location: main package at root, dependencies under deps/
+        is_main = (dep_ident == main_ident)
+        if is_main:
+            # Main package files go directly in main_pkg_dir
+            dep_out_dir = main_pkg_dir
+        else:
+            # Dependencies go under deps/<origin>/<name>/<version>/
+            dep_out_dir = os.path.join(deps_dir, dep_origin, dep_name, dep_version)
+        
         ensure_dir(dep_out_dir)
         
         dep_json_path = os.path.join(dep_out_dir, f"{dep_release}.json")
@@ -182,6 +193,15 @@ if scan_mode == "habitat":
             json.dump(dep_metadata, open(dep_metadata_path, "w", encoding="utf-8"), indent=2)
             
             # Track for rollup
+            # Check if this is the main package
+            is_main = (dep_ident == main_ident)
+            
+            # Store different paths for main vs dependency
+            if is_main:
+                json_rel_path = f"{release}.json"
+            else:
+                json_rel_path = f"deps/{dep_origin}/{dep_name}/{dep_version}/{dep_release}.json"
+            
             dep_results.append({
                 "ident": dep_ident,
                 "origin": dep_origin,
@@ -190,7 +210,8 @@ if scan_mode == "habitat":
                 "release": dep_release,
                 "matches_total": len(dep_matches),
                 "severity_counts": dep_sev_counts,
-                "json_path": f"deps/{dep_origin}/{dep_name}/{dep_version}/{dep_release}.json"
+                "json_path": json_rel_path,
+                "is_main_package": is_main
             })
             
             print(f"Scanned dependency: {dep_ident} ({len(dep_matches)} matches)")
@@ -279,10 +300,11 @@ if scan_mode == "habitat":
         "dependencies": dep_results
     }
     
-    index_path = os.path.join(out_dir, "index.json")
+    # Write index.json in the main package directory
+    index_path = os.path.join(main_pkg_dir, "index.json")
     json.dump(index, open(index_path, "w", encoding="utf-8"), indent=2)
     
-    # Write resolved_version for workflow outputs
+    # Write resolved_version for workflow outputs (keep in out_dir root for workflow to find)
     write_text(os.path.join(out_dir, "_resolved_version.txt"), resolved_version)
     write_text(os.path.join(out_dir, "_download_url_redacted.txt"), f"habitat://{main_ident}@{hab_channel}")
     
