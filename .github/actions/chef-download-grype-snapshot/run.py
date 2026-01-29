@@ -120,8 +120,6 @@ if scan_mode == "habitat":
     
     # Scan each dependency separately
     dep_results = []
-    deps_dir = os.path.join(main_pkg_dir, "deps")
-    ensure_dir(deps_dir)
     
     for dep_ident in dep_idents:
         # Parse dependency ident: origin/name/version/release
@@ -138,15 +136,8 @@ if scan_mode == "habitat":
         else:
             dep_scan_path = f"/hab/pkgs/{dep_origin}/{dep_name}/{dep_version}/{dep_release}"
         
-        # Determine output location: main package at root, dependencies under deps/
-        is_main = (dep_ident == main_ident)
-        if is_main:
-            # Main package files go directly in main_pkg_dir
-            dep_out_dir = main_pkg_dir
-        else:
-            # Dependencies go under deps/<origin>/<name>/<version>/
-            dep_out_dir = os.path.join(deps_dir, dep_origin, dep_name, dep_version)
-        
+        # Determine output location: all packages go in main_pkg_dir/{origin}/{name}/{version}/
+        dep_out_dir = os.path.join(main_pkg_dir, dep_origin, dep_name, dep_version)
         ensure_dir(dep_out_dir)
         
         dep_json_path = os.path.join(dep_out_dir, f"{dep_release}.json")
@@ -197,11 +188,8 @@ if scan_mode == "habitat":
             # Check if this is the main package
             is_main = (dep_ident == main_ident)
             
-            # Store different paths for main vs dependency
-            if is_main:
-                json_rel_path = f"{release}.json"
-            else:
-                json_rel_path = f"deps/{dep_origin}/{dep_name}/{dep_version}/{dep_release}.json"
+            # All packages stored under {origin}/{name}/{version}/
+            json_rel_path = f"{dep_origin}/{dep_name}/{dep_version}/{dep_release}.json"
             
             dep_results.append({
                 "ident": dep_ident,

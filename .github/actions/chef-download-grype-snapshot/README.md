@@ -215,26 +215,23 @@ Each dependency is scanned separately, and results are published to the data rep
 
 ```
 habitat/<product>/<channel>/<os>/<arch>/<origin>/<name>/<version>/
-├── <release>.json                    ← Main package scan
-├── <release>.metadata.json           ← Main package metadata
-├── index.json                        ← Rollup of all dependencies
-└── deps/                             ← Directory of dependencies
-    ├── <dep-origin>/<dep-name>/<dep-version>/<dep-release>.json
-    └── <dep-origin>/<dep-name>/<dep-version>/<dep-release>.metadata.json
+├── <release>.json                                          ← Main package scan
+├── <release>.metadata.json                                 ← Main package metadata
+├── index.json                                              ← Rollup of all dependencies
+├── <dep-origin>/<dep-name>/<dep-version>/<dep-release>.json        ← Dependency scans
+└── <dep-origin>/<dep-name>/<dep-version>/<dep-release>.metadata.json
 ```
 
 **Example:**
 ```
-habitat/inspec/stable/ubuntu/x86_64/
-└── chef/inspec/5.24.5/
-    ├── 20260128071642.json           ← Main inspec scan
-    ├── 20260128071642.metadata.json  ← Main inspec metadata
-    ├── index.json                    ← Rollup (13 deps, 20 vulns)
-    └── deps/
-        ├── core/ruby31/3.1.7/20250728150529.json
-        ├── core/ruby31/3.1.7/20250728150529.metadata.json
-        ├── core/bash/5.1/20240105214248.json
-        └── core/bash/5.1/20240105214248.metadata.json
+habitat/inspec/stable/ubuntu/x86_64/chef/inspec/5.24.5/
+├── 20260128071642.json                       ← Main inspec scan
+├── 20260128071642.metadata.json              ← Main inspec metadata
+├── index.json                                ← Rollup (13 deps, 20 vulns)
+├── core/ruby31/3.1.7/20250728150529.json
+├── core/ruby31/3.1.7/20250728150529.metadata.json
+├── core/bash/5.1/20240105214248.json
+└── core/bash/5.1/20240105214248.metadata.json
 ```
 
 ## Related Projects
