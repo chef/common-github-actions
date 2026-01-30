@@ -39,7 +39,7 @@ Supports two scan modes:
     scan_mode: habitat
     hab_ident: "chef/chef-infra-client"
     hab_channel: stable
-    license_id: ${{ secrets.LICENSE_ID }}
+    hab_auth_token: ${{ secrets.HAB_AUTH_TOKEN }}
 ```
 
 ## Inputs
@@ -60,7 +60,7 @@ Supports two scan modes:
 | `hab_ident` | No | "" | Habitat package identifier (e.g., 'core/chef-infra-client') - habitat mode |
 | `hab_channel` | No | stable | Habitat channel (stable, current, base-2025, etc.) - habitat mode |
 | `hab_origin` | No | "" | Habitat origin (e.g., 'chef') - alternative to hab_ident - habitat mode |
-| `transitive_deps` | No | false | Include transitive dependencies in habitat scan (true/false) |
+| `hab_auth_token` | No | "" | Habitat Builder Personal Access Token for protected channels (pass via secrets) |
 | `out_dir` | No | out | Output directory for results |
 | `work_dir` | No | work | Working directory for temporary files |
 
@@ -82,31 +82,43 @@ The action generates two JSON files in the `out_dir`:
 
 ### Habitat Mode
 
-The action generates an index file and per-dependency scans:
+The action generates an index file and per-dependency scans organized by type:
 
-- **index.json**: Rollup of all dependencies with aggregate counts and metadata
-- **deps/<origin>/<name>/<version>/<release>.json**: Grype scan results for each dependency
-- **deps/<origin>/<name>/<version>/<release>.metadata.json**: Metadata for each dependency scan
+- **index.json**: Rollup of all dependencies (direct and transitive) with aggregate counts and metadata
+- **direct-deps/<origin>/<name>/<version>/<release>.json**: Grype scan results for each direct dependency
+- **direct-deps/<origin>/<name>/<version>/<release>.metadata.json**: Metadata for each direct dependency
+- **transitive-deps/<origin>/<name>/<version>/<release>.json**: Grype scan results for each transitive dependency
+- **transitive-deps/<origin>/<name>/<version>/<release>.metadata.json**: Metadata for each transitive dependency
 
 Example structure:
 ```
 out/
 ├── index.json
-└── deps/
-    ├── core/
-    │   ├── openssl/
-    │   │   └── 3.0.13/
-    │   │       ├── 20250101120000.json
-    │   │       └── 20250101120000.metadata.json
-    │   └── glibc/
-    │       └── 2.39/
-    │           ├── 20250105140500.json
-    │           └── 20250105140500.metadata.json
-    └── chef/
-        └── chef-infra-client/
-            └── 18.5.0/
-                ├── 20250110120000.json
-                └── 20250110120000.metadata.json
+├── direct-deps/
+│   ├── core/
+│   │   ├── openssl/
+│   │   │   └── 3.0.13/
+│   │   │       ├── 20250101120000.json
+│   │   │       └── 20250101120000.metadata.json
+│   │   └── glibc/
+│   │       └── 2.39/
+│   │           ├── 20250105140500.json
+│   │           └── 20250105140500.metadata.json
+│   └── chef/
+│       └── chef-infra-client/
+│           └── 18.5.0/
+│               ├── 20250110120000.json
+│               └── 20250110120000.metadata.json
+└── transitive-deps/
+    └── core/
+        ├── gcc-libs/
+        │   └── 9.5.0/
+        │       ├── 20240105173910.json
+        │       └── 20240105173910.metadata.json
+        └── zlib/
+            └── 1.3/
+                ├── 20240105173710.json
+                └── 20240105173710.metadata.json
 ```
 
 ## Requirements
@@ -194,8 +206,7 @@ jobs:
           scan_mode: habitat
           hab_ident: ${{ matrix.package.ident }}
           hab_channel: ${{ matrix.package.channel }}
-          license_id: ${{ secrets.HAB_AUTH_TOKEN }}
-          transitive_deps: false
+          hab_auth_token: ${{ secrets.HAB_AUTH_TOKEN }}
       
       - name: Upload results
         uses: actions/upload-artifact@v4
@@ -218,8 +229,12 @@ habitat/<product>/<channel>/<os>/<arch>/<origin>/<name>/<version>/
 ├── <release>.json                                          ← Main package scan
 ├── <release>.metadata.json                                 ← Main package metadata
 ├── index.json                                              ← Rollup of all dependencies
-├── <dep-origin>/<dep-name>/<dep-version>/<dep-release>.json        ← Dependency scans
-└── <dep-origin>/<dep-name>/<dep-version>/<dep-release>.metadata.json
+├── direct-deps/                                            ← Direct dependencies
+│   ├── <dep-origin>/<dep-name>/<dep-version>/<dep-release>.json
+│   └── <dep-origin>/<dep-name>/<dep-version>/<dep-release>.metadata.json
+└── transitive-deps/                                        ← Transitive dependencies
+    ├── <dep-origin>/<dep-name>/<dep-version>/<dep-release>.json
+    └── <dep-origin>/<dep-name>/<dep-version>/<dep-release>.metadata.json
 ```
 
 **Example:**
@@ -227,11 +242,17 @@ habitat/<product>/<channel>/<os>/<arch>/<origin>/<name>/<version>/
 habitat/inspec/stable/ubuntu/x86_64/chef/inspec/5.24.5/
 ├── 20260128071642.json                       ← Main inspec scan
 ├── 20260128071642.metadata.json              ← Main inspec metadata
-├── index.json                                ← Rollup (13 deps, 20 vulns)
-├── core/ruby31/3.1.7/20250728150529.json
-├── core/ruby31/3.1.7/20250728150529.metadata.json
-├── core/bash/5.1/20240105214248.json
-└── core/bash/5.1/20240105214248.metadata.json
+├── index.json                                ← Rollup
+├── direct-deps/
+│   ├── core/ruby31/3.1.7/20250728150529.json
+│   ├── core/ruby31/3.1.7/20250728150529.metadata.json
+│   ├── core/bash/5.1/20240105214248.json
+│   └── core/bash/5.1/20240105214248.metadata.json
+└── transitive-deps/
+    ├── core/gcc-libs/9.5.0/20240105173910.json
+    ├── core/gcc-libs/9.5.0/20240105173910.metadata.json
+    ├── core/glibc/2.35/20240105171810.json
+    └── core/glibc/2.35/20240105171810.metadata.json
 ```
 
 ## Related Projects
@@ -326,8 +347,7 @@ Published to: `habitat/<product>/<channel>/<os>/<arch>/`
     scan_mode: habitat
     hab_ident: "chef/chef-infra-client"
     hab_channel: stable
-    transitive_deps: false
-    license_id: ${{ secrets.HAB_AUTH_TOKEN }}
+    hab_auth_token: ${{ secrets.HAB_AUTH_TOKEN }}
 ```
 
 ## Testing Recommendations

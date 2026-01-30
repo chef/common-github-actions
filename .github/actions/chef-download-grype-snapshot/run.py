@@ -43,7 +43,6 @@ hab_ident     = env("HAB_IDENT", "")
 hab_channel   = env("HAB_CHANNEL", "stable")
 hab_origin    = env("HAB_ORIGIN", "")
 hab_auth_token = env("HAB_AUTH_TOKEN", "")
-transitive_deps = env("TRANSITIVE_DEPS", "false").lower() == "true"
 
 ensure_dir(out_dir)
 ensure_dir(work_dir)
@@ -91,25 +90,29 @@ if scan_mode == "habitat":
     else:
         raise RuntimeError(f"Unable to parse habitat package path: {installed_path}")
     
-    # Enumerate dependencies
-    if transitive_deps:
-        # Include transitive dependencies (full tree via hab pkg deps)
-        rc, out, err = run(["bash", "-lc", f"sudo hab pkg dependencies -t {pkg_to_install}"], check=True)
-        dep_idents = [line.strip() for line in out.split("\n") if line.strip() and "/" in line]
-    else:
-        # Direct dependencies only (read from DEPS file)
-        deps_file = f"{installed_path}/DEPS"
-        rc, out, err = run(["bash", "-lc", f"sudo cat {deps_file} 2>/dev/null || echo ''"], check=False)
-        if rc == 0 and out.strip():
-            dep_idents = [line.strip() for line in out.split("\n") if line.strip() and "/" in line]
-        else:
-            # No DEPS file or empty - package has no dependencies
-            dep_idents = []
-    
-    # Always include the main package itself
+    # Enumerate direct dependencies (from DEPS file)
     main_ident = f"{origin}/{name}/{version}/{release}"
-    if main_ident not in dep_idents:
-        dep_idents.insert(0, main_ident)
+    deps_file = f"{installed_path}/DEPS"
+    rc, out, err = run(["bash", "-lc", f"sudo cat {deps_file} 2>/dev/null || echo ''"], check=False)
+    if rc == 0 and out.strip():
+        direct_dep_idents = [line.strip() for line in out.split("\n") if line.strip() and "/" in line]
+    else:
+        direct_dep_idents = []
+    
+    # Enumerate transitive dependencies (full tree - includes direct deps per Habitat definition)
+    rc, out, err = run(["bash", "-lc", f"sudo hab pkg dependencies -t {pkg_to_install}"], check=True)
+    transitive_dep_idents = [line.strip() for line in out.split("\n") if line.strip() and "/" in line and line.strip() != main_ident]
+    
+    # Build combined list for scanning: main package + direct deps + all transitive deps
+    # Note: Direct deps will be scanned twice (once in direct-deps/, once in transitive-deps/)
+    # Tag each with its type for proper directory placement
+    deps_to_scan = [
+        {"ident": main_ident, "type": "main"},
+    ]
+    for ident in direct_dep_idents:
+        deps_to_scan.append({"ident": ident, "type": "direct"})
+    for ident in transitive_dep_idents:
+        deps_to_scan.append({"ident": ident, "type": "transitive"})
     
     # Ensure grype
     run(["bash", "-lc", "command -v grype >/dev/null 2>&1 || (curl -sSfL https://get.anchore.io/grype | sh -s -- -b /usr/local/bin)"], check=True)
@@ -121,7 +124,9 @@ if scan_mode == "habitat":
     # Scan each dependency separately
     dep_results = []
     
-    for dep_ident in dep_idents:
+    for dep_info in deps_to_scan:
+        dep_ident = dep_info["ident"]
+        dep_type = dep_info["type"]
         # Parse dependency ident: origin/name/version/release
         dep_parts = dep_ident.split("/")
         if len(dep_parts) != 4:
@@ -136,14 +141,16 @@ if scan_mode == "habitat":
         else:
             dep_scan_path = f"/hab/pkgs/{dep_origin}/{dep_name}/{dep_version}/{dep_release}"
         
-        # Determine output location: main package at root, dependencies as subdirectories
-        is_main = (dep_ident == main_ident)
-        if is_main:
+        # Determine output location based on dependency type
+        if dep_type == "main":
             # Main package files go directly in main_pkg_dir
             dep_out_dir = main_pkg_dir
-        else:
-            # Dependencies go under {dep-origin}/{dep-name}/{dep-version}/
-            dep_out_dir = os.path.join(main_pkg_dir, dep_origin, dep_name, dep_version)
+        elif dep_type == "direct":
+            # Direct dependencies go under direct-deps/{origin}/{name}/{version}/
+            dep_out_dir = os.path.join(main_pkg_dir, "direct-deps", dep_origin, dep_name, dep_version)
+        else:  # transitive
+            # Transitive dependencies go under transitive-deps/{origin}/{name}/{version}/
+            dep_out_dir = os.path.join(main_pkg_dir, "transitive-deps", dep_origin, dep_name, dep_version)
         
         ensure_dir(dep_out_dir)
         
@@ -192,14 +199,13 @@ if scan_mode == "habitat":
             json.dump(dep_metadata, open(dep_metadata_path, "w", encoding="utf-8"), indent=2)
             
             # Track for rollup
-            # Check if this is the main package
-            is_main = (dep_ident == main_ident)
-            
-            # Main package at root level, dependencies in subdirectories
-            if is_main:
+            # Build json_path based on dependency type
+            if dep_type == "main":
                 json_rel_path = f"{dep_release}.json"
-            else:
-                json_rel_path = f"{dep_origin}/{dep_name}/{dep_version}/{dep_release}.json"
+            elif dep_type == "direct":
+                json_rel_path = f"direct-deps/{dep_origin}/{dep_name}/{dep_version}/{dep_release}.json"
+            else:  # transitive
+                json_rel_path = f"transitive-deps/{dep_origin}/{dep_name}/{dep_version}/{dep_release}.json"
             
             dep_results.append({
                 "ident": dep_ident,
@@ -210,7 +216,7 @@ if scan_mode == "habitat":
                 "matches_total": len(dep_matches),
                 "severity_counts": dep_sev_counts,
                 "json_path": json_rel_path,
-                "is_main_package": is_main
+                "dependency_type": dep_type
             })
             
             print(f"Scanned dependency: {dep_ident} ({len(dep_matches)} matches)")
@@ -288,7 +294,6 @@ if scan_mode == "habitat":
         },
         "scan": {
             "mode": "habitat",
-            "transitive_deps": transitive_deps,
             "grype": {"version": grype_version, "db": db_info}
         },
         "summary": {
