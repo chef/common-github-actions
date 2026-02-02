@@ -179,7 +179,7 @@ jobs:
 # Blackduck SBOM is at SERVER: https://progresssoftware.app.blackduck.com/ - org variable!
 # API token in repo - https://github.com/chef/chef-vault/settings/secrets/actions
   generate-blackduck-sbom:
-    name: Generate SBOM using Blackduck Tool (BLUE)
+    name: Blackduck SCA Scan (PURPLE)
     runs-on: ubuntu-latest
     if: ${{ inputs.perform-blackduck-sca-scan == true || inputs.generate-blackduck-polaris-sbom == true }} # generate-blackduck--polaris-sbom is OBSOLETE, use perform-blackduck-sca-scan instead
     steps:
@@ -213,7 +213,7 @@ jobs:
           echo "BLACKDUCK_SBOM_URL: ${{ secrets.BLACKDUCK_SBOM_URL }}"
         # echo "BLACKDUCK_SBOM_API_KEY: ${{ secrets.BLACKDUCK_SBOM_API_KEY }}" no longer used, see BLACKDUCK_SCA_TOKEN
 
-      - name: BlackDuck SBOM scan
+      - name: BlackDuck SCA scan
         uses: blackduck-inc/black-duck-security-scan@v2.1.1
         continue-on-error: true  # Allow pipeline to continue even with policy violations
         env: 
@@ -225,7 +225,8 @@ jobs:
           blackducksca_url: ${{ secrets.BLACKDUCK_SBOM_URL }}  # BLACKDUCK_URL, should be https://progresssoftware.app.blackduck.com/ 
           blackducksca_token: ${{ secrets.BLACKDUCK_SCA_TOKEN }}  # was BLACKDUCK_API_KEY
           # blackducksca_scan_failure_severities: 'BLOCKER,CRITICAL'
-          detect_args: --detect.excluded.detector.types=PIP   # ignore python per https://documentation.blackduck.com/bundle/detect/page/packagemgrs/python.html
+          detect_args: "--detect.excluded.detector.types=PIP --detect.accuracy.required=NONE"
+        # ignore python per https://documentation.blackduck.com/bundle/detect/page/packagemgrs/python.html
 
 ######################################################
 # original from https://github.com/progress-platform-services/common-github-actions/blob/main/.github/workflows/examples/ci-all-sbom-main.yml
