@@ -359,21 +359,12 @@ on:
         required: false
         type: string
         default: 'path/to/detect'
-      generate-msft-sbom:
-        description: 'Generate SBOM using MSFT tools'
-        required: false
-        type: boolean
-        default: true
-      license_scout:
-        description: 'Run license scout for license compliance'
-        required: false
-        type: boolean
-        default: true
       run-bundle-install: # Added to support projects without committed Gemfile.lock (e.g., chef-cli)
         description: 'Run bundle install before scanning to generate Gemfile.lock at runtime'
         required: false
         type: boolean
         default: false
+
       udf1:
         description: 'User defined flag 1'
         required: false
