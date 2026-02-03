@@ -65,6 +65,11 @@ on:
       go-private-modules:
         required: false
         type: string
+      run-bundle-install:
+        description: 'Run bundle install before scanning to generate Gemfile.lock at runtime'
+        required: false
+        type: boolean
+        default: false
 
 env:
   # Set the default SBOM filename prefix
@@ -189,6 +194,13 @@ jobs:
          
       - name: Checkout source
         uses: actions/checkout@v6
+
+      - name: Set up Ruby and run bundle install
+        if: ${{ inputs.run-bundle-install == true }}
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
 
       - name: Configure git for private Go modules
         env:

@@ -359,6 +359,11 @@ on:
         required: false
         type: string
         default: 'path/to/detect'
+      run-bundle-install: # Added to support projects without committed Gemfile.lock (e.g., chef-cli)
+        description: 'Run bundle install before scanning to generate Gemfile.lock at runtime'
+        required: false
+        type: boolean
+        default: false
 
       udf1:
         description: 'User defined flag 1'
@@ -764,21 +769,25 @@ jobs:
         #       run: echo 'hello world'
         #       # cargo build --release --target-dir ./bin
 
-        #     - name: Build for Ruby binary 
-        # simple bundle install to generate gemlock(puts them in directory vendor/bundle, and uses actual gemspec for deployment to get multi-architecture ), then build gem
-        # https://bundler.io/man/bundle-install.1.html
+      #     - name: Build for Ruby binary 
+      # simple bundle install to generate gemlock(puts them in directory vendor/bundle, and uses actual gemspec for deployment to get multi-architecture ), then build gem
+      # https://bundler.io/man/bundle-install.1.html
+      - name: Set up Ruby # Fixed: Ruby setup was missing, causing "bundle: command not found" errors
+        if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
       - name: 'Ruby build'
         if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}        
         run: |
-          echo "Ruby bundle here"
-          # mkdir -p vendor
-          # if [ -f "Gemfile.lock" ]; then
-          #   bundle install --deployment
-          # else
-          #   echo "No .gemlock file found, creating it now"
-          #   bundle install --path vendor/bundle --deployment
-          # fi
-          # bundle exec rake build
+          mkdir -p vendor
+          if [ -f "Gemfile.lock" ]; then
+            bundle install --deployment
+          else
+            echo "No Gemfile.lock found, creating it now"
+            bundle install --path vendor/bundle # Fixed: Removed --deployment flag when lockfile doesn't exist
+          fi
+          bundle exec rake build
       
     # - name: Configure git for private modules
     #   env:
@@ -1304,6 +1313,7 @@ jobs:
       generate-msft-sbom: ${{ inputs.generate-msft-sbom }}
       license_scout: ${{ inputs.license_scout }}
       go-private-modules: ${{ inputs.go-private-modules }}
+      run-bundle-install: ${{ inputs.run-bundle-install }} # Passed to sbom.yml to generate Gemfile.lock at runtime
 
   quality-dashboard:
     name: 'Reporting to quality dashboard'
