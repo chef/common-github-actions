@@ -787,7 +787,7 @@ jobs:
 
       - name: Configure git for private repositories
         if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}
-        run: git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - name: 'Ruby build'
         if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}
@@ -1321,7 +1321,7 @@ jobs:
     name: 'Generating SBOM'
     #    Create software bill-of-materials (SBOM) using SPDX format
     if: ${{ inputs.generate-sbom == true }}
-    uses: chef/common-github-actions/.github/workflows/sbom.yml@main
+    uses: chef/common-github-actions/.github/workflows/sbom.yml@nikhil/pull-private-gems-github-branch
     needs: ci-build
     secrets: inherit
     with:
