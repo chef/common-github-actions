@@ -204,7 +204,7 @@ jobs:
 
       - name: Configure git for private Ruby gems
         if: ${{ inputs.run-bundle-install == true }}
-        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: git config --global url."https://x-access-token:${{ secrets.GH_PRIVATE_REPO_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - name: Set up Ruby and run bundle install
         if: ${{ inputs.language == 'ruby' }} # only run for Ruby projects where we need to generate Gemfile.lock at runtime, inputs.run-bundle-install == true 
