@@ -986,7 +986,7 @@ jobs:
 
       - name: Configure git for private repositories
         if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}
-        run: git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - name: 'Ruby build'
         if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}

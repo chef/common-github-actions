@@ -233,6 +233,10 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v6
 
+      - name: Configure git for private Ruby gems
+        if: ${{ inputs.run-bundle-install == true }}
+        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+
       - name: Set up Ruby and run bundle install
         if: inputs.language == 'ruby'
         uses: ruby/setup-ruby@v1
