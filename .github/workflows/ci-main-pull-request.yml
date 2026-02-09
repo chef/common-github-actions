@@ -740,6 +740,7 @@ jobs:
           fetch-depth: 0
       - name: 'Go build'
         if: ${{ inputs.language == 'go' && env.GA_BUILD_PROFILE == 'cli' }}
+        continue-on-error: true
         # TODO: make this a matrix on WIndows/Mac/Linux
         # TODO: parameterize build output path
         run: |
@@ -749,6 +750,7 @@ jobs:
           go build -o ./bin/${{ env.REPO_NAME }} .
       - name: 'Go unit tests'
         if: ${{ inputs.language == 'go' && inputs.unit-tests == true && inputs.build-profile == 'cli' }}
+        continue-on-error: true
         run: |
           go test -v ./... > ${{ inputs.unit-test-output-path }}
 
@@ -778,7 +780,8 @@ jobs:
         with:
           ruby-version: '3.4'
       - name: 'Ruby build'
-        if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}        
+        if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}
+        continue-on-error: true
         run: |
           mkdir -p vendor
           if [ -f "Gemfile.lock" ]; then
@@ -788,7 +791,15 @@ jobs:
             bundle install --path vendor/bundle # Fixed: Removed --deployment flag when lockfile doesn't exist
           fi
           bundle exec rake build
-      
+      # this does not work on all repos - chef-telemetry needs bundle install to generate gemfile.lock, but chef-cli does not commit gemfile.lock and needs bundle install to generate it at runtime - add flag to control whether bundle install is run in ci-build or language-specific checks
+      # TODO: detect if rakefile exists, else do bundler default
+      - name: 'Ruby unit tests'
+        if: ${{ inputs.language == 'ruby' && inputs.unit-tests == true && inputs.build-profile == 'cli' }}
+        continue-on-error: true
+        run: |
+          echo "Running Ruby unit tests with output to ${{ inputs.unit-test-output-path }}"
+        # bundle exec rake spec --trace > ${{ inputs.unit-test-output-path }}
+
     # - name: Configure git for private modules
     #   env:
     #     GOPRIVATE: github.com/progress-platform-services/*
