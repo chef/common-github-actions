@@ -216,15 +216,20 @@ jobs:
         run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - name: generate Gemfile.lock if needed for Ruby projects
-        if: ${{ inputs.language == 'ruby' }} 
+        if: ${{ inputs.run-bundle-install == true && inputs.language == 'ruby' }} 
         continue-on-error: true
-        # if: ${{ inputs.run-bundle-install == true && inputs.language == 'ruby' }}
         run: |
           if [ ! -f Gemfile.lock ]; then
             bundle install 
-            # --path vendor/bundle
-            cat Gemfile.lock
           fi
+
+      - name: attach artifact for Gemfile.lock for debugging
+        if: ${{ inputs.language == 'ruby' }} 
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          path: Gemfile.lock
+          name: ${{ github.event.repository.name }}-Gemfile-lock.txt 
 
       - name: BlackDuck SCA scan
         uses: blackduck-inc/black-duck-security-scan@v2.1.1
