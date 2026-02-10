@@ -217,11 +217,13 @@ jobs:
 
       - name: generate Gemfile.lock if needed for Ruby projects
         if: ${{ inputs.language == 'ruby' }} 
+        continue-on-error: true
         # if: ${{ inputs.run-bundle-install == true && inputs.language == 'ruby' }}
         run: |
           if [ ! -f Gemfile.lock ]; then
             bundle install 
             # --path vendor/bundle
+            cat Gemfile.lock
           fi
 
       - name: BlackDuck SCA scan
