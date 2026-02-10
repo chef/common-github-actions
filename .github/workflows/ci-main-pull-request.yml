@@ -359,6 +359,11 @@ on:
         required: false
         type: string
         default: 'path/to/detect'
+      blackduck-force-low-accuracy-mode:
+        description: 'Force low accuracy mode for BlackDuck SCA scan to speed up scan time at the cost of accuracy (not recommended for production use)'
+        required: false
+        type: boolean
+        default: false
       run-bundle-install: # Added to support projects without committed Gemfile.lock (e.g., chef-cli)
         description: 'Run bundle install before scanning to generate Gemfile.lock at runtime'
         required: false
@@ -1324,7 +1329,9 @@ jobs:
       generate-msft-sbom: ${{ inputs.generate-msft-sbom }}
       license_scout: ${{ inputs.license_scout }}
       go-private-modules: ${{ inputs.go-private-modules }}
+      blackduck-force-low-accuracy-mode: ${{ inputs.blackduck-force-low-accuracy-mode }}
       run-bundle-install: ${{ inputs.run-bundle-install }} # Passed to sbom.yml to generate Gemfile.lock at runtime
+      language: ${{ inputs.language }}
 
   quality-dashboard:
     name: 'Reporting to quality dashboard'

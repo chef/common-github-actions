@@ -38,14 +38,11 @@ on:
         required: false
         type: boolean
       perform-blackduck-sca-scan: # combined with export-github-sbom above
+      # generate-blackduck-polaris-sbom is OBSOLETE, use perform-blackduck-sca-scan instead
         description: 'Perform BlackDuck SCA scan'
         required: false
         type: boolean
         default: true
-      # generate-blackduck-sbom:  # obsolete
-      #   description: 'Generate SBOM using Blackduck Tool'
-      #   required: false
-      #   type: boolean
       blackduck-project-group-name:
         description: 'BlackDuck project group name'
         required: false
@@ -65,11 +62,21 @@ on:
       go-private-modules:
         required: false
         type: string
+      blackduck-force-low-accuracy-mode:
+        description: 'Force low accuracy mode for BlackDuck SCA scan to speed up scan time at the cost of accuracy (not recommended for production use)'
+        required: false
+        type: boolean
+        default: false
       run-bundle-install:
         description: 'Run bundle install before scanning to generate Gemfile.lock at runtime'
         required: false
         type: boolean
         default: false
+      language:
+        description: 'Primary programming language of the project, used for SBOM enrichment (e.g., "ruby", "go", "python")'
+        required: false
+        type: string
+        default: 'ruby'
 
 env:
   # Set the default SBOM filename prefix
@@ -181,7 +188,7 @@ jobs:
   generate-blackduck-sbom:
     name: Blackduck SCA Scan (PURPLE)
     runs-on: ubuntu-latest
-    if: ${{ inputs.perform-blackduck-sca-scan == true || inputs.generate-blackduck-polaris-sbom == true }} # generate-blackduck--polaris-sbom is OBSOLETE, use perform-blackduck-sca-scan instead
+    if: ${{ inputs.perform-blackduck-sca-scan == true }} 
     steps:
       - name: 'Echo inputs'
         run: |
@@ -203,15 +210,19 @@ jobs:
           bundler-cache: true
 
       - name: Configure git for private Go modules
+        if : ${{ inputs.go-private-modules != '' }}
         env:
           GOPRIVATE: ${{ inputs.go-private-modules }}
         run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
-      - name: BlackDuck SCA scan
-        id: black-duck-sca-scan
+      - name: generate Gemfile.lock if needed for Ruby projects
+        if: ${{ inputs.language == 'ruby' }} 
+        # && inputs.run-bundle-install == true }}
         run: |
-          echo "BLACKDUCK_SBOM_URL: ${{ secrets.BLACKDUCK_SBOM_URL }}"
-        # echo "BLACKDUCK_SBOM_API_KEY: ${{ secrets.BLACKDUCK_SBOM_API_KEY }}" no longer used, see BLACKDUCK_SCA_TOKEN
+          if [ ! -f Gemfile.lock ]; then
+            bundle install 
+            # --path vendor/bundle
+          fi
 
       - name: BlackDuck SCA scan
         uses: blackduck-inc/black-duck-security-scan@v2.1.1
@@ -224,13 +235,11 @@ jobs:
         with:
           blackducksca_url: ${{ secrets.BLACKDUCK_SBOM_URL }}  # BLACKDUCK_URL, should be https://progresssoftware.app.blackduck.com/ 
           blackducksca_token: ${{ secrets.BLACKDUCK_SCA_TOKEN }}  # was BLACKDUCK_API_KEY
+          detect_args: ${{ inputs.blackduck-force-low-accuracy-mode == true && '--detect.excluded.detector.types=PIP --detect.accuracy.required=NONE' || '--detect.excluded.detector.types=PIP' }}
           # blackducksca_scan_failure_severities: 'BLOCKER,CRITICAL'
-          detect_args: "--detect.excluded.detector.types=PIP --detect.accuracy.required=NONE"
-        # ignore python per https://documentation.blackduck.com/bundle/detect/page/packagemgrs/python.html
+          # ignore python per https://documentation.blackduck.com/bundle/detect/page/packagemgrs/python.html
 
-######################################################
 # original from https://github.com/progress-platform-services/common-github-actions/blob/main/.github/workflows/examples/ci-all-sbom-main.yml
-
   generate-msft-sbom:
     name: Generate MSFT SBOM
     runs-on: ubuntu-latest
