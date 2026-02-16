@@ -784,6 +784,13 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.4'
+          bundler-cache: false
+
+      - name: Configure Bundler for private Ruby gems
+        if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}
+        run: |
+          bundle config set --local github.com "x-access-token:${{ secrets.GH_PRIVATE_REPO_TOKEN }}"
+
       - name: 'Ruby build'
         if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}
         continue-on-error: true
