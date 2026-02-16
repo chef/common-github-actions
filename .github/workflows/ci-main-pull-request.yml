@@ -784,12 +784,12 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.4'
+          bundler-cache: false
 
-      - name: Configure git for private repositories
+      - name: Configure Bundler for private Ruby gems
         if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}
         run: |
-          git config --global url."https://x-access-token:${{ secrets.GH_PRIVATE_REPO_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          echo "Git configured for private repository access"
+          bundle config set --local github.com "x-access-token:${{ secrets.GH_PRIVATE_REPO_TOKEN }}"
 
       - name: 'Ruby build'
         if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}
