@@ -1315,7 +1315,7 @@ jobs:
   generate-sbom:
     name: 'Generating SBOM'
     #    Create software bill-of-materials (SBOM) using SPDX format
-    if: ${{ inputs.generate-sbom == true }}
+    if: ${{ inputs.generate-sbom }}
     uses: chef/common-github-actions/.github/workflows/sbom.yml@main
     needs: ci-build
     secrets: inherit
