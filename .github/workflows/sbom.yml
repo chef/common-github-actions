@@ -233,10 +233,6 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v6
 
-      - name: Configure git for private Ruby gems
-        if: ${{ inputs.run-bundle-install == true }}
-        run: git config --global url."https://x-access-token:${{ secrets.GH_PRIVATE_REPO_TOKEN }}@github.com/".insteadOf "https://github.com/"
-
       - name: Set up Ruby and run bundle install
         if: inputs.language == 'ruby'
         uses: ruby/setup-ruby@v1
@@ -244,6 +240,11 @@ jobs:
           ruby-version: '3.4.2'
           bundler-cache: false
           working-directory: ${{ inputs.ruby-app-directory != '' && inputs.ruby-app-directory || '.' }}
+
+      - name: Configure Bundler for private Ruby gems
+        if: ${{ inputs.run-bundle-install == true && inputs.language == 'ruby' }}
+        run: |
+          bundle config set --local github.com "x-access-token:${{ secrets.PRIVATE_ACCESS_KITCHEN_CHEF_ENTERPRISE }}"
 
       - name: Set up Erlang/OTP and rebar3
         if: inputs.language == 'erlang'
