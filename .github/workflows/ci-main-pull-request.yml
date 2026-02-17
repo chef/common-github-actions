@@ -1017,8 +1017,13 @@ jobs:
     # chef-vault at https://polaris.blackduck.com/portfolio/portfolios/8b7ad6f7-6dcb-49ec-bded-bfc4f190d4f8/portfolio-items/fe369baf-11d2-4989-bcb7-045577856dcc/projects/2460eabd-d033-48a1-a378-6cadd49be6d1/tests/sast?branchId=a6d2c02a-05f8-4557-bfa1-c40e9337ee5d
     if: ${{ inputs.perform-blackduck-polaris == true }}
     runs-on: ubuntu-latest
-    needs: checkout
+    needs: ci-build
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          
       - name: Starting Black Duck Polaris scan
         run: |
           echo "Starting Polaris SAST scan"
