@@ -15,6 +15,11 @@ on:
         required: false
         type: string
         default: '1.0.0'
+      fail-on-high-critical:
+        description: 'Fail the build if HIGH or CRITICAL vulnerabilities are found'
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   trivy:
@@ -67,14 +72,16 @@ jobs:
           # name: trivy-report-${{ github.event.repository.name }}-${{ github.ref_name }}-${{ inputs.version }}-$(date +'%Y%m%d')-text
           path: trivy-report.txt
           retention-days: 30
-          #   - name: Fail build on High/Criticial Vulnerabilities
-        #     uses: aquasecurity/trivy-action@master
-        #     with:
-        #       scan-type: "fs"
-        #       format: table
-        #       scan-ref: .
-        #       severity: HIGH,CRITICAL
-        #       ignore-unfixed: true
-        #       exit-code: 1
-        #       # On a subsequent call to the action we know trivy is already installed so can skip this
-        #       skip-setup-trivy: true
+
+      - name: Fail build on High/Critical Vulnerabilities
+        if: ${{ inputs.fail-on-high-critical }}
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          format: table
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1
+          # On a subsequent call to the action we know trivy is already installed so can skip this
+          skip-setup-trivy: true

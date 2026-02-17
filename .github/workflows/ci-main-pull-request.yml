@@ -101,6 +101,11 @@ on:
         required: false
         type: boolean
         default: true
+      trivy-fail-on-high-critical:
+        description: 'Fail pipeline if Trivy finds HIGH or CRITICAL vulnerabilities'
+        required: false
+        type: boolean
+        default: true
         
       build:
         description: 'CI Build (language-specific)'
@@ -711,10 +716,11 @@ jobs:
   run-trivy:
     name: 'Trivy scan'
     if: ${{ inputs.perform-trivy-scan }}
-    uses: chef/common-github-actions/.github/workflows/trivy.yml@main
+    uses: chef/common-github-actions/.github/workflows/trivy.yml@sandhi/fix-blackduc-sca
     needs: checkout
     with:
       version: ${{ inputs.version }}
+      fail-on-high-critical: ${{ inputs.trivy-fail-on-high-critical }}
   
     # run-srcclr:
     #   if: ${{ inputs.perform-srcclr-scan == true }}
