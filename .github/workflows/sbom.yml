@@ -203,11 +203,18 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Set up Ruby and run bundle install
-        if: ${{ inputs.language == 'ruby' }} # only run for Ruby projects where we need to generate Gemfile.lock at runtime, inputs.run-bundle-install == true 
+        if: inputs.language == 'ruby'
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.4'
+          ruby-version: '3.4.2'
           bundler-cache: true
+
+      - name: Set up Erlang/OTP and rebar3
+        if: inputs.language == 'erlang'
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: '25.3.2.16'
+          rebar3-version: '3.22.0'
 
       - name: Configure git for private Go modules
         if : ${{ inputs.go-private-modules != '' }}

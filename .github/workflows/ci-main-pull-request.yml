@@ -1023,6 +1023,55 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Configure git for private Go modules
+        env:
+          GOPRIVATE: ${{ inputs.go-private-modules }}
+        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Install build tools for Erlang
+        if: inputs.language == 'erlang'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+
+      - name: Set up Erlang/OTP and rebar3
+        if: inputs.language == 'erlang'
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: '25.3.2.16'
+          rebar3-version: '3.22.0'
+
+      - name: Set up Ruby
+        if: inputs.language == 'ruby'
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.0'
+          bundler-cache: false
+      
+      - name: Create bundle stub for Erlang SAST scan
+        if: inputs.language == 'erlang'
+        working-directory: ${{ github.workspace }}
+        run: |
+          # Polaris scans Erlang source code for SAST - Ruby gems not needed
+          # System ruby-dev from apt provides Ruby runtime (already installed)
+          # Create bundle stub to skip gem installation during Polaris scan
+          echo "Creating bundle stub to bypass Ruby gem installation"
+          
+          # Create no-op bundle script
+          mkdir -p "$HOME/.polaris-stubs"
+          cat > "$HOME/.polaris-stubs/bundle" << 'EOF'
+          #!/bin/bash
+          # Stub: skips gem installation during SAST scan
+          echo "[STUB] Skipping bundle $@ - not needed for Erlang SAST"
+          exit 0
+          EOF
+          chmod +x "$HOME/.polaris-stubs/bundle"
+          
+          # Prepend to PATH so stub is found before any system bundler
+          echo "$HOME/.polaris-stubs" >> $GITHUB_PATH
+          
+          echo "Bundle stub created and added to PATH"
           
       - name: Starting Black Duck Polaris scan
         run: |
@@ -1332,7 +1381,7 @@ jobs:
     name: 'Generating SBOM'
     #    Create software bill-of-materials (SBOM) using SPDX format
     if: ${{ inputs.generate-sbom == true }}
-    uses: chef/common-github-actions/.github/workflows/sbom.yml@main
+    uses: chef/common-github-actions/.github/workflows/sbom.yml@sandhi/fix-blackduc-sca
     needs: checkout # TODO: fix set-application-version
     secrets: inherit
     with:
