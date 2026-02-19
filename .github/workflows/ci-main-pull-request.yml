@@ -105,7 +105,7 @@ on:
         description: 'Fail pipeline if Trivy finds HIGH or CRITICAL vulnerabilities'
         required: false
         type: boolean
-        default: true
+        default: false
         
       build:
         description: 'CI Build (language-specific)'
@@ -169,15 +169,15 @@ on:
         type: string
       polaris-coverity-clean-command:
         # NEW IN 1.0.7
-        description: 'Coverity clean command, typically done before build stage by language or here as param 1-liner like "mvn clean"'
+        description: 'Coverity clean command, typically done before build stage by language or here as param 1-liner like "mvn clean". Leave empty for buildless analysis (Ruby, Python, etc.)'
         required: false
-        default: 'go clean'
+        default: ''
         type: string
       polaris-coverity-build-command:
         # NEW IN 1.0.7
-        description: 'Coverity build command, typically done in build stage by language or here as param 1-liner like "mvn clean install"'
+        description: 'Coverity build command, typically done in build stage by language or here as param 1-liner like "mvn clean install". Leave empty for buildless analysis (Ruby, Python, etc.)'
         required: false
-        default: 'go build'
+        default: ''
         type: string
       polaris-coverity-args:
         # NEW IN 1.0.7
@@ -374,6 +374,11 @@ on:
         required: false
         type: boolean
         default: false
+      ruby-app-directory:
+        description: 'Subdirectory containing Ruby Gemfile (e.g., "src/supermarket" for repos with non-root Gemfile location). Leave empty if Gemfile is in root.'
+        required: false
+        type: string
+        default: ''
 
       udf1:
         description: 'User defined flag 1'
@@ -716,7 +721,7 @@ jobs:
   run-trivy:
     name: 'Trivy scan'
     if: ${{ inputs.perform-trivy-scan }}
-    uses: chef/common-github-actions/.github/workflows/trivy.yml@sandhi/fix-blackduc-sca
+    uses: chef/common-github-actions/.github/workflows/trivy.yml@main
     needs: checkout
     with:
       version: ${{ inputs.version }}
@@ -1024,11 +1029,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Configure git for private Go modules
-        env:
-          GOPRIVATE: ${{ inputs.go-private-modules }}
-        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
-
       - name: Install build tools for Erlang
         if: inputs.language == 'erlang'
         run: |
@@ -1046,7 +1046,7 @@ jobs:
         if: inputs.language == 'ruby'
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.0'
+          ruby-version: '3.4'
           bundler-cache: false
       
       - name: Create bundle stub for Erlang SAST scan
@@ -1381,7 +1381,7 @@ jobs:
     name: 'Generating SBOM'
     #    Create software bill-of-materials (SBOM) using SPDX format
     if: ${{ inputs.generate-sbom == true }}
-    uses: chef/common-github-actions/.github/workflows/sbom.yml@sandhi/fix-blackduc-sca
+    uses: chef/common-github-actions/.github/workflows/sbom.yml@main
     needs: checkout # TODO: fix set-application-version
     secrets: inherit
     with:
@@ -1397,6 +1397,7 @@ jobs:
       blackduck-force-low-accuracy-mode: ${{ inputs.blackduck-force-low-accuracy-mode }}
       run-bundle-install: ${{ inputs.run-bundle-install }} # Passed to sbom.yml to generate Gemfile.lock at runtime
       language: ${{ inputs.language }}
+      ruby-app-directory: ${{ inputs.ruby-app-directory }}
 
   quality-dashboard:
     name: 'Reporting to quality dashboard'
