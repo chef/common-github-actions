@@ -105,7 +105,7 @@ on:
         description: 'Fail pipeline if Trivy finds HIGH or CRITICAL vulnerabilities'
         required: false
         type: boolean
-        default: true
+        default: false
         
       build:
         description: 'CI Build (language-specific)'
@@ -169,15 +169,15 @@ on:
         type: string
       polaris-coverity-clean-command:
         # NEW IN 1.0.7
-        description: 'Coverity clean command, typically done before build stage by language or here as param 1-liner like "mvn clean"'
+        description: 'Coverity clean command, typically done before build stage by language or here as param 1-liner like "mvn clean". Leave empty for buildless analysis (Ruby, Python, etc.)'
         required: false
-        default: 'go clean'
+        default: ''
         type: string
       polaris-coverity-build-command:
         # NEW IN 1.0.7
-        description: 'Coverity build command, typically done in build stage by language or here as param 1-liner like "mvn clean install"'
+        description: 'Coverity build command, typically done in build stage by language or here as param 1-liner like "mvn clean install". Leave empty for buildless analysis (Ruby, Python, etc.)'
         required: false
-        default: 'go build'
+        default: ''
         type: string
       polaris-coverity-args:
         # NEW IN 1.0.7
@@ -374,6 +374,11 @@ on:
         required: false
         type: boolean
         default: false
+      ruby-app-directory:
+        description: 'Subdirectory containing Ruby Gemfile (e.g., "src/supermarket" for repos with non-root Gemfile location). Leave empty if Gemfile is in root.'
+        required: false
+        type: string
+        default: ''
 
       udf1:
         description: 'User defined flag 1'
@@ -585,7 +590,7 @@ jobs:
   scc:
     name: 'Source code complexity checks'
     if: ${{ inputs.perform-complexity-checks == true }}
-    uses: chef/common-github-actions/.github/workflows/scc.yml@main
+    uses: chef/common-github-actions/.github/workflows/scc.yml@sandhi/test-integrations
     needs: checkout
     with:
       outputfilename: ${{ inputs.scc-output-filename }}
@@ -627,10 +632,10 @@ jobs:
         # bundle install
         # - name: 'Bundler Audit'
         #   if: ${{ inputs.language == 'Ruby' && inputs.perform-complexity-checks == true }}
-        #   uses: andrewmcodes/bundler-audit-action@main
+        #   uses: andrewmcodes/bundler-audit-action@sandhi/test-integrations
         #   env:
         #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # TODO: get with Marc/Prajakta on this sequence for Ruby uses: chef/common-github-actions/.github/workflows/rubocop.yml@main
+        # TODO: get with Marc/Prajakta on this sequence for Ruby uses: chef/common-github-actions/.github/workflows/rubocop.yml@sandhi/test-integrations
         # TODO: this is also not certified, craete a copy in .github/actions - https://github.com/marketplace/actions/bundler-audit-action
         # Bundler Audit Action is not certified by GitHub. It is provided by a third-party and is governed by separate terms of service, privacy policy, and support documentation.
 
@@ -681,7 +686,7 @@ jobs:
       - name: Language agnostic checks (OWASP dep check)
         run: echo "placeholder"
         #     - name: 'Language-agnostic pre-compilation steps (OWASP dependency check)'  
-        #       uses: dependency-check/Dependency-Check_Action@main
+        #       uses: dependency-check/Dependency-Check_Action@sandhi/test-integrations
         # TODO: Dependency Check is not certified by GitHub. It is provided by a third-party and is governed by separate terms of service, privacy policy, and support documentation
         # create a copy in common-github-actions/.github/actions/owasp-dependency-check.yml
         # https://github.com/marketplace/actions/dependency-check & https://owasp.org/www-project-dependency-check/ 
@@ -710,13 +715,13 @@ jobs:
   run-trufflehog:
     name: 'Trufflehog scan'
     if: ${{ inputs.perform-trufflehog-scan }}
-    uses: chef/common-github-actions/.github/workflows/trufflehog.yml@main
+    uses: chef/common-github-actions/.github/workflows/trufflehog.yml@sandhi/test-integrations
     needs: checkout
 
   run-trivy:
     name: 'Trivy scan'
     if: ${{ inputs.perform-trivy-scan }}
-    uses: chef/common-github-actions/.github/workflows/trivy.yml@sandhi/fix-blackduc-sca
+    uses: chef/common-github-actions/.github/workflows/trivy.yml@sandhi/test-integrations
     needs: checkout
     with:
       version: ${{ inputs.version }}
@@ -724,12 +729,12 @@ jobs:
   
     # run-srcclr:
     #   if: ${{ inputs.perform-srcclr-scan == true }}
-    #   uses: chef/common-github-actions/.github/workflows/srcclr.yml@main
+    #   uses: chef/common-github-actions/.github/workflows/srcclr.yml@sandhi/test-integrations
     #   needs: run-scc
 
     # run-veracode-sca:
     #   if: ${{ inputs.perform-veracode-sca-scan == true }}
-    #   uses: chef/common-github-actions/.github/workflows/veracode-sca.yml@main
+    #   uses: chef/common-github-actions/.github/workflows/veracode-sca.yml@sandhi/test-integrations
     #   needs: run-scc
     #   secrets: inherit
     
@@ -938,7 +943,7 @@ jobs:
     name: 'PUBLIC Sonar SAST scan'
     needs: ci-build
     if: ${{ inputs.perform-sonarqube-scan == true && success() && inputs.visibility == 'public'}}
-    uses: chef/common-github-actions/.github/workflows/sonarqube-public-repo.yml@main
+    uses: chef/common-github-actions/.github/workflows/sonarqube-public-repo.yml@sandhi/test-integrations
     secrets: inherit
     permissions:
       id-token: write
@@ -964,7 +969,7 @@ jobs:
     name: 'PRIVATE Sonar scan (inline)'
     if: ${{ inputs.perform-sonarqube-scan == true && success() && inputs.visibility == 'private'}}
     needs: ci-build
-    # was uses: chef/common-github-actions/.github/workflows/sonarqube-private-repo.yml@main
+    # was uses: chef/common-github-actions/.github/workflows/sonarqube-private-repo.yml@sandhi/test-integrations
     runs-on: ubuntu-latest
     steps:
     - name: SonarQube Scan
@@ -980,7 +985,7 @@ jobs:
     if: ${{ inputs.perform-sonarqube-scan == true && inputs.visibility == 'internal'}}
     # was if: ${{ inputs.perform-sonarqube-scan == true && success() && inputs.visibility == 'internal'}}
     needs: ci-build
-    uses: chef/common-github-actions/.github/workflows/sonarqube-internal-repo.yml@main
+    uses: chef/common-github-actions/.github/workflows/sonarqube-internal-repo.yml@sandhi/test-integrations
     secrets: inherit
     permissions:
       id-token: write
@@ -1024,10 +1029,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Configure git for private Go modules
-        env:
-          GOPRIVATE: ${{ inputs.go-private-modules }}
-        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+      # - name: Configure git for private Go modules
+      #   env:
+      #     GOPRIVATE: ${{ inputs.go-private-modules }}
+      #   run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - name: Install build tools for Erlang
         if: inputs.language == 'erlang'
@@ -1046,7 +1051,7 @@ jobs:
         if: inputs.language == 'ruby'
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.0'
+          ruby-version: '3.4'
           bundler-cache: false
       
       - name: Create bundle stub for Erlang SAST scan
@@ -1381,7 +1386,7 @@ jobs:
     name: 'Generating SBOM'
     #    Create software bill-of-materials (SBOM) using SPDX format
     if: ${{ inputs.generate-sbom == true }}
-    uses: chef/common-github-actions/.github/workflows/sbom.yml@sandhi/fix-blackduc-sca
+    uses: chef/common-github-actions/.github/workflows/sbom.yml@sandhi/test-integrations
     needs: checkout # TODO: fix set-application-version
     secrets: inherit
     with:
@@ -1397,6 +1402,7 @@ jobs:
       blackduck-force-low-accuracy-mode: ${{ inputs.blackduck-force-low-accuracy-mode }}
       run-bundle-install: ${{ inputs.run-bundle-install }} # Passed to sbom.yml to generate Gemfile.lock at runtime
       language: ${{ inputs.language }}
+      ruby-app-directory: ${{ inputs.ruby-app-directory }}
 
   quality-dashboard:
     name: 'Reporting to quality dashboard'
@@ -1406,7 +1412,7 @@ jobs:
       id-token: write
       contents: read
     if: ${{ inputs.report-to-atlassian-dashboard == true && success() }}
-    uses: chef/common-github-actions/.github/workflows/irfan-quality-dashboard.yml@main
+    uses: chef/common-github-actions/.github/workflows/irfan-quality-dashboard.yml@sandhi/test-integrations
     with:
       perform-build: ${{ inputs.build }} # was ${{ inputs.perform-sonar-build }}
       build-profile: ${{ inputs.build-profile }}

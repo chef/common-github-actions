@@ -77,6 +77,11 @@ on:
         required: false
         type: string
         default: 'ruby'
+      ruby-app-directory:
+        description: 'Subdirectory containing Ruby Gemfile (e.g., "src/supermarket" for repos with non-root Gemfile location). Leave empty if Gemfile is in root.'
+        required: false
+        type: string
+        default: ''
 
 env:
   # Set the default SBOM filename prefix
@@ -207,7 +212,8 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.4.2'
-          bundler-cache: true
+          bundler-cache: false
+          working-directory: ${{ inputs.ruby-app-directory != '' && inputs.ruby-app-directory || '.' }}
 
       - name: Set up Erlang/OTP and rebar3
         if: inputs.language == 'erlang'
@@ -225,6 +231,7 @@ jobs:
       - name: generate Gemfile.lock if needed for Ruby projects
         if: ${{ inputs.run-bundle-install == true && inputs.language == 'ruby' }} 
         continue-on-error: true
+        working-directory: ${{ inputs.ruby-app-directory != '' && inputs.ruby-app-directory || '.' }}
         run: |
           if [ ! -f Gemfile.lock ]; then
             bundle install 
@@ -235,7 +242,7 @@ jobs:
         uses: actions/upload-artifact@v4
         continue-on-error: true
         with:
-          path: Gemfile.lock
+          path: ${{ inputs.ruby-app-directory != '' && format('{0}/Gemfile.lock', inputs.ruby-app-directory) || 'Gemfile.lock' }}
           name: ${{ github.event.repository.name }}-Gemfile-lock.txt 
 
       - name: BlackDuck SCA scan
@@ -249,7 +256,8 @@ jobs:
         with:
           blackducksca_url: ${{ secrets.BLACKDUCK_SBOM_URL }}  # BLACKDUCK_URL, should be https://progresssoftware.app.blackduck.com/ 
           blackducksca_token: ${{ secrets.BLACKDUCK_SCA_TOKEN }}  # was BLACKDUCK_API_KEY
-          detect_args: ${{ inputs.blackduck-force-low-accuracy-mode == true && '--detect.excluded.detector.types=PIP --detect.accuracy.required=NONE' || '--detect.excluded.detector.types=PIP' }}
+          blackducksca_scan_full: true  # Force INTELLIGENT scan mode for all branches (uploads results to server)
+          detect_args: ${{ inputs.ruby-app-directory != '' && format('{0} --detect.source.path={1}', inputs.blackduck-force-low-accuracy-mode == true && '--detect.excluded.detector.types=PIP --detect.accuracy.required=NONE' || '--detect.excluded.detector.types=PIP', inputs.ruby-app-directory) || (inputs.blackduck-force-low-accuracy-mode == true && '--detect.excluded.detector.types=PIP --detect.accuracy.required=NONE' || '--detect.excluded.detector.types=PIP') }}
           # blackducksca_scan_failure_severities: 'BLOCKER,CRITICAL'
           # ignore python per https://documentation.blackduck.com/bundle/detect/page/packagemgrs/python.html
 
