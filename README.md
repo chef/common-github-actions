@@ -1,6 +1,15 @@
 # Common Github Actions for Chef organization
 Location for reusable workflows
 
+## 📖 Read This Before Using
+
+| Document | Description |
+|----------|-------------|
+| **[HOW-TO-USE.md](HOW-TO-USE.md)** | Quick start guide, configuration examples, and input reference |
+| **[PIPELINE-REFERENCE.md](PIPELINE-REFERENCE.md)** | Detailed tool documentation, mermaid diagrams, and job mappings |
+
+---
+
 ## Naming convention
 Typical workflows are stored in the `.github\workflows` directory.
 
