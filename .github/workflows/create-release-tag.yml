@@ -76,26 +76,78 @@ jobs:
           echo "latest_tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
           echo "Latest tag: ${LATEST_TAG}"
 
-      - name: Calculate new version
+      - name: Validate and parse version
         id: calc_version
         run: |
           LATEST_TAG="${{ steps.get_latest_tag.outputs.latest_tag }}"
           
+          # Function to validate semver format (vX.Y.Z or X.Y.Z where X, Y, Z are integers)
+          validate_semver() {
+            local version="$1"
+            local stripped="${version#v}"  # Remove 'v' prefix if present
+            
+            # Check if it matches X.Y.Z where X, Y, Z are non-negative integers
+            if [[ "$stripped" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              echo "valid"
+            else
+              echo "invalid"
+            fi
+          }
+          
+          # Function to extract semver components
+          extract_semver() {
+            local version="$1"
+            local stripped="${version#v}"  # Remove 'v' prefix if present
+            
+            # Extract just the X.Y.Z part, ignoring any suffix like -rc1, -beta, etc.
+            if [[ "$stripped" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
+              echo "${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+            else
+              echo ""
+            fi
+          }
+          
           # Handle custom version input
           if [ -n "${{ inputs.custom_version }}" ]; then
-            NEW_VERSION="${{ inputs.custom_version }}"
-            echo "Using custom version: ${NEW_VERSION}"
-            echo "new_version=${NEW_VERSION}" >> $GITHUB_OUTPUT
+            CUSTOM_VER="${{ inputs.custom_version }}"
+            CUSTOM_VER="${CUSTOM_VER#v}"  # Strip 'v' prefix if user included it
+            
+            if [[ "$(validate_semver "$CUSTOM_VER")" != "valid" ]]; then
+              echo "❌ Error: Custom version '$CUSTOM_VER' is not a valid semantic version."
+              echo "   Expected format: X.Y.Z (e.g., 1.2.3)"
+              echo "   Each component must be a non-negative integer."
+              exit 1
+            fi
+            
+            echo "Using custom version: ${CUSTOM_VER}"
+            echo "new_version=${CUSTOM_VER}" >> $GITHUB_OUTPUT
             exit 0
           fi
           
-          # Strip 'v' prefix for version calculation
-          VERSION=${LATEST_TAG#v}
+          # Validate latest tag format
+          EXTRACTED_VERSION=$(extract_semver "$LATEST_TAG")
+          
+          if [ -z "$EXTRACTED_VERSION" ]; then
+            echo "⚠️ Warning: Latest tag '$LATEST_TAG' is not a valid semantic version."
+            echo "   Expected format: vX.Y.Z (e.g., v1.2.3)"
+            echo "   Starting from v0.0.0 instead."
+            EXTRACTED_VERSION="0.0.0"
+          elif [ "$EXTRACTED_VERSION" != "${LATEST_TAG#v}" ]; then
+            echo "⚠️ Warning: Latest tag '$LATEST_TAG' contains a suffix."
+            echo "   Using base version: $EXTRACTED_VERSION"
+          fi
           
           # Split version into parts
-          MAJOR=$(echo $VERSION | cut -d. -f1)
-          MINOR=$(echo $VERSION | cut -d. -f2)
-          PATCH=$(echo $VERSION | cut -d. -f3)
+          MAJOR=$(echo "$EXTRACTED_VERSION" | cut -d. -f1)
+          MINOR=$(echo "$EXTRACTED_VERSION" | cut -d. -f2)
+          PATCH=$(echo "$EXTRACTED_VERSION" | cut -d. -f3)
+          
+          # Verify components are numeric (defensive check)
+          if ! [[ "$MAJOR" =~ ^[0-9]+$ ]] || ! [[ "$MINOR" =~ ^[0-9]+$ ]] || ! [[ "$PATCH" =~ ^[0-9]+$ ]]; then
+            echo "❌ Error: Version components must be numeric."
+            echo "   Got: MAJOR=$MAJOR, MINOR=$MINOR, PATCH=$PATCH"
+            exit 1
+          fi
           
           # Default to patch bump for push events, use input for workflow_dispatch
           BUMP_TYPE="${{ inputs.version_bump }}"
@@ -116,6 +168,10 @@ jobs:
               ;;
             patch)
               PATCH=$((PATCH + 1))
+              ;;
+            *)
+              echo "❌ Error: Invalid bump type '$BUMP_TYPE'. Must be one of: major, minor, patch"
+              exit 1
               ;;
           esac
           
