@@ -131,6 +131,21 @@ on:
         required: false
         type: boolean
         default: false
+      perform-grype-image-scan:
+        description: 'Perform Grype scan on Docker image'
+        required: false
+        type: boolean
+        default: false
+      grype-image-fail-on-high:
+        description: 'Fail pipeline if Grype image scan finds HIGH vulnerabilities'
+        required: false
+        type: boolean
+        default: false
+      grype-image-fail-on-critical:
+        description: 'Fail pipeline if Grype image scan finds CRITICAL vulnerabilities'
+        required: false
+        type: boolean
+        default: false
       build:
         description: 'CI Build (language-specific)'
         required: false
@@ -865,6 +880,16 @@ jobs:
       #     path: .
       #     fail-build: true
       #     severity-cutoff: high
+
+  run-grype-image:
+    name: 'Grype Docker image scan'
+    if: ${{ inputs.perform-grype-image-scan }}
+    uses: chef/common-github-actions/.github/workflows/grype.yml@sandhi/fix-blackduc-sca
+    needs: checkout
+    secrets: inherit
+    with:
+      fail-grype-on-high: ${{ inputs.grype-image-fail-on-high }}
+      fail-grype-on-critical: ${{ inputs.grype-image-fail-on-critical }}
   
     # run-srcclr:
     #   if: ${{ inputs.perform-srcclr-scan == true }}
