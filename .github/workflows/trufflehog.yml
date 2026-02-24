@@ -4,6 +4,12 @@ name: Trufflehog secret scan
 
 on:
   workflow_call:
+    inputs:
+      fail-trufflehog-on-secrets-found:
+        description: 'Fail the pipeline if Trufflehog finds verified secrets'
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   Trufflehog:
@@ -14,11 +20,19 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Construct Trufflehog arguments
+        id: trufflehog-args
+        run: |
+          EXTRA_ARGS="--only-verified"
+          
+          echo "EXTRA_ARGS=${EXTRA_ARGS}" >> $GITHUB_ENV
+          echo "Trufflehog enforcement: fail-on-secrets=${{ inputs.fail-trufflehog-on-secrets-found }}"
+
       - name: TruffleHog secret scan
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          extra_args: --only-verified
+          extra_args: ${{ env.EXTRA_ARGS }}
         continue-on-error: false
         # --only-verified --fail --github-actions --results=verified,unknown --branch dev
         # TODO: use the GH_TOKEN --org=progress --token=ghp_xxxxx

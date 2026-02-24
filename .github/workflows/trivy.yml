@@ -15,8 +15,13 @@ on:
         required: false
         type: string
         default: '1.0.0'
-      fail-on-high-critical:
-        description: 'Fail the build if HIGH or CRITICAL vulnerabilities are found'
+      trivy-fail-on-high:
+        description: 'Fail the build if HIGH vulnerabilities are found'
+        required: false
+        type: boolean
+        default: false
+      trivy-fail-on-critical:
+        description: 'Fail the build if CRITICAL vulnerabilities are found'
         required: false
         type: boolean
         default: false
@@ -73,14 +78,30 @@ jobs:
           path: trivy-report.txt
           retention-days: 30
 
+      - name: Construct Trivy failure severities
+        id: failure-severities
+        run: |
+          SEVERITIES=""
+          
+          if [[ "${{ inputs.trivy-fail-on-high }}" == "true" ]]; then
+            SEVERITIES="HIGH"
+          fi
+          
+          if [[ "${{ inputs.trivy-fail-on-critical }}" == "true" ]]; then
+            SEVERITIES="${SEVERITIES},CRITICAL"
+          fi
+          
+          echo "FAILURE_SEVERITIES=${SEVERITIES}" >> $GITHUB_ENV
+          echo "Enforcement policy: ${SEVERITIES}"
+
       - name: Fail build on High/Critical Vulnerabilities
-        if: ${{ inputs.fail-on-high-critical }}
+        if: ${{ inputs.trivy-fail-on-high || inputs.trivy-fail-on-critical }}
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: "fs"
           format: table
           scan-ref: .
-          severity: HIGH,CRITICAL
+          severity: ${{ env.FAILURE_SEVERITIES }}
           ignore-unfixed: true
           exit-code: 1
           # On a subsequent call to the action we know trivy is already installed so can skip this
