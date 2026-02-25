@@ -4,6 +4,12 @@ name: Trufflehog secret scan
 
 on:
   workflow_call:
+    inputs:
+      fail-trufflehog-on-secrets-found:
+        description: 'Fail the pipeline if Trufflehog finds verified secrets'
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   Trufflehog:
@@ -15,11 +21,33 @@ jobs:
           fetch-depth: 0
 
       - name: TruffleHog secret scan
+        id: trufflehog-scan
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
           extra_args: --only-verified
         continue-on-error: false
+
+      - name: Check results and fail if secrets found
+        if: ${{ always() && inputs.fail-trufflehog-on-secrets-found == true }}
+        run: |
+          # Parse the log output from the trufflehog action
+          LOG_OUTPUT="${{ steps.trufflehog-scan.outputs.stdout }}"
+          
+          # Extract verified_secrets count from JSON output
+          VERIFIED_COUNT=$(echo "$LOG_OUTPUT" | grep -oE '"verified_secrets":\s*[0-9]+' | grep -oE '[0-9]+' | tail -1 || echo "0")
+          
+          if [ "$VERIFIED_COUNT" -gt 0 ]; then
+            echo ""
+            echo "============================================"
+            echo "❌ Trufflehog Secret Scan Failed"
+            echo "============================================"
+            echo "Found $VERIFIED_COUNT verified secret(s)"
+            echo "============================================"
+            exit 1
+          else
+            echo "✅ No verified secrets found"
+          fi
         # --only-verified --fail --github-actions --results=verified,unknown --branch dev
         # TODO: use the GH_TOKEN --org=progress --token=ghp_xxxxx
 
