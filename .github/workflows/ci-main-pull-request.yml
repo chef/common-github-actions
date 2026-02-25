@@ -779,7 +779,7 @@ jobs:
   run-trufflehog:
     name: 'Trufflehog scan'
     if: ${{ inputs.perform-trufflehog-scan }}
-    uses: chef/common-github-actions/.github/workflows/trufflehog.yml@sandhi/fix-blackduc-sca
+    uses: chef/common-github-actions/.github/workflows/trufflehog.yml@main
     needs: checkout
     with:
       fail-trufflehog-on-secrets-found: ${{ inputs.fail-trufflehog-on-secrets-found }}
@@ -787,7 +787,7 @@ jobs:
   run-trivy:
     name: 'Trivy scan'
     if: ${{ inputs.perform-trivy-scan }}
-    uses: chef/common-github-actions/.github/workflows/trivy.yml@sandhi/fix-blackduc-sca
+    uses: chef/common-github-actions/.github/workflows/trivy.yml@main
     needs: checkout
     with:
       version: ${{ inputs.version }}
@@ -884,7 +884,7 @@ jobs:
   run-grype-image:
     name: 'Grype Docker image scan'
     if: ${{ inputs.perform-grype-image-scan }}
-    uses: chef/common-github-actions/.github/workflows/grype.yml@sandhi/fix-blackduc-sca
+    uses: chef/common-github-actions/.github/workflows/grype.yml@main
     needs: checkout
     secrets: inherit
     with:
@@ -1588,7 +1588,7 @@ jobs:
     name: 'Generating SBOM'
     #    Create software bill-of-materials (SBOM) using SPDX format
     if: ${{ inputs.generate-sbom == true }}
-    uses: chef/common-github-actions/.github/workflows/sbom.yml@sandhi/fix-blackduc-sca
+    uses: chef/common-github-actions/.github/workflows/sbom.yml@main
     needs: checkout # TODO: fix set-application-version
     secrets: inherit
     with:
