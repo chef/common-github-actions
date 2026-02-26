@@ -41,6 +41,21 @@ name: CI flow containing PR checks for main & release, v2
 on:
   workflow_call:
     inputs:
+      github-token:
+        description: 'GitHub token for private repo access (pass secrets.GH_TOKEN or secrets.GITHUB_TOKEN, auto-detected if not provided)'
+        required: false
+        type: string
+        default: ''
+      github-event-name:
+        description: 'GitHub event name (pass github.event_name from calling workflow for PR comment detection)'
+        required: false
+        type: string
+        default: ''
+      github-branch-name:
+        description: 'GitHub branch name (pass github.ref_name from calling workflow for branch-specific logic)'
+        required: false
+        type: string
+        default: ''
       application:
         # NEW IN 1.0.7 
         description: 'Application set in repository custom properties, typically primaryApplication'
@@ -143,6 +158,11 @@ on:
         default: false
       grype-image-fail-on-critical:
         description: 'Fail pipeline if Grype image scan finds CRITICAL vulnerabilities'
+        required: false
+        type: boolean
+        default: false
+      grype-image-skip-aws:
+        description: 'Skip Grype image scan on AWS ECR images to avoid rate limits (assumes these images are scanned with Amazon ECR scan or Trivy)'
         required: false
         type: boolean
         default: false
@@ -474,6 +494,7 @@ on:
       #   type: string
         
 env:
+  GITHUB_TOKEN_TO_USE: ${{ inputs.github-token != '' && inputs.github-token || secrets.GH_TOKEN != '' && secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
   PRIMARY_APPLICATION: ${{ inputs.application }} # was 'default'   # Custom repo property [primaryApplication]: chef360, automate, infra-server, habitat, supermarket, licensing, downloads, chef-client, inspec, chef-workstation (or derivatives like habitat-builder)
   REPO_VISIBILITY: ${{ github.event.repository.visibility }}
   REPO_NAME: ${{ github.event.repository.name }}
@@ -509,7 +530,7 @@ jobs:
           echo "GA_BUILD_PROFILE=$GABuildProfile" >> $GITHUB_ENV
         continue-on-error: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN_TO_USE }} 
           
       - name: generate-filename-slug
         # description: Generate a simple slug based on repo and date for use in any output artifacts
@@ -713,7 +734,7 @@ jobs:
         if: inputs.language == 'go'
         env:
           GOPRIVATE: ${{ inputs.go-private-modules }}
-        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: git config --global url."https://${{ env.GITHUB_TOKEN_TO_USE }}@github.com/".insteadOf "https://github.com/"
       - name: Go linting and security checks  
         if: inputs.language == 'go'
         run: echo "Running Go linting and security checks"
@@ -884,12 +905,13 @@ jobs:
   run-grype-image:
     name: 'Grype Docker image scan'
     if: ${{ inputs.perform-grype-image-scan }}
-    uses: chef/common-github-actions/.github/workflows/grype.yml@main
+    uses: chef/common-github-actions/.github/workflows/grype.yml@sandhi/fixes-for-chef-org
     needs: checkout
     secrets: inherit
     with:
       fail-grype-on-high: ${{ inputs.grype-image-fail-on-high }}
       fail-grype-on-critical: ${{ inputs.grype-image-fail-on-critical }}
+      grype-image-skip-aws: ${{ inputs.grype-image-skip-aws }}
   
     # run-srcclr:
     #   if: ${{ inputs.perform-srcclr-scan == true }}
@@ -922,7 +944,7 @@ jobs:
         if: inputs.language == 'go'
         env:
           GOPRIVATE: ${{ inputs.go-private-modules }}
-        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: git config --global url."https://${{ env.GITHUB_TOKEN_TO_USE }}@github.com/".insteadOf "https://github.com/"
       - name: 'Go build'
         if: ${{ inputs.language == 'go' && env.GA_BUILD_PROFILE == 'cli' }}
         continue-on-error: true
@@ -1194,7 +1216,7 @@ jobs:
           fetch-depth: 0
       
       - name: Configure git for private
-        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: git config --global url."https://${{ env.GITHUB_TOKEN_TO_USE }}@github.com/".insteadOf "https://github.com/"
 
       - name: Install build tools for Erlang
         if: inputs.language == 'erlang'
@@ -1291,7 +1313,11 @@ jobs:
           # include_diagnostics: ${{ inputs.polaris-diagnostic }}
           # mark_build_status: ${{ inputs.polaris-mark-build-status != '' && inputs.polaris-mark-build-status || null }}
           # pr-comment-severities: "CRITICAL,HIGH"
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          polaris_prComment_enabled: ${{ inputs.github-event-name == 'pull_request' && 'true' || 'false' }}
+          polaris_branch_parent_name: ${{ inputs.github-event-name == 'pull_request' && 'main' || null }}
+          polaris_branch_name: ${{ inputs.github-event-name == 'pull_request' && inputs.github-branch-name || null }} # for pull requests, this will be the source branch; for pushes, this will be the branch being pushed to
+          polaris_prComment_severities: "CRITICAL,HIGH"
+          github_token: ${{ env.GITHUB_TOKEN_TO_USE }}
           
           # options from Jan's (FlowMon. GitLab)
           #   polaris_prComment_enabled: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
