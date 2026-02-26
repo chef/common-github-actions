@@ -21,18 +21,36 @@ name: Download SBOM from Insights and Convert to CSV
 # https://github.com/srcclr/srcclr_sbom_gen 
 # https://github.com/openclarity/kubeclarity?tab=readme-ov-file#installation 
 
-# inherit secrets from the calling workflow including BLACKDUCK_SBOM_URL, BLACKDUCK_SBOM_API_KEY
+# BLACKDUCK SBOM
+# required secrets: BLACKDUCK_SCA_URL, BLACKDUCK_SCA_TOKEN (organization)
+# required inputs: blackduck-project-group-name, blackduck-project-name, version
+
+
 on:
   workflow_call:
     inputs:
+      version:
+        description: 'Version of the project'
+        required: true
+        type: string
       export-github-sbom:
         description: 'Export SBOM from GitHub Dependency Graph API' 
         required: false
         type: boolean
-      generate-blackduck-polaris-sbom:
-        description: 'Generate SBOM using Blackduck Polaris Tool'
+      perform-blackduck-sca-scan: # combined with export-github-sbom above
+      # generate-blackduck-polaris-sbom is OBSOLETE, use perform-blackduck-sca-scan instead
+        description: 'Perform BlackDuck SCA scan'
         required: false
         type: boolean
+        default: true
+      blackduck-project-group-name:
+        description: 'BlackDuck project group name'
+        required: false
+        type: string
+      blackduck-project-name:
+        description: 'BlackDuck project name'
+        required: false
+        type: string
       generate-msft-sbom:
         description: 'Generate SBOM using Microsoft SBOM Tool'
         required: false
@@ -44,10 +62,48 @@ on:
       go-private-modules:
         required: false
         type: string
+      blackduck-force-low-accuracy-mode:
+        description: 'Force low accuracy mode for BlackDuck SCA scan to speed up scan time at the cost of accuracy (not recommended for production use)'
+        required: false
+        type: boolean
+        default: false
+      run-bundle-install:
+        description: 'Run bundle install before scanning to generate Gemfile.lock at runtime'
+        required: false
+        type: boolean
+        default: false
+      language:
+        description: 'Primary programming language of the project, used for SBOM enrichment (e.g., "ruby", "go", "python")'
+        required: false
+        type: string
+        default: 'ruby'
+      ruby-app-directory:
+        description: 'Subdirectory containing Ruby Gemfile (e.g., "src/supermarket" for repos with non-root Gemfile location). Leave empty if Gemfile is in root.'
+        required: false
+        type: string
+        default: ''
+      blackduck-fail-on-blocker:
+        description: 'Fail the pipeline if BlackDuck SCA scan finds BLOCKER vulnerabilities'
+        required: false
+        type: boolean
+        default: false
+      blackduck-fail-on-critical:
+        description: 'Fail the pipeline if BlackDuck SCA scan finds CRITICAL vulnerabilities'
+        required: false
+        type: boolean
+        default: false
+      blackduck-fail-on-major:
+        description: 'Fail the pipeline if BlackDuck SCA scan finds MAJOR vulnerabilities'
+        required: false
+        type: boolean
+        default: false
 
 env:
   # Set the default SBOM filename prefix
   FILE_PREFIX: $(echo "${{ github.repository }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
+  DEFAULT_FILE_NAME: "GitHub-sbom"
+  DEFAULT_FILE_EXTENSION: ".json"
+  DEFAULT_SEPARATOR: "-"
 
 jobs:
   export-github-SBOM:
@@ -56,13 +112,15 @@ jobs:
     if : ${{ inputs.export-github-sbom == true }}
     steps:
     - name: Checkout Code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
-    - name: Generate Filename Prefix
+    - name: Generate Filename Prefix and full JSON file name as environment variables for later steps
       run: |
-        FILE_PREFIX=$(echo "${{ github.repository }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
+        FILE_PREFIX=$(echo "${{ github.repository }}${{ env.DEFAULT_SEPARATOR }}${{ github.ref_name }}${{ env.DEFAULT_SEPARATOR }}${{ inputs.version }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
         echo "FILE_PREFIX=${FILE_PREFIX}" >> $GITHUB_ENV
-
+        FILE_NAME=$(echo "${{ env.FILE_PREFIX }}${{ env.DEFAULT_SEPARATOR }}${{ env.DEFAULT_FILE_NAME }}${{ env.DEFAULT_FILE_EXTENSION }}")
+        echo "FILE_NAME=${FILE_NAME}" >> $GITHUB_ENV
+      
     - name: Download SBOM from GitHub Dependency Graph API
       run: |
         curl -L \
@@ -70,19 +128,21 @@ jobs:
           -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
           -H "X-GitHub-Api-Version: 2022-11-28" \
           https://api.github.com/repos/${{ github.repository }}/dependency-graph/sbom \
-          -o "${FILE_PREFIX}-GitHub-sbom.json"
+          -o "${{ env.FILE_NAME }}"
+      continue-on-error: true
 
-    # TODO: remove the ls -l and preview steps
-    - name: Verify SBOM JSON File
-      run: |
-        ls -l "${FILE_PREFIX}-GitHub-sbom.json"
-    - name: Preview SBOM JSON Content
-      run: |
-        head -n 20 "${FILE_PREFIX}-GitHub-sbom.json"
+    - name: Upload JSON artifact
+      uses: actions/upload-artifact@v4
+      with:
+        # name: ${{ env.FILE_PREFIX }}-GitHub-SBOM.json
+        name: ${{ env.FILE_NAME }}
+        # path: ${{ env.FILE_PREFIX }}-GitHub-SBOM.json
+        path: ${{ env.FILE_NAME }}
+      continue-on-error: true
 
     - name: Convert SBOM to CSV using jq
       run: |
-        echo "name,SPDXID,versionInfo,downloadLocation,externalRefs,license,source_code_url,vendor" > "${FILE_PREFIX}-sbom.csv"
+        echo "name,SPDXID,versionInfo,downloadLocation,externalRefs,license,source_code_url,vendor" > "${FILE_PREFIX}${DEFAULT_SEPARATOR}${DEFAULT_FILE_NAME}.csv"
         jq -r '
           .sbom.packages[] | [
             .name,
@@ -91,18 +151,15 @@ jobs:
             .downloadLocation,
             ( .externalRefs[]? | .referenceLocator ),
             "None", "None", "None"
-          ] | @csv' "${FILE_PREFIX}-GitHub-sbom.json" >> "${FILE_PREFIX}-GitHub-sbom.csv"
-
-    # TODO: remove preview step
-    - name: Preview SBOM CSV Content
-      run: |
-        head -n 20 "${FILE_PREFIX}-GitHub-sbom.csv"
-
+          ] | @csv' "${FILE_NAME}" >> "${FILE_PREFIX}${DEFAULT_SEPARATOR}${DEFAULT_FILE_NAME}.csv"
+      continue-on-error: true
+    
+    # TODO: add enrichment from other sources (pkgdev (Go), cargo, GitHub Actions / Marketplace etc.)
     - name: Enrich SBOM CSV from RubyGems
       run: |
-        TEMP_CSV="${FILE_PREFIX}-sbom-temp.csv"
+        TEMP_CSV="${FILE_PREFIX}${DEFAULT_SEPARATOR}${DEFAULT_FILE_NAME}-temp.csv"
         echo "name,SPDXID,versionInfo,downloadLocation,externalRefs,license,source_code_url,vendor" > "$TEMP_CSV"
-        tail -n +2 "${FILE_PREFIX}-sbom.csv" | while IFS=, read -r name SPDXID versionInfo downloadLocation externalRefs license source_code_url vendor; do
+        tail -n +2 "${FILE_PREFIX}${DEFAULT_SEPARATOR}${DEFAULT_FILE_NAME}.csv" | while IFS=, read -r name SPDXID versionInfo downloadLocation externalRefs license source_code_url vendor; do
           # Debug each row
           echo "Processing: $name, $SPDXID, $versionInfo, $downloadLocation, $externalRefs, $license, $source_code_url, $vendor"
           if [[ "$externalRefs" == *"pkg:gem"* ]]; then
@@ -131,23 +188,16 @@ jobs:
           fi
           echo "$name,$SPDXID,$versionInfo,$downloadLocation,$externalRefs,$new_license,$new_source_code_url,$new_vendor" >> "$TEMP_CSV"
         done
-        mv "$TEMP_CSV" "${FILE_PREFIX}-GitHub-sbom.csv"
-
-    - name: Verify SBOM CSV File
-      run: |
-        ls -l "${FILE_PREFIX}-GitHub-sbom.csv"
-
-    - name: Upload JSON artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ env.FILE_PREFIX }}-GitHub-sbom.json
-        path: ${{ env.FILE_PREFIX }}-GitHub-sbom.json
-
+        mv "$TEMP_CSV" "${FILE_PREFIX}${DEFAULT_SEPARATOR}${DEFAULT_FILE_NAME}.csv"
+      continue-on-error: true
+    
     - name: Upload SBOM CSV as Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ env.FILE_PREFIX }}-GitHub-sbom.csv
-        path: ${{ env.FILE_PREFIX }}-GitHub-sbom.csv
+        # name: ${{ env.FILE_PREFIX }}-GitHub-SBOM.csv
+        name: ${{ env.FILE_PREFIX }}${{ env.DEFAULT_SEPARATOR }}${{ env.DEFAULT_FILE_NAME }}.csv
+        # path: ${{ env.FILE_PREFIX }}-GitHub-SBOM.csv
+        path: ${{ env.FILE_PREFIX }}${{ env.DEFAULT_SEPARATOR }}${{ env.DEFAULT_FILE_NAME }}.csv
 
 # example project https://progresssoftware.app.blackduck.com/api/risk-profile-dashboard?limit=25&offset=0
 # server URL https://progresssoftware.app.blackduck.com/api/projects/c7954ee4-348d-4c2f-b259-d577e1df40dc
@@ -155,48 +205,177 @@ jobs:
 #
 # Blackduck SBOM is at SERVER: https://progresssoftware.app.blackduck.com/ - org variable!
 # API token in repo - https://github.com/chef/chef-vault/settings/secrets/actions
-  generate-blackduck-polaris-sbom:
-    name: Generate SBOM using Blackduck Polaris Tool
+  generate-blackduck-sbom:
+    name: Blackduck SCA Scan (PURPLE)
     runs-on: ubuntu-latest
-    if: ${{ inputs.generate-blackduck-polaris-sbom == true }}
+    if: ${{ inputs.perform-blackduck-sca-scan == true }} 
     steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
-      - name: Starting Black Duck Bridge scan
+      - name: 'Echo inputs'
         run: |
-          echo "BLACKDUCK_SBOM_URL: ${{ secrets.BLACKDUCK_SBOM_URL }}"
-          echo "BLACKDUCK_SBOM_API_KEY: ${{ secrets.BLACKDUCK_SBOM_API_KEY }}"
-      - name: BlackDuck SBOM scan
-        uses: blackduck-inc/black-duck-security-scan@v2.1.1
+          echo "Starting BlackDuck SCA scan"
+          echo "BlackDuck_SCA_URL: ${{ secrets.BLACKDUCK_SBOM_URL }}"
+          echo "BLACKDUCK_SCA_TOKEN: ${{ secrets.BLACKDUCK_SCA_TOKEN }}"
+          echo "DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name }}"
+          echo "DETECT_PROJECT_NAME: ${{ inputs.blackduck-project-name }}"
+          echo "DETECT_PROJECT_VERSION_NAME: ${{ inputs.version }}"
+         
+      - name: Checkout source
+        uses: actions/checkout@v6
+
+      - name: Set up Ruby and run bundle install
+        if: inputs.language == 'ruby'
+        uses: ruby/setup-ruby@v1
         with:
-          ### ---------- SRM SCANNING: REQUIRED FIELDS ----------
-          srm_url: ${{ secrets.BLACKDUCK_SBOM_URL }}  # SRM_URL
-          srm_apikey: ${{ secrets.BLACKDUCK_SBOM_API_KEY }}  # SRM_API_KEY
-          # TODO: this may be just SAST
-          srm_assessment_types: "SCA,SAST"
-          ### SCANNING: Optional fields from https://documentation.blackduck.com/bundle/bridge/page/documentation/c_github-srm.html
-          # srm_project_name: ${{ github.event.repository.name }} # chef-vault
-          srm_project_id: c7954ee4-348d-4c2f-b259-d577e1df40dc
+          ruby-version: '3.4.2'
+          bundler-cache: false
+          working-directory: ${{ inputs.ruby-app-directory != '' && inputs.ruby-app-directory || '.' }}
 
-          #### srm_auto_create_project: true  # Whether SRM should automatically create a project with the given project-name if it does not yet exist.	false	No[2]
-          # srm_project_id: ${{ vars.PROJECT_ID }}
-          # srm_branch_name: ${{ vars.BRANCH_NAME }}
-          # srm_branch_parent: ${{ vars.BRANCH_PARENT }}
-          # srm_waitForScan: false   # Used to support the async mode 
-          # detect_execution_path: ${{ vars.DETECT_EXECUTION_PATH }}
-          # coverity_execution_path: ${{ vars.COVERITY_EXECUTION_PATH }}    
-          # project_directory: ${{ vars.PROJECT_DIRECTORY }}
+      - name: Set up Erlang/OTP and rebar3
+        if: inputs.language == 'erlang'
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: '25.3.2.16'
+          rebar3-version: '3.22.0'
 
-######################################################
+      - name: Configure git for private Go modules
+        if : ${{ inputs.go-private-modules != '' }}
+        env:
+          GOPRIVATE: ${{ inputs.go-private-modules }}
+        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+
+      - name: generate Gemfile.lock if needed for Ruby projects
+        if: ${{ inputs.run-bundle-install == true && inputs.language == 'ruby' }} 
+        continue-on-error: true
+        working-directory: ${{ inputs.ruby-app-directory != '' && inputs.ruby-app-directory || '.' }}
+        run: |
+          if [ ! -f Gemfile.lock ]; then
+            bundle install 
+          fi
+
+      - name: attach artifact for Gemfile.lock for debugging
+        if: ${{ inputs.language == 'ruby' }} 
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          path: ${{ inputs.ruby-app-directory != '' && format('{0}/Gemfile.lock', inputs.ruby-app-directory) || 'Gemfile.lock' }}
+          name: ${{ github.event.repository.name }}-Gemfile-lock.txt 
+
+      - name: Construct BlackDuck detect arguments
+        id: detect-args
+        run: |
+          # Start with base arguments (always exclude PIP detector)
+          DETECT_ARGS="--detect.excluded.detector.types=PIP"
+          
+          # Add low accuracy mode if requested
+          if [[ "${{ inputs.blackduck-force-low-accuracy-mode }}" == "true" ]]; then
+            DETECT_ARGS="${DETECT_ARGS} --detect.accuracy.required=NONE"
+          fi
+          
+          # Add source path if ruby-app-directory is specified
+          if [[ -n "${{ inputs.ruby-app-directory }}" ]]; then
+            DETECT_ARGS="${DETECT_ARGS} --detect.source.path=${{ inputs.ruby-app-directory }}"
+          fi
+          
+          echo "DETECT_ARGS=${DETECT_ARGS}" >> $GITHUB_ENV
+          echo "Constructed detect_args: ${DETECT_ARGS}"
+
+      - name: Construct BlackDuck failure severities
+        id: failure-severities
+        run: |
+          SEVERITIES=""
+          
+          if [[ "${{ inputs.blackduck-fail-on-blocker }}" == "true" ]]; then
+            SEVERITIES="BLOCKER"
+          fi
+          
+          if [[ "${{ inputs.blackduck-fail-on-critical }}" == "true" ]]; then
+            if [[ -n "$SEVERITIES" ]]; then
+              SEVERITIES="${SEVERITIES},CRITICAL"
+            else
+              SEVERITIES="CRITICAL"
+            fi
+          fi
+          
+          if [[ "${{ inputs.blackduck-fail-on-major }}" == "true" ]]; then
+            if [[ -n "$SEVERITIES" ]]; then
+              SEVERITIES="${SEVERITIES},MAJOR"
+            else
+              SEVERITIES="MAJOR"
+            fi
+          fi
+          
+          echo "FAILURE_SEVERITIES=${SEVERITIES}" >> $GITHUB_ENV
+          echo "Enforcement policy: ${SEVERITIES}"
+
+      - name: BlackDuck SCA scan
+        id: blackduck-scan
+        uses: blackduck-inc/black-duck-security-scan@v2.1.1
+        continue-on-error: false  # Allow pipeline to continue even with policy violations
+        env: 
+          GOPRIVATE: ${{ inputs.go-private-modules }}
+          DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name}} #'Chef-Agents' # <the_parent_group_of_your_target_project>, Chef, Chef-Agents, Chef-Automate, Chef-Chef360, Chef-Habitat, Chef-Infrastructure-Server, Chef-Shared-Services
+          DETECT_PROJECT_NAME: ${{ inputs.blackduck-project-name }}
+          DETECT_PROJECT_VERSION_NAME: ${{ inputs.version }} # <the_existing_version_in_your_project>
+        with:
+          blackducksca_url: ${{ secrets.BLACKDUCK_SBOM_URL }}  # BLACKDUCK_URL, should be https://progresssoftware.app.blackduck.com/ 
+          blackducksca_token: ${{ secrets.BLACKDUCK_SCA_TOKEN }}  # was BLACKDUCK_API_KEY
+          blackducksca_scan_failure_severities: ${{ env.FAILURE_SEVERITIES }}
+          blackducksca_scan_full: true  # Force INTELLIGENT scan mode for all branches (uploads results to server)
+          detect_args: ${{ env.DETECT_ARGS }}
+          # ignore python per https://documentation.blackduck.com/bundle/detect/page/packagemgrs/python.html
+
+      - name: Check BlackDuck SCA results and report violations
+        if: ${{ always() && (inputs.blackduck-fail-on-blocker == true || inputs.blackduck-fail-on-critical == true || inputs.blackduck-fail-on-major == true) }}
+        run: |
+          BRIDGE_LOG=".bridge/bridge.log"
+          
+          if [ ! -f "$BRIDGE_LOG" ]; then
+            echo "⚠️  Bridge log not found"
+            exit 0
+          fi
+          
+          SEVERITY_LINE=$(grep "Policy Severity counts:" "$BRIDGE_LOG" || true)
+          
+          if [ -z "$SEVERITY_LINE" ]; then
+            echo "⚠️  Policy Severity counts line not found in bridge.log"
+            exit 0
+          fi
+          
+          BLOCKER_COUNT=$(echo "$SEVERITY_LINE" | grep -oE '[0-9]+ match(es)? ha(s|ve) a severity level of BLOCKER' | grep -oE '^[0-9]+' || echo "0")
+          CRITICAL_COUNT=$(echo "$SEVERITY_LINE" | grep -oE '[0-9]+ match(es)? ha(s|ve) a severity level of CRITICAL' | grep -oE '^[0-9]+' || echo "0")
+          MAJOR_COUNT=$(echo "$SEVERITY_LINE" | grep -oE '[0-9]+ match(es)? ha(s|ve) a severity level of MAJOR' | grep -oE '^[0-9]+' || echo "0")
+          
+          echo ""
+          echo "============================================"
+          echo "BlackDuck SCA Policy Violation Summary"
+          echo "============================================"
+          echo "BLOCKER violations: $BLOCKER_COUNT"
+          echo "CRITICAL violations: $CRITICAL_COUNT"
+          echo "MAJOR violations: $MAJOR_COUNT"
+          echo "============================================"
+          
+          VIOLATIONS=""
+          [ "${{ inputs.blackduck-fail-on-blocker }}" == "true" ] && [ "$BLOCKER_COUNT" -gt 0 ] && VIOLATIONS="${VIOLATIONS}$BLOCKER_COUNT BLOCKER, "
+          [ "${{ inputs.blackduck-fail-on-critical }}" == "true" ] && [ "$CRITICAL_COUNT" -gt 0 ] && VIOLATIONS="${VIOLATIONS}$CRITICAL_COUNT CRITICAL, "
+          [ "${{ inputs.blackduck-fail-on-major }}" == "true" ] && [ "$MAJOR_COUNT" -gt 0 ] && VIOLATIONS="${VIOLATIONS}$MAJOR_COUNT MAJOR, "
+          
+          if [ -n "$VIOLATIONS" ]; then
+            echo ""
+            echo "❌ Vulnerabilities Found: ${VIOLATIONS%, }"
+            exit 1
+          else
+            echo ""
+            echo "✅ No policy-violating vulnerabilities found"
+          fi
+
 # original from https://github.com/progress-platform-services/common-github-actions/blob/main/.github/workflows/examples/ci-all-sbom-main.yml
-
   generate-msft-sbom:
     name: Generate MSFT SBOM
     runs-on: ubuntu-latest
     if: ${{ inputs.generate-msft-sbom == true }}
     timeout-minutes: 5
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 # TODO: cache the sbom-tool binary
     - name: Set up Go
       uses: actions/setup-go@v5
@@ -204,11 +383,10 @@ jobs:
         go-version: 'stable'
 #        go-version: 1.24.2
 #        check-latest: true
-    # - name: Configure git for private modules
-    #   env:
-    #     GOPRIVATE: github.com/progress-platform-services/*
-    #       use ${{ inputs.go-private-modules }}
-    #   run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+    - name: Configure git for private modules
+      env:
+        GOPRIVATE: ${{ inputs.go-private-modules }}
+      run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
     - name: create folder
       run: mkdir -p ./bin
@@ -239,7 +417,7 @@ jobs:
     if: ${{ inputs.license_scout == true }}
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -248,11 +426,10 @@ jobs:
 #        go-version: 1.24.2
 #        check-latest: true
         
-      # - name: Configure git for private modules
-      #   env:
-      #     GOPRIVATE: github.com/progress-platform-services/*
-      #       use ${{ inputs.go-private-modules }}
-      #   run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+      - name: Configure git for private modules
+        env:
+          GOPRIVATE: ${{ inputs.go-private-modules }}
+        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - name: set up license_scout
         uses: ruby/setup-ruby@v1

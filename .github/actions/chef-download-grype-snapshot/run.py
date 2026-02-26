@@ -1,0 +1,257 @@
+import os, json, subprocess, re
+from datetime import datetime, timezone
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+
+def env(k, d=""):
+    return os.environ.get(k, d)
+
+def now_utc():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+def run(cmd, check=True):
+    p = subprocess.run(cmd, text=True, capture_output=True)
+    if check and p.returncode != 0:
+        raise RuntimeError(f"Command failed: {cmd}\nstdout:\n{p.stdout}\nstderr:\n{p.stderr}")
+    return p.returncode, p.stdout.strip(), p.stderr.strip()
+
+def http_json(url):
+    rc, out, err = run(["bash", "-lc", f"curl -fsSL '{url}'"], check=True)
+    return json.loads(out)
+
+def ensure_dir(path):
+    run(["bash","-lc", f"mkdir -p '{path}'"], check=True)
+
+def write_text(path, content):
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+# Inputs
+product       = env("PRODUCT")
+channel       = env("CHANNEL")
+download_site = env("DOWNLOAD_SITE", "commercial")
+os_name       = env("OS", "ubuntu")
+os_ver        = env("OS_VERSION")
+arch          = env("ARCH", "x86_64")
+scan_mode     = env("SCAN_MODE", "native")
+scan_root     = env("SCAN_ROOT", "")
+resolve_ver   = env("RESOLVE_VERSION", "latest")
+pinned_ver    = env("PINNED_VERSION", "")
+license_id    = env("LICENSE_ID", "")
+out_dir       = env("OUT_DIR", "out")
+work_dir      = env("WORK_DIR", "work")
+
+
+# Guard: commercial downloads require a license_id (fail fast with a clear error)
+if download_site == "commercial" and not license_id.strip():
+    raise RuntimeError(
+        "Commercial download_site requires LICENSE_ID, but it was empty. "
+        "Fix by scoping GA_DOWNLOAD_GRYPE_LICENSE_ID to the orchestrator repo and passing it into the composite action, "
+        "or switch DOWNLOAD_SITE to 'community' for targets that do not require licensing."
+    )
+
+ensure_dir(out_dir)
+ensure_dir(work_dir)
+
+# Choose base URL
+base = "https://chefdownload-commercial.chef.io" if download_site == "commercial" else "https://chefdownload-community.chef.io"
+
+# Resolve version
+resolved_version = pinned_ver
+if resolve_ver == "latest" or not resolved_version:
+    ver_url = f"{base}/{channel}/{product}/versions/latest"
+    # Both commercial and community require license_id, but different license types
+    if license_id:
+        ver_url += f"?license_id={license_id}"
+    
+    try:
+        ver_doc = http_json(ver_url)
+        if isinstance(ver_doc, dict):
+            resolved_version = (
+                ver_doc.get("version")
+                or ver_doc.get("latest")
+                or ver_doc.get("artifact_version")
+                or ver_doc.get("value")
+            )
+            if not resolved_version:
+                resolved_version = str(ver_doc)
+        else:
+            resolved_version = str(ver_doc)
+    except RuntimeError as e:
+        error_msg = str(e)
+        if "403" in error_msg or "401" in error_msg or "Missing license_id" in error_msg or "License Id is not valid" in error_msg or "Only Free license" in error_msg:
+            site_type = "commercial" if download_site == "commercial" else "community"
+            license_secret = "GA_DOWNLOAD_GRYPE_LICENSE_ID" if download_site == "commercial" else "GA_DOWNLOAD_GRYPE_LICENSE_ID_FREE"
+            
+            if "Missing license_id" in error_msg:
+                raise RuntimeError(
+                    f"LICENSE ERROR ({site_type}): Missing license_id parameter.\n"
+                    f"  Download site: {download_site}\n"
+                    f"  Required secret: {license_secret}\n"
+                    f"  Solution: Ensure the {license_secret} secret is set in the orchestrator repository"
+                ) from e
+            elif "License Id is not valid" in error_msg or "403" in error_msg:
+                raise RuntimeError(
+                    f"LICENSE ERROR ({site_type}): Invalid or expired license_id.\n"
+                    f"  Download site: {download_site}\n"
+                    f"  Product: {product}, Channel: {channel}\n"
+                    f"  Secret used: {license_secret}\n"
+                    f"  Solution: Update the {license_secret} secret with a valid {'commercial' if download_site == 'commercial' else 'Free'} license"
+                ) from e
+            elif "Only Free license" in error_msg:
+                raise RuntimeError(
+                    f"LICENSE ERROR (community): Wrong license type provided.\n"
+                    f"  Download site: community\n"
+                    f"  Error: Community downloads require a 'Free' license, but a commercial license was provided\n"
+                    f"  Solution: Update GA_DOWNLOAD_GRYPE_LICENSE_ID_FREE secret with a valid Free license (not commercial)"
+                ) from e
+            else:
+                raise RuntimeError(
+                    f"LICENSE ERROR ({site_type}): Authentication failed.\n"
+                    f"  Download site: {download_site}\n"
+                    f"  Product: {product}, Channel: {channel}\n"
+                    f"  Secret used: {license_secret}\n"
+                    f"  Solution: Verify the {license_secret} secret contains a valid license for {download_site} downloads"
+                ) from e
+        raise
+
+# Construct download URL
+download_url = f"{base}/{channel}/{product}/download?p={os_name}&pv={os_ver}&m={arch}&v={resolved_version}"
+if license_id:
+    download_url += f"&license_id={license_id}"
+
+# Redact license_id (robust URL parsing)
+parts = urlsplit(download_url)
+q = [(k,v) for (k,v) in parse_qsl(parts.query, keep_blank_values=True) if k != "license_id"]
+download_url_redacted = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(q, doseq=True), parts.fragment))
+
+# Persist small values for action outputs
+write_text(os.path.join(out_dir, "_resolved_version.txt"), resolved_version)
+write_text(os.path.join(out_dir, "_download_url_redacted.txt"), download_url_redacted)
+
+# Download package
+pkg_path = os.path.join(work_dir, "package_downloaded.deb")
+try:
+    run(["bash","-lc", f"curl -fsSL -o '{pkg_path}' '{download_url}'"], check=True)
+except RuntimeError as e:
+    if "403" in str(e) or "401" in str(e):
+        site_type = "commercial" if download_site == "commercial" else "community"
+        license_secret = "GA_DOWNLOAD_GRYPE_LICENSE_ID" if download_site == "commercial" else "GA_DOWNLOAD_GRYPE_LICENSE_ID_FREE"
+        raise RuntimeError(
+            f"DOWNLOAD ERROR ({site_type}): Failed to download package.\n"
+            f"  Product: {product} v{resolved_version}\n"
+            f"  Channel: {channel}, OS: {os_name} {os_ver}\n"
+            f"  Download site: {download_site}\n"
+            f"  This may indicate:\n"
+            f"    1. Invalid or expired {license_secret} secret\n"
+            f"    2. Package not available for this OS/version combination\n"
+            f"    3. Version {resolved_version} doesn't exist in {channel} channel\n"
+            f"  Solution: Verify license and that the product/version/platform combination is valid"
+        ) from e
+    raise
+
+# Extract deterministically (pilot assumes Ubuntu .deb)
+extract_dir = os.path.join(work_dir, "extracted")
+run(["bash","-lc", f"rm -rf '{extract_dir}' && mkdir -p '{extract_dir}'"], check=True)
+run(["bash","-lc", f"dpkg-deb -x '{pkg_path}' '{extract_dir}'"], check=True)
+
+# Ensure grype
+run(["bash","-lc", "command -v grype >/dev/null 2>&1 || (curl -sSfL https://get.anchore.io/grype | sh -s -- -b /usr/local/bin)"], check=True)
+
+# Run grype scan to JSON (do not print findings to stdout)
+latest_json_path = os.path.join(out_dir, "latest.json")
+run(["bash","-lc", f"grype dir:'{extract_dir}' --name '{product}' --output json > '{latest_json_path}'"], check=True)
+
+# Parse counts and rewrite with pretty formatting
+doc = json.load(open(latest_json_path, "r", encoding="utf-8"))
+json.dump(doc, open(latest_json_path, "w", encoding="utf-8"), indent=2)
+doc = json.load(open(latest_json_path, "r", encoding="utf-8"))
+matches = doc.get("matches", []) or []
+
+buckets = ["Critical","High","Medium","Low","Negligible","Unknown"]
+sev_counts = {k: 0 for k in buckets}
+
+for m in matches:
+    sev = (m.get("vulnerability", {}) or {}).get("severity", "Unknown") or "Unknown"
+    sev_norm = sev.strip().title()
+    if sev_norm in ("Negligible","Minimal"):
+        sev_norm = "Negligible"
+    if sev_norm not in sev_counts:
+        sev_norm = "Unknown"
+    sev_counts[sev_norm] += 1
+
+# Grype version + DB status (best effort)
+grype_version = ""
+rc, out, err = run(["bash","-lc", "grype version"], check=False)
+if rc == 0:
+    m = re.search(r"Version:\s*([0-9]+\.[0-9]+\.[0-9]+(?:[-+.\w]+)?)", out)
+    if m:
+        grype_version = m.group(1)
+
+db_info = {}
+rc, out, err = run(["bash","-lc", "grype db status -o json"], check=False)
+if rc == 0 and out.startswith("{"):
+    try:
+        dbj = json.loads(out)
+        db_info["status_raw"] = dbj
+        for k in ("built","builtAt","lastBuilt","updated","updatedAt","lastUpdated"):
+            if k in dbj:
+                db_info["built_utc"] = dbj.get(k)
+                break
+        for k in ("schemaVersion","schema","dbSchemaVersion"):
+            if k in dbj:
+                db_info["schema"] = dbj.get(k)
+                break
+        for k in ("checksum","hash","etag"):
+            if k in dbj:
+                db_info["checksum"] = dbj.get(k)
+                break
+    except Exception:
+        db_info["status_raw_text"] = out
+else:
+    rc2, out2, err2 = run(["bash","-lc","grype db status"], check=False)
+    if rc2 == 0:
+        db_info["status_raw_text"] = out2
+        m = re.search(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)", out2)
+        if m:
+            db_info["built_utc"] = m.group(1)
+
+# Metadata
+gha_run_id = env("GITHUB_RUN_ID", "")
+repo = env("GITHUB_REPOSITORY", "")
+workflow = env("GITHUB_WORKFLOW", "")
+sha = env("GITHUB_SHA", "")
+
+metadata = {
+    "schema_version": "1.0",
+    "snapshot": {
+        "timestamp_utc": now_utc(),
+        "run_id": f"gha-{gha_run_id}" if gha_run_id else "",
+        "pipeline": {"repo": repo, "workflow": workflow, "git_sha": sha}
+    },
+    "target": {
+        "product": product,
+        "channel": channel,
+        "resolved_version": resolved_version,
+        "download": {"site": download_site, "url_redacted": download_url_redacted}
+    },
+    "environment": {
+        "runner": env("RUNNER_OS",""),
+        "os": os_name,
+        "os_version": os_ver,
+        "arch": arch
+    },
+    "scan": {
+        "mode": scan_mode,
+        "scan_root": scan_root,
+        "grype": {"version": grype_version, "db": db_info},
+        "options": {"output": "json"}
+    },
+    "summary": {
+        "matches_total": len(matches),
+        "severity_counts": sev_counts
+    }
+}
+
+metadata_path = os.path.join(out_dir, "metadata.json")
+json.dump(metadata, open(metadata_path, "w", encoding="utf-8"), indent=2)
+print("Wrote:", latest_json_path, metadata_path)

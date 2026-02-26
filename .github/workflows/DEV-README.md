@@ -1,4 +1,6 @@
-#TODO: items
+# Common GitHub Actions design and contributions
+
+## Workflow `ci-main-pull-request.yml` description
 
 1. identify affected repos (needing common GH action)
 	- list of repos finalized for limited GA
@@ -66,3 +68,11 @@ https://github.com/actions/starter-workflows/blob/main/code-scanning/snyk-contai
 Evaluate other tools:
 https://github.com/actions/starter-workflows/blob/main/code-scanning/sysdig-scan.yml
 https://github.com/actions/starter-workflows/blob/main/code-scanning/trivy.yml
+
+### Release notes for `ci-main-pull-request.yml`
+1. **v1.0.7** - added simple build and unit test for Go CLI projects, parameters for publishing Habitat packages (but not implementation yet), testing Habitat packages with grype on Windows or Linux, and Go-language security checks (golangci/golangci-lint-action, dominikh/staticcheck-action, and securego/gosec), new flags for testing Polaris
+1. **v1.0.5** - 
+1. **Previous versions** - 
+
+## References for building in GitHub Actions
+https://docs.github.com/en/actions/sharing-automations/reusing-workflows#passing-inputs-and-secrets-to-a-reusable-workflow

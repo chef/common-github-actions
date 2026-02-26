@@ -1,0 +1,108 @@
+# trivy.yml
+name: Trivy dependency vulnerability scan
+# see https://github.com/aquasecurity/trivy-action    
+
+on:
+  workflow_call:
+    inputs:
+      outputfilename:
+        description: 'Name of the Trivy output file'
+        required: false
+        type: string
+        default: 'trivy-output.json'
+      version:
+        description: 'Version of the project'
+        required: false
+        type: string
+        default: '1.0.0'
+      trivy-fail-on-high:
+        description: 'Fail the build if HIGH vulnerabilities are found'
+        required: false
+        type: boolean
+        default: false
+      trivy-fail-on-critical:
+        description: 'Fail the build if CRITICAL vulnerabilities are found'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  trivy:
+    runs-on: ubuntu-latest
+    name: 'Trivy dependency vulnerability scan'
+    permissions:
+      contents: read
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v6
+
+      - name: Generate Filename Prefix
+        run: |
+          FILE_PREFIX=$(echo "${{ github.repository }}-${{ github.ref_name }}-${{ inputs.version }}-" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
+          echo "FILE_PREFIX=${FILE_PREFIX}" >> $GITHUB_ENV
+
+      # The first call to the action will invoke setup-trivy and install trivy
+      - name: Generate Trivy Vulnerability Report (JSON)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          output: trivy-report.json
+          format: json  # can be json, table, template, cyclonedx, sarif, table, spdx, spdx-json
+          scan-ref: .
+          exit-code: 0
+
+      - name: Upload Vulnerability Scan Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.FILE_PREFIX }}-Trivy.json
+          # name: trivy-report-${{ github.event.repository.name }}-${{ github.ref_name }}-${{ inputs.version }}-$(date +'%Y%m%d')-json
+          path: trivy-report.json
+          retention-days: 30
+
+
+      - name: Generate Trivy Vulnerability Report (TABLE)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          output: trivy-report.txt
+          format: table  
+          scan-ref: .
+          skip-setup-trivy: true
+          exit-code: 0
+
+      - name: Upload Vulnerability Scan Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.FILE_PREFIX }}-Trivy.txt
+          # name: trivy-report-${{ github.event.repository.name }}-${{ github.ref_name }}-${{ inputs.version }}-$(date +'%Y%m%d')-text
+          path: trivy-report.txt
+          retention-days: 30
+
+      - name: Construct Trivy failure severities
+        id: failure-severities
+        run: |
+          SEVERITIES=""
+          
+          if [[ "${{ inputs.trivy-fail-on-high }}" == "true" ]]; then
+            SEVERITIES="HIGH"
+          fi
+          
+          if [[ "${{ inputs.trivy-fail-on-critical }}" == "true" ]]; then
+            SEVERITIES="${SEVERITIES},CRITICAL"
+          fi
+          
+          echo "FAILURE_SEVERITIES=${SEVERITIES}" >> $GITHUB_ENV
+          echo "Enforcement policy: ${SEVERITIES}"
+
+      - name: Fail build on High/Critical Vulnerabilities
+        if: ${{ inputs.trivy-fail-on-high || inputs.trivy-fail-on-critical }}
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          format: table
+          scan-ref: .
+          severity: ${{ env.FAILURE_SEVERITIES }}
+          ignore-unfixed: true
+          exit-code: 1
+          # On a subsequent call to the action we know trivy is already installed so can skip this
+          skip-setup-trivy: true

@@ -1,4 +1,5 @@
-name: Update Storage Firewall Rule
+# from https://github.com/prgs-community/githubactions-reusableworkflow-evcodesign/tree/main/.github/actions/update-firewall-rule
+name: Update Firewall Rule
 description: Update Firewall Rule by adding or removing runner ip.
 inputs:
   action-to-execute:
@@ -8,10 +9,44 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: ${{ inputs.action-to-execute }} Firewall Rule
+    - name: Remove Firewall Rule (thank you Eric)
+      if: ${{ inputs.action-to-execute == 'remove' }}
       shell: bash
       run: |
-        AgentPublicIp=$(curl ipconfig.io)
-        echo "##[warning]Adding $AgentPublicIp To Storage Account Firewall, Please Wait..."
-        az network nsg rule update -n HTTPS_CI --nsg-name vmsonarqubeprod001-nsg -g rg-prgssonarqube-prod-001 --add sourceAddressPrefixes $AgentPublicIp
+        AgentPublicIp=$(curl https://checkip.amazonaws.com)
+        echo "##[warning]Removing $AgentPublicIp from the Storage Account Firewall, Please Wait..."
+        az network nsg rule update -n HTTPS_CI --nsg-name vmsonarqubeprod001-nsg -g rg-prgssonarqube-prod-001 \
+          --source-address-prefixes $(az network nsg rule show -g rg-prgssonarqube-prod-001 --nsg-name vmsonarqubeprod001-nsg -n HTTPS_CI \
+          --query "sourceAddressPrefixes[?@ != '$AgentPublicIp']" -o tsv)
+
+    - name: ${{ inputs.action-to-execute }} Firewall Rule
+      if: ${{ inputs.action-to-execute == 'add' }}
+      shell: bash
+      run: |
+        AgentPublicIp=$(curl checkip.amazonaws.com)
+        echo "##[warning]${{ inputs.action-to-execute }}ing $AgentPublicIp To Storage Account Firewall, Please Wait..." 
+        az network nsg rule update -n HTTPS_CI --nsg-name vmsonarqubeprod001-nsg -g rg-prgssonarqube-prod-001 --${{ inputs.action-to-execute }} sourceAddressPrefixes $AgentPublicIp
         sleep 30
+
+      # CANONICAL  az network nsg rule update --name MyNsgRule --nsg-name MyNsg --resource-group MyResourceGroup --source-address-prefixes 208.130.28/24
+      
+      # # was echo "##[warning]Adding $AgentPublicIp To Storage Account Firewall, Please Wait..."
+      # was AgentPublicIp=$(curl ipconfig.io) which returned a 522/timeout error, so switched to checkip.amazonaws.com
+      # az network nsg rule update -n HTTPS_CI --nsg-name vmsonarqubeprod001-nsg -g rg-prgssonarqube-prod-001 --add sourceAddressPrefixes $AgentPublicIp
+        
+      #  pwsh version az keyvault network-rule ${{ inputs.action-to-execute }} --name caps-evcodesign-useast --ip-address $AgentPublicIp
+        
+      # shell: pwsh
+      # run: |
+      #   $AgentPublicIp = Invoke-RestMethod https://ipinfo.io/json | Select -ExpandProperty Ip
+      #   Write-Host "##[warning]${{ inputs.action-to-execute }}ing $AgentPublicIp To Storage Account Firewall, Please Wait..." 
+      #   az keyvault network-rule ${{ inputs.action-to-execute }} --name caps-evcodesign-useast --ip-address $AgentPublicIp
+      #   Start-Sleep -Seconds 20
+
+      # MODIFIED - BUT NOT PART OF caps-evcodesign-useast
+      # shell: pwsh
+      # run: |
+      #     $AgentPublicIp = Invoke-RestMethod https://checkip.amazonaws.com
+      #     Write-Host "##[warning]${{ inputs.action-to-execute }}ing $AgentPublicIp To Storage Account Firewall, Please Wait..." 
+      #     az keyvault network-rule ${{ inputs.action-to-execute }} --name caps-evcodesign-useast --ip-address $AgentPublicIp
+      #     Start-Sleep -Seconds 20

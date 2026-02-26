@@ -24,7 +24,7 @@ jobs:
         ruby: ['3.4'] # '2.7', '3.1', 
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - uses: ruby/setup-ruby@v1
       # follow instructions at https://github.com/marketplace/actions/setup-ruby-jruby-and-truffleruby & https://docs.github.com/en/actions/use-cases-and-examples/building-and-testing/building-and-testing-ruby
       # not recommended to pin setup-ruby anymore - like uses: ruby/setup-ruby@55283cc23133118229fd3f97f9336ee23a179fcf # v1.146.0
