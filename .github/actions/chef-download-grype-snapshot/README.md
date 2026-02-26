@@ -317,6 +317,31 @@ out/
 - Channels are flexible: `stable`, `current`, `base-2025`, custom channels, etc.
 - Licensed channels (e.g., `base-2025`) require HAB_AUTH_TOKEN via license_id input
 
+## Version Matching Logic
+
+### Smart Stable Channel Selection
+
+When scanning the `stable` channel in native/modern modes, the action implements intelligent major version matching to ensure fair comparisons:
+
+**The Problem**: Comparing `stable` (e.g., v4.18.1) against `current` (e.g., v5.2.0) would show inflated vulnerability differences due to version gap rather than actual security improvements.
+
+**The Solution**: The action automatically:
+1. Queries the latest version from the `current` channel
+2. Extracts the major version number (e.g., `5` from `5.2.0`)
+3. Fetches all available versions from the `stable` channel
+4. Selects the highest stable version matching the same major version (e.g., `5.1.0`)
+
+**Example Flow**:
+```
+Current channel latest: 5.2.0
+Stable versions: [4.18.1, 4.18.0, 5.1.0, 5.0.2, 3.22.1]
+Selected stable version: 5.1.0 ✅ (matches major version 5)
+```
+
+This ensures apples-to-apples comparisons between `stable` and `current` releases, providing meaningful vulnerability trend analysis.
+
+**Fallback Behavior**: If no matching major version is found in stable, the action falls back to using `/versions/latest` from the stable channel.
+
 ## Error Handling
 
 The action provides detailed error messages for common failures:
