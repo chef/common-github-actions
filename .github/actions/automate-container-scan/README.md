@@ -157,6 +157,35 @@ Creates `index.json` with:
 - Vulnerability counts by severity
 - Package counts per origin
 
+## Performance and Caching
+
+### Execution Time
+
+Typical run times:
+- **Container build**: 1-2 minutes
+- **Automate deployment**: 10-15 minutes (cannot be cached)
+- **Grype scans**: 3-5 minutes per origin
+- **Total**: ~15-20 minutes
+
+### Why We Don't Cache the Deployment
+
+**The Automate deployment cannot be cached** because:
+- Even if the Automate version string stays the same, the embedded Habitat packages are updated frequently
+- We need to scan the **latest** embedded packages to detect new vulnerabilities
+- Caching would miss critical security updates in dependencies
+
+### What Gets Optimized
+
+- **Docker BuildKit**: Enabled for faster image builds with layer caching
+- **APT package cache**: Reused within Docker build layers
+- **Container reuse**: Same container used for both origin scans
+
+### Recommendations for Scheduled Runs
+
+- Run **nightly** rather than on every commit (deployment time is acceptable for daily scans)
+- Use GitHub Actions' schedule trigger during off-peak hours
+- Monitor for Automate version changes to detect when fresh scans are needed
+
 ## Local Testing
 
 ### Build and Test Container

@@ -189,8 +189,9 @@ scan_origin() {
     log "Running Grype scan (this may take several minutes)..."
     mkdir -p "$(dirname "${output_file}")"
     
+    # Run scan and pretty-print JSON output for readability
     if docker exec -w /root "${CONTAINER_ID}" grype "dir:${origin_path}" -o json \
-        > "${output_file}" 2>"${LOGS_DIR}/${origin_name}-scan.log"; then
+        2>"${LOGS_DIR}/${origin_name}-scan.log" | jq '.' > "${output_file}"; then
         log "Scan completed: ${output_file}"
     else
         log "WARNING: Grype scan of ${origin_name} may have failed"
@@ -237,14 +238,16 @@ EOF
 extract_severity_summary() {
     local json_file="$1"
     
-    # Extract severity counts as JSON object
+    # Extract severity counts and package info as JSON object
     python3 - <<EOF
 import json
+import sys
 
 try:
     with open("${json_file}") as f:
         data = json.load(f)
     
+    # Count vulnerabilities by severity (same logic as parse_severity_counts)
     counts = {"Critical": 0, "High": 0, "Medium": 0, "Low": 0, "Negligible": 0}
     
     for match in data.get("matches", []):
@@ -252,19 +255,21 @@ try:
         if severity in counts:
             counts[severity] += 1
     
-    # Count total packages cataloged
-    packages = data.get("source", {}).get("target", {}).get("userInput", "")
-    pkg_count = len(data.get("source", {}).get("distro", {}).get("idLike", [])) if "distro" in data.get("source", {}) else 0
+    # Count unique packages that have vulnerabilities
+    artifacts = set()
+    for match in data.get("matches", []):
+        artifact = match.get("artifact", {})
+        name = artifact.get("name", "")
+        version = artifact.get("version", "")
+        if name and version:
+            artifacts.add(f"{name}@{version}")
     
-    # Try alternative package counting
-    if "source" in data and "target" in data["source"]:
-        # Count unique artifact locations
-        artifacts = set()
-        for match in data.get("matches", []):
-            artifact = match.get("artifact", {})
-            if "name" in artifact and "version" in artifact:
-                artifacts.add(f"{artifact['name']}@{artifact['version']}")
-        pkg_count = len(artifacts) if artifacts else pkg_count
+    pkg_count = len(artifacts)
+    
+    # If no matches, try to get total cataloged packages from source
+    if pkg_count == 0 and "source" in data:
+        # Some Grype versions include catalog info
+        pkg_count = data.get("source", {}).get("target", {}).get("packages", 0)
     
     result = {
         "total_packages": pkg_count,
@@ -275,6 +280,8 @@ try:
     print(json.dumps(result))
     
 except Exception as e:
+    # Print error to stderr for debugging
+    print(f"Error parsing {json_file}: {e}", file=sys.stderr)
     print(json.dumps({"total_packages": 0, "total_vulnerabilities": 0, "severity_counts": {"Critical": 0, "High": 0, "Medium": 0, "Low": 0, "Negligible": 0}}))
 EOF
 }
