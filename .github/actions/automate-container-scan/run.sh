@@ -91,20 +91,29 @@ deploy_automate() {
     
     # Initialize Automate configuration
     log "Initializing Automate configuration..."
-    docker exec "${CONTAINER_ID}" ./chef-automate init-config --upgrade-strategy none \
-        > "${LOGS_DIR}/init-config.log" 2>&1 || fail "Failed to initialize Automate config"
+    if ! docker exec -w /root "${CONTAINER_ID}" ./chef-automate init-config --upgrade-strategy none \
+        > "${LOGS_DIR}/init-config.log" 2>&1; then
+        log "ERROR: Failed to initialize Automate config"
+        log "Last 20 lines of init-config.log:"
+        tail -n 20 "${LOGS_DIR}/init-config.log" || true
+        fail "Automate init-config failed"
+    fi
     
     # Set required sysctl parameter
     log "Setting sysctl parameters..."
-    docker exec "${CONTAINER_ID}" sysctl -w vm.dirty_expire_centisecs=20000 \
-        > "${LOGS_DIR}/sysctl.log" 2>&1 || fail "Failed to set sysctl parameters"
+    if ! docker exec -w /root "${CONTAINER_ID}" sysctl -w vm.dirty_expire_centisecs=20000 \
+        > "${LOGS_DIR}/sysctl.log" 2>&1; then
+        log "ERROR: Failed to set sysctl parameters"
+        cat "${LOGS_DIR}/sysctl.log" || true
+        fail "sysctl configuration failed"
+    fi
     
     # Deploy Automate (this takes 10-15 minutes)
     log "Deploying Automate (this may take 10-15 minutes)..."
     log "Progress will be logged to ${LOGS_DIR}/deploy.log"
     
     # Run deploy with timeout and capture output
-    if docker exec "${CONTAINER_ID}" timeout 1800 ./chef-automate deploy config.toml --accept-terms-and-mlsa \
+    if docker exec -w /root "${CONTAINER_ID}" timeout 1800 ./chef-automate deploy config.toml --accept-terms-and-mlsa \
         > "${LOGS_DIR}/deploy.log" 2>&1; then
         log "Automate deployment completed successfully"
     else
@@ -115,11 +124,11 @@ deploy_automate() {
     
     # Enter maintenance mode
     log "Entering maintenance mode..."
-    docker exec "${CONTAINER_ID}" ./chef-automate maintenance on \
+    docker exec -w /root "${CONTAINER_ID}" ./chef-automate maintenance on \
         > "${LOGS_DIR}/maintenance.log" 2>&1 || log "WARNING: Failed to enter maintenance mode (may not be critical)"
     
     # Capture Automate version
-    AUTOMATE_VERSION=$(docker exec "${CONTAINER_ID}" ./chef-automate version 2>/dev/null | head -n 1 | awk '{print $NF}')
+    AUTOMATE_VERSION=$(docker exec -w /root "${CONTAINER_ID}" ./chef-automate version 2>/dev/null | head -n 1 | awk '{print $NF}')
     log "Chef Automate version: ${AUTOMATE_VERSION}"
     
     # Verify Habitat packages are present
@@ -143,12 +152,12 @@ get_grype_metadata() {
     log "Capturing Grype metadata..."
     
     # Get Grype version
-    GRYPE_VERSION=$(docker exec "${CONTAINER_ID}" grype version 2>/dev/null | grep "^Version:" | awk '{print $2}')
+    GRYPE_VERSION=$(docker exec -w /root "${CONTAINER_ID}" grype version 2>/dev/null | grep "^Version:" | awk '{print $2}')
     log "Grype version: ${GRYPE_VERSION}"
     
     # Get Grype DB metadata
     local db_status
-    db_status=$(docker exec "${CONTAINER_ID}" grype db status 2>/dev/null || echo "")
+    db_status=$(docker exec -w /root "${CONTAINER_ID}" grype db status 2>/dev/null || echo "")
     
     GRYPE_DB_BUILT=$(echo "${db_status}" | grep "Built:" | awk '{print $2, $3}')
     GRYPE_DB_SCHEMA=$(echo "${db_status}" | grep "Schema version:" | awk '{print $3}')
@@ -166,7 +175,7 @@ scan_origin() {
     
     # Count packages in directory
     local pkg_count
-    pkg_count=$(docker exec "${CONTAINER_ID}" bash -c \
+    pkg_count=$(docker exec -w /root "${CONTAINER_ID}" bash -c \
         "find ${origin_path} -mindepth 3 -maxdepth 3 -type d 2>/dev/null | wc -l" || echo "0")
     log "Found ${pkg_count} packages in ${origin_name}"
     
@@ -174,7 +183,7 @@ scan_origin() {
     log "Running Grype scan (this may take several minutes)..."
     mkdir -p "$(dirname "${output_file}")"
     
-    if docker exec "${CONTAINER_ID}" grype "dir:${origin_path}" -o json \
+    if docker exec -w /root "${CONTAINER_ID}" grype "dir:${origin_path}" -o json \
         > "${output_file}" 2>"${LOGS_DIR}/${origin_name}-scan.log"; then
         log "Scan completed: ${output_file}"
     else
