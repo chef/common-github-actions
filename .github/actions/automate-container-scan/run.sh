@@ -127,8 +127,10 @@ deploy_automate() {
     docker exec -w /root "${CONTAINER_ID}" chef-automate maintenance on \
         > "${LOGS_DIR}/maintenance.log" 2>&1 || log "WARNING: Failed to enter maintenance mode (may not be critical)"
     
-    # Capture Automate version
+    # Capture Automate version (disable pipefail to avoid SIGPIPE from head)
+    set +o pipefail
     AUTOMATE_VERSION=$(docker exec -w /root "${CONTAINER_ID}" chef-automate version 2>/dev/null | head -n 1 | awk '{print $NF}')
+    set -o pipefail
     log "Chef Automate version: ${AUTOMATE_VERSION}"
     
     # Verify Habitat packages are present
@@ -151,16 +153,20 @@ deploy_automate() {
 get_grype_metadata() {
     log "Capturing Grype metadata..."
     
-    # Get Grype version
+    # Get Grype version (disable pipefail to avoid SIGPIPE from grep/awk)
+    set +o pipefail
     GRYPE_VERSION=$(docker exec -w /root "${CONTAINER_ID}" grype version 2>/dev/null | grep "^Version:" | awk '{print $2}')
+    set -o pipefail
     log "Grype version: ${GRYPE_VERSION}"
     
     # Get Grype DB metadata
     local db_status
     db_status=$(docker exec -w /root "${CONTAINER_ID}" grype db status 2>/dev/null || echo "")
     
+    set +o pipefail
     GRYPE_DB_BUILT=$(echo "${db_status}" | grep "Built:" | awk '{print $2, $3}')
     GRYPE_DB_SCHEMA=$(echo "${db_status}" | grep "Schema version:" | awk '{print $3}')
+    set -o pipefail
     
     log "Grype DB built: ${GRYPE_DB_BUILT}"
     log "Grype DB schema: ${GRYPE_DB_SCHEMA}"
@@ -335,13 +341,15 @@ EOF
     
     log "Metadata generated: ${index_file}"
     
-    # Display summary
+    # Display summary (disable pipefail for safe jq parsing)
+    set +o pipefail
     log "=== SCAN SUMMARY ==="
     log "Chef Automate version: ${AUTOMATE_VERSION}"
     log "Channel: ${CHANNEL}"
     log "Chef origin: $(echo "${chef_summary}" | jq -r '.total_vulnerabilities') vulnerabilities across $(echo "${chef_summary}" | jq -r '.total_packages') packages"
     log "Core origin: $(echo "${core_summary}" | jq -r '.total_vulnerabilities') vulnerabilities across $(echo "${core_summary}" | jq -r '.total_packages') packages"
     log "==================="
+    set -o pipefail
 }
 
 # ============================================================================
