@@ -33,7 +33,8 @@ RUN curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
     | sh -s -- -b /usr/local/bin
 
 # Verify installations
-RUN ./chef-automate version && grype version
+# Note: chef-automate version requires deployment, so we just verify the binary exists
+RUN test -f ./chef-automate && echo "chef-automate binary present" && grype version
 
 # Set working directory
 WORKDIR /root
