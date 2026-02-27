@@ -139,15 +139,31 @@ Deploys Chef Automate inside the container:
 
 ### 3. Vulnerability Scanning
 
-Scans Habitat packages from two locations:
-- `/hab/pkgs/chef` - Chef-maintained packages
-- `/hab/pkgs/core` - Binary Bakers core packages
+Scans Habitat packages from two origins:
+
+#### Chef Origin (`/hab/pkgs/chef`)
+- **Chef-maintained service packages** that make up the Automate application
+- Examples: `automate-ui`, `compliance-service`, `notifications-service`, `event-feed-service`
+- These are the core Automate components
+
+#### Core Origin (`/hab/pkgs/core`)
+- **Binary Bakers maintained packages** providing the foundation layer
+- Examples: `gcc`, `openssl`, `postgresql`, `nginx`, `erlang`
+- System dependencies required by Chef packages
 
 Each scan produces a Grype JSON output with:
 - Package catalog
 - Vulnerability matches
 - Severity ratings
 - Fix information
+
+**Note on Origin Discovery**: These two origins (`chef` and `core`) are hard-coded based on Chef Automate's current deployment structure. If Chef Automate changes its origin structure in the future, the scan script will need to be updated. To discover what origins exist in a deployment:
+
+```bash
+docker exec <container-id> ls -1 /hab/pkgs/
+```
+
+If additional origins appear, update the scan calls in `run.sh` and the `origins_scanned` array in the metadata generation function.
 
 ### 4. Metadata Generation
 
@@ -294,6 +310,23 @@ docker --version  # Recommend 20.10+
 - Ensure at least 10 GB free space on runner
 - Clean up Docker images: `docker system prune -a`
 - Use larger runner instance
+
+### Detecting New Habitat Origins
+
+**Symptom**: Suspicion that Chef Automate is using new package origins not currently scanned
+
+**Solution**:
+1. After deployment, list all origins:
+   ```bash
+   docker exec <container-id> ls -1 /hab/pkgs/
+   ```
+
+2. If origins beyond `chef` and `core` appear, update `run.sh`:
+   - Add new `scan_origin` calls in the main() function
+   - Update the `origins_scanned` array in `generate_metadata()`
+   - Update this README
+   
+3. Update the dashboard's `container_index.sql` and `container_vulnerabilities.sql` to handle new origins
 
 ## Contributing
 
