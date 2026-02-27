@@ -17,7 +17,7 @@ permissions:
   contents: read
   
 env:
-  STUB_VERSION: "1.0.5" 
+  STUB_VERSION: "1.0.7" 
 
 jobs: 
   echo_version:
@@ -61,9 +61,20 @@ jobs:
       perform-blackduck-polaris: true
       polaris-application-name: "Chef-Chef360"  # one of these: Chef-Agents, Chef-Automate, Chef-Chef360, Chef-Habitat, Chef-Infrastructure-Server, Chef-Shared-Services, Chef-Other, Chef-Non-Product
       polaris-project-name: ${{ github.event.repository.name }}
-      polaris-blackduck-executable: 'path/to/blackduck/binary'
-      polaris-executable-detect-path: 'path/to/detect'
- 
+      # polaris-blackduck-executable: 'path/to/blackduck/binary'
+      # polaris-executable-detect-path: 'path/to/detect'
+      # NEW IN 1.0.7
+      polaris-working-directory: 'path/to/source' # Working directory for the scan, defaults to . but usually lang-dependent like ./src
+      # polaris-config-path: ''   # Path to Detect configuration file, typically a file supplied at root level like ./detect-config.yml
+      # polaris-coverity-config-path: ''  # Path to Coverity configuration file, typically a file supplied at root level like ./coverity.yml
+      # polaris-coverity-build-command: '' # Coverity build command, typically done in build stage by language or here as param 1-liner like "mvn clean install"
+      # polaris-coverity-clean-command: '' # Coverity clean command, typically done before build stage by language or here as param 1-liner like "mvn clean"
+      # polaris-coverity-args: '' # Additional Coverity arguments,can supply extra arguments like "--config-override capture.build.build-command=make
+      polaris-detect-search-depth: '5' # Detect search depth, blank but can be set to "3" to search up to 3 levels of subdirectories for code to scan'
+      # polaris-detect-args: ''  # Additional Detect arguments, can supply extra arguments like "--detect.diagnostic=true"
+      polaris-assessment-mode: 'SAST' # Assessment mode (SAST, CI or SOURCE_UPLOAD)
+      wait-for-scan: 'true'
+
       # perform application build and unit testing, will use custom repository properties when implemented for chef-primary-application, chef-build-profile, and chef-build-language
       build: false
       # ga-build-profile: $chef-ga-build-profile   
@@ -88,9 +99,18 @@ jobs:
       # quality-service-name: 'YourServiceOrRepoName'
       # quality-junit-report: 'path/to/junit/report''
 
-      # perform native and Habitat packaging, publish to package repositories
+      # perform Habitat-based and native packaging, publish to package repositories
       package-binaries: false     # Package binaries (e.g., RPM, DEB, MSI, dpkg + signing + SHA)
       habitat-build: false        # Create Habitat packages
+      publish-habitat-packages: false   # Publish Habitat packages to Builder
+      publish-habitat-hab_package: false # Chef Habitat package to install (e.g., core/nginx)
+      publish-habitat-hab_version: "1.0.0" # Chef Habitat package version (optional)
+      publish-habitat-hab_release: "20240101010101"  # Chef Habitat package release (optional)
+      publish-habitat-hab_channel: "stable"  # Chef Habitat package channel (e.g., stable, base, base-2025); default is stable
+      publish-habitat-hab_auth_token: ""   # Chef Habitat Builder authentication token (uses secret if not provided)
+      publish-habitat-runner_os: "ubuntu-latest"   # OS runner for Habitat package publishing job, can also be windows-latest
+      habitat-grype-scan: false  # Scan built Habitat packages with Grype for vulnerabilities
+      
       publish-packages: false     # Publish packages (e.g., container from Dockerfile to ECR, go-releaser binary to releases page, omnibus to artifactory, gems, choco, homebrew, other app stores)
 
       # generate and export Software Bill of Materials (SBOM) in various formats
