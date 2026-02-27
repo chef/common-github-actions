@@ -15,6 +15,16 @@ on:
         required: false
         type: string
         default: '1.0.0'
+      trivy-fail-on-high:
+        description: 'Fail the build if HIGH vulnerabilities are found'
+        required: false
+        type: boolean
+        default: false
+      trivy-fail-on-critical:
+        description: 'Fail the build if CRITICAL vulnerabilities are found'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   trivy:
@@ -24,7 +34,7 @@ jobs:
       contents: read
     steps:
       - name: Check out Git repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Generate Filename Prefix
         run: |
@@ -67,14 +77,32 @@ jobs:
           # name: trivy-report-${{ github.event.repository.name }}-${{ github.ref_name }}-${{ inputs.version }}-$(date +'%Y%m%d')-text
           path: trivy-report.txt
           retention-days: 30
-          #   - name: Fail build on High/Criticial Vulnerabilities
-        #     uses: aquasecurity/trivy-action@master
-        #     with:
-        #       scan-type: "fs"
-        #       format: table
-        #       scan-ref: .
-        #       severity: HIGH,CRITICAL
-        #       ignore-unfixed: true
-        #       exit-code: 1
-        #       # On a subsequent call to the action we know trivy is already installed so can skip this
-        #       skip-setup-trivy: true
+
+      - name: Construct Trivy failure severities
+        id: failure-severities
+        run: |
+          SEVERITIES=""
+          
+          if [[ "${{ inputs.trivy-fail-on-high }}" == "true" ]]; then
+            SEVERITIES="HIGH"
+          fi
+          
+          if [[ "${{ inputs.trivy-fail-on-critical }}" == "true" ]]; then
+            SEVERITIES="${SEVERITIES},CRITICAL"
+          fi
+          
+          echo "FAILURE_SEVERITIES=${SEVERITIES}" >> $GITHUB_ENV
+          echo "Enforcement policy: ${SEVERITIES}"
+
+      - name: Fail build on High/Critical Vulnerabilities
+        if: ${{ inputs.trivy-fail-on-high || inputs.trivy-fail-on-critical }}
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          format: table
+          scan-ref: .
+          severity: ${{ env.FAILURE_SEVERITIES }}
+          ignore-unfixed: true
+          exit-code: 1
+          # On a subsequent call to the action we know trivy is already installed so can skip this
+          skip-setup-trivy: true

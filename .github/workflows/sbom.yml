@@ -38,14 +38,11 @@ on:
         required: false
         type: boolean
       perform-blackduck-sca-scan: # combined with export-github-sbom above
+      # generate-blackduck-polaris-sbom is OBSOLETE, use perform-blackduck-sca-scan instead
         description: 'Perform BlackDuck SCA scan'
         required: false
         type: boolean
         default: true
-      # generate-blackduck-sbom:  # obsolete
-      #   description: 'Generate SBOM using Blackduck Tool'
-      #   required: false
-      #   type: boolean
       blackduck-project-group-name:
         description: 'BlackDuck project group name'
         required: false
@@ -65,6 +62,41 @@ on:
       go-private-modules:
         required: false
         type: string
+      blackduck-force-low-accuracy-mode:
+        description: 'Force low accuracy mode for BlackDuck SCA scan to speed up scan time at the cost of accuracy (not recommended for production use)'
+        required: false
+        type: boolean
+        default: false
+      run-bundle-install:
+        description: 'Run bundle install before scanning to generate Gemfile.lock at runtime'
+        required: false
+        type: boolean
+        default: false
+      language:
+        description: 'Primary programming language of the project, used for SBOM enrichment (e.g., "ruby", "go", "python")'
+        required: false
+        type: string
+        default: 'ruby'
+      ruby-app-directory:
+        description: 'Subdirectory containing Ruby Gemfile (e.g., "src/supermarket" for repos with non-root Gemfile location). Leave empty if Gemfile is in root.'
+        required: false
+        type: string
+        default: ''
+      blackduck-fail-on-blocker:
+        description: 'Fail the pipeline if BlackDuck SCA scan finds BLOCKER vulnerabilities'
+        required: false
+        type: boolean
+        default: false
+      blackduck-fail-on-critical:
+        description: 'Fail the pipeline if BlackDuck SCA scan finds CRITICAL vulnerabilities'
+        required: false
+        type: boolean
+        default: false
+      blackduck-fail-on-major:
+        description: 'Fail the pipeline if BlackDuck SCA scan finds MAJOR vulnerabilities'
+        required: false
+        type: boolean
+        default: false
 
 env:
   # Set the default SBOM filename prefix
@@ -80,7 +112,7 @@ jobs:
     if : ${{ inputs.export-github-sbom == true }}
     steps:
     - name: Checkout Code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Generate Filename Prefix and full JSON file name as environment variables for later steps
       run: |
@@ -174,9 +206,9 @@ jobs:
 # Blackduck SBOM is at SERVER: https://progresssoftware.app.blackduck.com/ - org variable!
 # API token in repo - https://github.com/chef/chef-vault/settings/secrets/actions
   generate-blackduck-sbom:
-    name: Generate SBOM using Blackduck Tool (BLUE)
+    name: Blackduck SCA Scan (PURPLE)
     runs-on: ubuntu-latest
-    if: ${{ inputs.perform-blackduck-sca-scan == true || inputs.generate-blackduck-polaris-sbom == true }} # generate-blackduck--polaris-sbom is OBSOLETE, use perform-blackduck-sca-scan instead
+    if: ${{ inputs.perform-blackduck-sca-scan == true }} 
     steps:
       - name: 'Echo inputs'
         run: |
@@ -188,22 +220,97 @@ jobs:
           echo "DETECT_PROJECT_VERSION_NAME: ${{ inputs.version }}"
          
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+
+      - name: Set up Ruby and run bundle install
+        if: inputs.language == 'ruby'
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4.2'
+          bundler-cache: false
+          working-directory: ${{ inputs.ruby-app-directory != '' && inputs.ruby-app-directory || '.' }}
+
+      - name: Set up Erlang/OTP and rebar3
+        if: inputs.language == 'erlang'
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: '25.3.2.16'
+          rebar3-version: '3.22.0'
 
       - name: Configure git for private Go modules
+        if : ${{ inputs.go-private-modules != '' }}
         env:
           GOPRIVATE: ${{ inputs.go-private-modules }}
         run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
-      - name: BlackDuck SCA scan
-        id: black-duck-sca-scan
+      - name: generate Gemfile.lock if needed for Ruby projects
+        if: ${{ inputs.run-bundle-install == true && inputs.language == 'ruby' }} 
+        continue-on-error: true
+        working-directory: ${{ inputs.ruby-app-directory != '' && inputs.ruby-app-directory || '.' }}
         run: |
-          echo "BLACKDUCK_SBOM_URL: ${{ secrets.BLACKDUCK_SBOM_URL }}"
-        # echo "BLACKDUCK_SBOM_API_KEY: ${{ secrets.BLACKDUCK_SBOM_API_KEY }}" no longer used, see BLACKDUCK_SCA_TOKEN
+          if [ ! -f Gemfile.lock ]; then
+            bundle install 
+          fi
 
-      - name: BlackDuck SBOM scan
+      - name: attach artifact for Gemfile.lock for debugging
+        if: ${{ inputs.language == 'ruby' }} 
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          path: ${{ inputs.ruby-app-directory != '' && format('{0}/Gemfile.lock', inputs.ruby-app-directory) || 'Gemfile.lock' }}
+          name: ${{ github.event.repository.name }}-Gemfile-lock.txt 
+
+      - name: Construct BlackDuck detect arguments
+        id: detect-args
+        run: |
+          # Start with base arguments (always exclude PIP detector)
+          DETECT_ARGS="--detect.excluded.detector.types=PIP"
+          
+          # Add low accuracy mode if requested
+          if [[ "${{ inputs.blackduck-force-low-accuracy-mode }}" == "true" ]]; then
+            DETECT_ARGS="${DETECT_ARGS} --detect.accuracy.required=NONE"
+          fi
+          
+          # Add source path if ruby-app-directory is specified
+          if [[ -n "${{ inputs.ruby-app-directory }}" ]]; then
+            DETECT_ARGS="${DETECT_ARGS} --detect.source.path=${{ inputs.ruby-app-directory }}"
+          fi
+          
+          echo "DETECT_ARGS=${DETECT_ARGS}" >> $GITHUB_ENV
+          echo "Constructed detect_args: ${DETECT_ARGS}"
+
+      - name: Construct BlackDuck failure severities
+        id: failure-severities
+        run: |
+          SEVERITIES=""
+          
+          if [[ "${{ inputs.blackduck-fail-on-blocker }}" == "true" ]]; then
+            SEVERITIES="BLOCKER"
+          fi
+          
+          if [[ "${{ inputs.blackduck-fail-on-critical }}" == "true" ]]; then
+            if [[ -n "$SEVERITIES" ]]; then
+              SEVERITIES="${SEVERITIES},CRITICAL"
+            else
+              SEVERITIES="CRITICAL"
+            fi
+          fi
+          
+          if [[ "${{ inputs.blackduck-fail-on-major }}" == "true" ]]; then
+            if [[ -n "$SEVERITIES" ]]; then
+              SEVERITIES="${SEVERITIES},MAJOR"
+            else
+              SEVERITIES="MAJOR"
+            fi
+          fi
+          
+          echo "FAILURE_SEVERITIES=${SEVERITIES}" >> $GITHUB_ENV
+          echo "Enforcement policy: ${SEVERITIES}"
+
+      - name: BlackDuck SCA scan
+        id: blackduck-scan
         uses: blackduck-inc/black-duck-security-scan@v2.1.1
-        continue-on-error: true  # Allow pipeline to continue even with policy violations
+        continue-on-error: false  # Allow pipeline to continue even with policy violations
         env: 
           GOPRIVATE: ${{ inputs.go-private-modules }}
           DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name}} #'Chef-Agents' # <the_parent_group_of_your_target_project>, Chef, Chef-Agents, Chef-Automate, Chef-Chef360, Chef-Habitat, Chef-Infrastructure-Server, Chef-Shared-Services
@@ -212,19 +319,63 @@ jobs:
         with:
           blackducksca_url: ${{ secrets.BLACKDUCK_SBOM_URL }}  # BLACKDUCK_URL, should be https://progresssoftware.app.blackduck.com/ 
           blackducksca_token: ${{ secrets.BLACKDUCK_SCA_TOKEN }}  # was BLACKDUCK_API_KEY
-          # blackducksca_scan_failure_severities: 'BLOCKER,CRITICAL'
-          detect_args: --detect.excluded.detector.types=PIP   # ignore python per https://documentation.blackduck.com/bundle/detect/page/packagemgrs/python.html
+          blackducksca_scan_failure_severities: ${{ env.FAILURE_SEVERITIES }}
+          blackducksca_scan_full: true  # Force INTELLIGENT scan mode for all branches (uploads results to server)
+          detect_args: ${{ env.DETECT_ARGS }}
+          # ignore python per https://documentation.blackduck.com/bundle/detect/page/packagemgrs/python.html
 
-######################################################
+      - name: Check BlackDuck SCA results and report violations
+        if: ${{ always() && (inputs.blackduck-fail-on-blocker == true || inputs.blackduck-fail-on-critical == true || inputs.blackduck-fail-on-major == true) }}
+        run: |
+          BRIDGE_LOG=".bridge/bridge.log"
+          
+          if [ ! -f "$BRIDGE_LOG" ]; then
+            echo "⚠️  Bridge log not found"
+            exit 0
+          fi
+          
+          SEVERITY_LINE=$(grep "Policy Severity counts:" "$BRIDGE_LOG" || true)
+          
+          if [ -z "$SEVERITY_LINE" ]; then
+            echo "⚠️  Policy Severity counts line not found in bridge.log"
+            exit 0
+          fi
+          
+          BLOCKER_COUNT=$(echo "$SEVERITY_LINE" | grep -oE '[0-9]+ match(es)? ha(s|ve) a severity level of BLOCKER' | grep -oE '^[0-9]+' || echo "0")
+          CRITICAL_COUNT=$(echo "$SEVERITY_LINE" | grep -oE '[0-9]+ match(es)? ha(s|ve) a severity level of CRITICAL' | grep -oE '^[0-9]+' || echo "0")
+          MAJOR_COUNT=$(echo "$SEVERITY_LINE" | grep -oE '[0-9]+ match(es)? ha(s|ve) a severity level of MAJOR' | grep -oE '^[0-9]+' || echo "0")
+          
+          echo ""
+          echo "============================================"
+          echo "BlackDuck SCA Policy Violation Summary"
+          echo "============================================"
+          echo "BLOCKER violations: $BLOCKER_COUNT"
+          echo "CRITICAL violations: $CRITICAL_COUNT"
+          echo "MAJOR violations: $MAJOR_COUNT"
+          echo "============================================"
+          
+          VIOLATIONS=""
+          [ "${{ inputs.blackduck-fail-on-blocker }}" == "true" ] && [ "$BLOCKER_COUNT" -gt 0 ] && VIOLATIONS="${VIOLATIONS}$BLOCKER_COUNT BLOCKER, "
+          [ "${{ inputs.blackduck-fail-on-critical }}" == "true" ] && [ "$CRITICAL_COUNT" -gt 0 ] && VIOLATIONS="${VIOLATIONS}$CRITICAL_COUNT CRITICAL, "
+          [ "${{ inputs.blackduck-fail-on-major }}" == "true" ] && [ "$MAJOR_COUNT" -gt 0 ] && VIOLATIONS="${VIOLATIONS}$MAJOR_COUNT MAJOR, "
+          
+          if [ -n "$VIOLATIONS" ]; then
+            echo ""
+            echo "❌ Vulnerabilities Found: ${VIOLATIONS%, }"
+            exit 1
+          else
+            echo ""
+            echo "✅ No policy-violating vulnerabilities found"
+          fi
+
 # original from https://github.com/progress-platform-services/common-github-actions/blob/main/.github/workflows/examples/ci-all-sbom-main.yml
-
   generate-msft-sbom:
     name: Generate MSFT SBOM
     runs-on: ubuntu-latest
     if: ${{ inputs.generate-msft-sbom == true }}
     timeout-minutes: 5
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 # TODO: cache the sbom-tool binary
     - name: Set up Go
       uses: actions/setup-go@v5
@@ -266,7 +417,7 @@ jobs:
     if: ${{ inputs.license_scout == true }}
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       
       - name: Set up Go
         uses: actions/setup-go@v5
