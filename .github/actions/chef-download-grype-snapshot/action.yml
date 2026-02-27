@@ -16,15 +16,20 @@ inputs:
     description: "OS platform (ubuntu)"
     default: "ubuntu"
   os_version:
-    required: true
-    description: "OS version (e.g., 24.04)"
+    required: false
+    description: "OS version (e.g., 24.04) - optional for universal binaries like chef-ice"
+    default: ""
   arch:
     required: true
     description: "Architecture (x86_64)"
     default: "x86_64"
+  package_manager:
+    required: false
+    description: "Package manager type (deb, rpm, tar) - required for universal binaries like chef-ice"
+    default: ""
   scan_mode:
     required: true
-    description: "native|habitat (native for pilot)"
+    description: "native|modern|habitat (native for traditional products, modern for next-gen products, habitat for Habitat packages)"
     default: "native"
   scan_root:
     required: true
@@ -41,6 +46,26 @@ inputs:
     required: false
     description: "License ID for commercial downloads (pass via secrets)"
     default: ""
+  base_url_override:
+    required: false
+    description: "Override the default base URL for downloads (e.g., https://commercial-acceptance.downloads.chef.co for current channel)"
+    default: ""
+  hab_ident:
+    required: false
+    description: "Habitat package identifier (e.g., 'core/chef-infra-client') - for habitat mode"
+    default: ""
+  hab_channel:
+    required: false
+    description: "Habitat channel (stable, current, base-2025, etc.) - for habitat mode"
+    default: "stable"
+  hab_origin:
+    required: false
+    description: "Habitat origin (e.g., 'chef') - alternative to hab_ident - for habitat mode"
+    default: ""
+  hab_auth_token:
+    required: false
+    description: "Habitat Builder Personal Access Token for protected channels (pass via secrets)"
+    default: ""
   out_dir:
     required: false
     description: "Output directory"
@@ -49,6 +74,38 @@ inputs:
     required: false
     description: "Working directory"
     default: "work"
+  data_repo_path:
+    required: false
+    description: "Path to checked out data repository for version comparison (optional)"
+    default: ""
+  full_product_scan:
+    required: false
+    description: "Force full product scan, bypassing version check (default: true for scheduled runs, false for manual runs)"
+    default: "false"
+  enable_trivy:
+    required: false
+    description: "Enable Trivy scanning alongside Grype"
+    default: "true"
+  trivy_scanners:
+    required: false
+    description: "Trivy scanner types (comma-separated: vuln, misconfig, secret, license)"
+    default: "vuln"
+  trivy_severity:
+    required: false
+    description: "Severity levels to report (comma-separated)"
+    default: "UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL"
+  trivy_ignore_unfixed:
+    required: false
+    description: "Ignore vulnerabilities without fixes"
+    default: "false"
+  trivy_timeout:
+    required: false
+    description: "Timeout for Trivy scan"
+    default: ""
+  trivy_cache_dir:
+    required: false
+    description: "Directory for Trivy cache"
+    default: ""
 
 outputs:
   resolved_version:
@@ -61,6 +118,48 @@ outputs:
 runs:
   using: "composite"
   steps:
+    - name: Install Trivy
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Tool versions (pinned for stability and cache reliability)
+        GRYPE_VERSION="0.109.0"
+        TRIVY_VERSION="0.58.1"
+        
+        # Export for use in run.py
+        echo "GRYPE_VERSION=${GRYPE_VERSION}" >> $GITHUB_ENV
+        
+        # Check if Trivy exists (may be from cache)
+        if [ -f /usr/local/bin/trivy ]; then
+          # Ensure executable permissions (cache may not preserve them)
+          sudo chmod +x /usr/local/bin/trivy 2>/dev/null || chmod +x /usr/local/bin/trivy
+          echo "✓ Trivy found in cache: $(trivy --version | head -n1)"
+        elif command -v trivy >/dev/null 2>&1; then
+          echo "✓ Trivy already installed: $(trivy --version | head -n1)"
+        else
+          echo "Installing Trivy ${TRIVY_VERSION}..."
+          # Retry logic for GitHub releases API (handles transient 502 errors)
+          MAX_RETRIES=5
+          RETRY=0
+          while [ $RETRY -lt $MAX_RETRIES ]; do
+            if curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v${TRIVY_VERSION}; then
+              echo "✓ Trivy installed successfully"
+              break
+            else
+              RETRY=$((RETRY + 1))
+              if [ $RETRY -lt $MAX_RETRIES ]; then
+                # Exponential backoff with jitter
+                SLEEP_TIME=$((2 ** RETRY + RANDOM % 2))
+                echo "⚠️  Trivy installation failed (attempt $RETRY/$MAX_RETRIES), retrying in ${SLEEP_TIME}s..."
+                sleep $SLEEP_TIME
+              else
+                echo "✗ Trivy installation failed after $MAX_RETRIES attempts"
+                exit 1
+              fi
+            fi
+          done
+        fi
+
     - name: Run snapshot logic
       id: run
       shell: bash
@@ -71,13 +170,27 @@ runs:
         OS: ${{ inputs.os }}
         OS_VERSION: ${{ inputs.os_version }}
         ARCH: ${{ inputs.arch }}
+        PACKAGE_MANAGER: ${{ inputs.package_manager }}
         SCAN_MODE: ${{ inputs.scan_mode }}
         SCAN_ROOT: ${{ inputs.scan_root }}
         RESOLVE_VERSION: ${{ inputs.resolve_version }}
         PINNED_VERSION: ${{ inputs.pinned_version }}
         LICENSE_ID: ${{ inputs.license_id }}
+        BASE_URL_OVERRIDE: ${{ inputs.base_url_override }}
+        HAB_IDENT: ${{ inputs.hab_ident }}
+        HAB_CHANNEL: ${{ inputs.hab_channel }}
+        HAB_ORIGIN: ${{ inputs.hab_origin }}
+        HAB_AUTH_TOKEN: ${{ inputs.hab_auth_token }}
         OUT_DIR: ${{ inputs.out_dir }}
         WORK_DIR: ${{ inputs.work_dir }}
+        DATA_REPO_PATH: ${{ inputs.data_repo_path }}
+        FULL_PRODUCT_SCAN: ${{ inputs.full_product_scan }}
+        ENABLE_TRIVY: ${{ inputs.enable_trivy }}
+        TRIVY_SCANNERS: ${{ inputs.trivy_scanners }}
+        TRIVY_SEVERITY: ${{ inputs.trivy_severity }}
+        TRIVY_IGNORE_UNFIXED: ${{ inputs.trivy_ignore_unfixed }}
+        TRIVY_TIMEOUT: ${{ inputs.trivy_timeout }}
+        TRIVY_CACHE_DIR: ${{ inputs.trivy_cache_dir }}
       run: |
         set -euo pipefail
         if [ -n "${LICENSE_ID:-}" ]; then
