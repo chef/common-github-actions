@@ -1,6 +1,15 @@
 # Common Github Actions for Chef organization
 Location for reusable workflows
 
+## 📖 Read This Before Using
+
+| Document | Description |
+|----------|-------------|
+| **[HOW-TO-USE.md](HOW-TO-USE.md)** | Quick start guide, configuration examples, and input reference |
+| **[PIPELINE-REFERENCE.md](PIPELINE-REFERENCE.md)** | Detailed tool documentation, mermaid diagrams, and job mappings |
+
+---
+
 ## Naming convention
 Typical workflows are stored in the `.github\workflows` directory.
 
@@ -19,3 +28,7 @@ This performs CI actions - build, test, scan, package - and is described in DEV-
 In the `workflow-supporting-files` you will find the following files:
 - Sonar project templates for GoLang, Ruby and Rust, which can becopied as`sonar-project.properties` into the root of a repo and modified
 - `.license_scout.yml` contains the default/reference fallback licenses for common Courier items
+
+# Copyright
+
+See [COPYRIGHT.md](./COPYRIGHT.md).

@@ -1,0 +1,306 @@
+# Workflow to create a git tag when code is merged to main branch
+# This tag can be used to version projects that reference this repository
+#
+# Usage: Projects can reference a specific version of common-github-actions using the tag:
+#   uses: chef/common-github-actions/.github/workflows/ci-main-pull-request.yml@v1.0.7
+#
+# Tag format: v{MAJOR}.{MINOR}.{PATCH}
+# - MAJOR: Breaking changes
+# - MINOR: New features, backward compatible
+# - PATCH: Bug fixes, backward compatible
+#
+# This workflow can be:
+# 1. Used directly in this repository (triggers on push/workflow_dispatch)
+# 2. Called by other repositories via workflow_call
+
+name: Create Release Tag on Merge
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+      custom_version:
+        description: 'Custom version (overrides version_bump, format: X.Y.Z without v prefix)'
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      version_bump:
+        description: 'Version bump type (major, minor, patch)'
+        required: false
+        type: string
+        default: 'patch'
+      custom_version:
+        description: 'Custom version (overrides version_bump, format: X.Y.Z without v prefix)'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+
+env:
+  WORKFLOW_VERSION: '1.0.0'
+
+jobs:
+  create-tag:
+    name: 'Create Release Tag'
+    runs-on: ubuntu-latest
+    outputs:
+      new_tag: ${{ steps.create_tag.outputs.new_tag }}
+      previous_tag: ${{ steps.get_latest_tag.outputs.latest_tag }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Get latest tag
+        id: get_latest_tag
+        run: |
+          # Get the latest tag, default to v0.0.0 if no tags exist
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "latest_tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
+          echo "Latest tag: ${LATEST_TAG}"
+
+      - name: Validate and parse version
+        id: calc_version
+        run: |
+          LATEST_TAG="${{ steps.get_latest_tag.outputs.latest_tag }}"
+          
+          # Function to validate semver format (vX.Y.Z or X.Y.Z where X, Y, Z are integers)
+          validate_semver() {
+            local version="$1"
+            local stripped="${version#v}"  # Remove 'v' prefix if present
+            
+            # Check if it matches X.Y.Z where X, Y, Z are non-negative integers
+            if [[ "$stripped" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              echo "valid"
+            else
+              echo "invalid"
+            fi
+          }
+          
+          # Function to extract semver components
+          extract_semver() {
+            local version="$1"
+            local stripped="${version#v}"  # Remove 'v' prefix if present
+            
+            # Extract just the X.Y.Z part, ignoring any suffix like -rc1, -beta, etc.
+            if [[ "$stripped" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
+              echo "${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+            else
+              echo ""
+            fi
+          }
+          
+          # Handle custom version input
+          if [ -n "${{ inputs.custom_version }}" ]; then
+            CUSTOM_VER="${{ inputs.custom_version }}"
+            CUSTOM_VER="${CUSTOM_VER#v}"  # Strip 'v' prefix if user included it
+            
+            if [[ "$(validate_semver "$CUSTOM_VER")" != "valid" ]]; then
+              echo "❌ Error: Custom version '$CUSTOM_VER' is not a valid semantic version."
+              echo "   Expected format: X.Y.Z (e.g., 1.2.3)"
+              echo "   Each component must be a non-negative integer."
+              exit 1
+            fi
+            
+            echo "Using custom version: ${CUSTOM_VER}"
+            echo "new_version=${CUSTOM_VER}" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Validate latest tag format
+          EXTRACTED_VERSION=$(extract_semver "$LATEST_TAG")
+          
+          if [ -z "$EXTRACTED_VERSION" ]; then
+            echo "⚠️ Warning: Latest tag '$LATEST_TAG' is not a valid semantic version."
+            echo "   Expected format: vX.Y.Z (e.g., v1.2.3)"
+            echo "   Starting from v0.0.0 instead."
+            EXTRACTED_VERSION="0.0.0"
+          elif [ "$EXTRACTED_VERSION" != "${LATEST_TAG#v}" ]; then
+            echo "⚠️ Warning: Latest tag '$LATEST_TAG' contains a suffix."
+            echo "   Using base version: $EXTRACTED_VERSION"
+          fi
+          
+          # Split version into parts
+          MAJOR=$(echo "$EXTRACTED_VERSION" | cut -d. -f1)
+          MINOR=$(echo "$EXTRACTED_VERSION" | cut -d. -f2)
+          PATCH=$(echo "$EXTRACTED_VERSION" | cut -d. -f3)
+          
+          # Verify components are numeric (defensive check)
+          if ! [[ "$MAJOR" =~ ^[0-9]+$ ]] || ! [[ "$MINOR" =~ ^[0-9]+$ ]] || ! [[ "$PATCH" =~ ^[0-9]+$ ]]; then
+            echo "❌ Error: Version components must be numeric."
+            echo "   Got: MAJOR=$MAJOR, MINOR=$MINOR, PATCH=$PATCH"
+            exit 1
+          fi
+          
+          # Default to patch bump for push events, use input for workflow_dispatch
+          BUMP_TYPE="${{ inputs.version_bump }}"
+          if [ -z "$BUMP_TYPE" ]; then
+            BUMP_TYPE="patch"
+          fi
+          
+          # Calculate new version based on bump type
+          case $BUMP_TYPE in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+            *)
+              echo "❌ Error: Invalid bump type '$BUMP_TYPE'. Must be one of: major, minor, patch"
+              exit 1
+              ;;
+          esac
+          
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          echo "new_version=${NEW_VERSION}" >> $GITHUB_OUTPUT
+          echo "Bump type: ${BUMP_TYPE}"
+          echo "New version: ${NEW_VERSION}"
+
+      - name: Check if tag already exists
+        id: check_tag
+        run: |
+          NEW_TAG="v${{ steps.calc_version.outputs.new_version }}"
+          if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
+            echo "Tag ${NEW_TAG} already exists!"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Tag ${NEW_TAG} does not exist, proceeding with creation"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create and push tag
+        id: create_tag
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          NEW_TAG="v${{ steps.calc_version.outputs.new_version }}"
+          
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Create annotated tag with message
+          git tag -a "${NEW_TAG}" -m "Release ${NEW_TAG}
+
+          Automated release tag created on merge to main branch.
+          
+          Previous version: ${{ steps.get_latest_tag.outputs.latest_tag }}
+          Commit: ${{ github.sha }}
+          Triggered by: ${{ github.actor }}"
+          
+          # Push the tag
+          git push origin "${NEW_TAG}"
+          
+          echo "new_tag=${NEW_TAG}" >> $GITHUB_OUTPUT
+          echo "✅ Created and pushed tag: ${NEW_TAG}"
+
+      - name: Skip tag creation (already exists)
+        if: steps.check_tag.outputs.exists == 'true'
+        run: |
+          echo "⚠️ Skipping tag creation - tag v${{ steps.calc_version.outputs.new_version }} already exists"
+
+      - name: Output summary
+        run: |
+          echo "## 🏷️ Release Tag Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Previous Tag | ${{ steps.get_latest_tag.outputs.latest_tag }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| New Tag | v${{ steps.calc_version.outputs.new_version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit SHA | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Actor | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Workflow Version | ${{ env.WORKFLOW_VERSION }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Usage" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Reference this version in your workflow:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`yaml" >> $GITHUB_STEP_SUMMARY
+          echo "uses: chef/common-github-actions/.github/workflows/ci-main-pull-request.yml@v${{ steps.calc_version.outputs.new_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+  create-release:
+    name: 'Create GitHub Release'
+    runs-on: ubuntu-latest
+    needs: create-tag
+    if: needs.create-tag.outputs.new_tag != ''
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.create-tag.outputs.new_tag }}
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          PREVIOUS_TAG="${{ needs.create-tag.outputs.previous_tag }}"
+          NEW_TAG="${{ needs.create-tag.outputs.new_tag }}"
+          
+          # Generate changelog between tags
+          if [ "$PREVIOUS_TAG" != "v0.0.0" ]; then
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" ${PREVIOUS_TAG}..HEAD 2>/dev/null || echo "- Initial release")
+          else
+            CHANGELOG="- Initial release"
+          fi
+          
+          # Write to file for multi-line handling
+          cat > release_notes.md << EOF
+          ## What's Changed
+          
+          ${CHANGELOG}
+          
+          ## Usage
+          
+          Reference this version in your workflow:
+          
+          \`\`\`yaml
+          jobs:
+            call-ci-main-pr-check-pipeline:
+              uses: chef/common-github-actions/.github/workflows/ci-main-pull-request.yml@${NEW_TAG}
+              secrets: inherit
+              permissions:
+                id-token: write
+                contents: read
+          \`\`\`
+          
+          ## Full Changelog
+          
+          https://github.com/${{ github.repository }}/compare/${PREVIOUS_TAG}...${NEW_TAG}
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.create-tag.outputs.new_tag }}
+          name: "Release ${{ needs.create-tag.outputs.new_tag }}"
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
