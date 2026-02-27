@@ -287,6 +287,44 @@ EOF
 }
 
 # ============================================================================
+# Size Collection
+# ============================================================================
+
+get_origin_size() {
+    local origin_path="$1"
+    
+    log "Collecting size information for ${origin_path}..."
+    
+    # Get total size in bytes and human-readable format
+    local size_bytes
+    local size_human
+    
+    # Disable pipefail temporarily for du command
+    set +o pipefail
+    size_bytes=$(docker exec "${CONTAINER_ID}" bash -c \
+        "du -sb ${origin_path} 2>/dev/null | cut -f1" || echo "0")
+    size_human=$(docker exec "${CONTAINER_ID}" bash -c \
+        "du -sh ${origin_path} 2>/dev/null | cut -f1" || echo "0")
+    set -o pipefail
+    
+    # Count files
+    local file_count
+    file_count=$(docker exec "${CONTAINER_ID}" bash -c \
+        "find ${origin_path} -type f 2>/dev/null | wc -l" || echo "0")
+    
+    # Return JSON with size info
+    jq -n \
+        --arg bytes "${size_bytes}" \
+        --arg human "${size_human}" \
+        --arg files "${file_count}" \
+        '{
+          "total_bytes": ($bytes | tonumber),
+          "total_human": $human,
+          "file_count": ($files | tonumber)
+        }'
+}
+
+# ============================================================================
 # Metadata Generation
 # ============================================================================
 
@@ -303,6 +341,12 @@ generate_metadata() {
     chef_summary=$(extract_severity_summary "${OUT_BASE}/chef-origin.json")
     core_summary=$(extract_severity_summary "${OUT_BASE}/core-origin.json")
     
+    # Collect size information for both origins
+    local chef_size
+    local core_size
+    chef_size=$(get_origin_size "/hab/pkgs/chef")
+    core_size=$(get_origin_size "/hab/pkgs/core")
+    
     # Build JSON structure with proper formatting
     # Use jq to merge and format the entire structure properly
     jq -n \
@@ -317,6 +361,8 @@ generate_metadata() {
         --arg grype_db_schema "${GRYPE_DB_SCHEMA}" \
         --argjson chef_summary "${chef_summary}" \
         --argjson core_summary "${core_summary}" \
+        --argjson chef_size "${chef_size}" \
+        --argjson core_size "${core_size}" \
         '{
           "schema_version": "1.0",
           "snapshot": {
@@ -354,11 +400,13 @@ generate_metadata() {
           "summary": {
             "chef_origin": ($chef_summary + {
               "path": "/hab/pkgs/chef",
-              "output_file": "chef-origin.json"
+              "output_file": "chef-origin.json",
+              "size": $chef_size
             }),
             "core_origin": ($core_summary + {
               "path": "/hab/pkgs/core",
-              "output_file": "core-origin.json"
+              "output_file": "core-origin.json",
+              "size": $core_size
             })
           }
         }' > "${index_file}"
@@ -412,7 +460,29 @@ main() {
     # Get Grype metadata
     get_grype_metadata
     
-    # Scan both origins
+    # =========================================================================
+    # SCAN HABITAT PACKAGE ORIGINS
+    # =========================================================================
+    # Chef Automate bundles Habitat packages from multiple origins:
+    #
+    # 1. "chef" origin (/hab/pkgs/chef/):
+    #    - Chef-maintained service packages (e.g., automate-ui, compliance-service)
+    #    - These are the core Automate application components
+    #
+    # 2. "core" origin (/hab/pkgs/core/):
+    #    - Binary Bakers maintained packages (foundation layer)
+    #    - System dependencies (e.g., gcc, openssl, postgresql, nginx)
+    #
+    # NOTE: These origins are specific to Chef Automate's Habitat deployment.
+    # If Chef Automate changes its origin structure in the future, this list
+    # will need to be updated. To discover what origins exist in a deployment:
+    #
+    #   docker exec <container> ls -1 /hab/pkgs/
+    #
+    # If additional origins are detected, add new scan_origin calls here and
+    # update the "origins_scanned" array in generate_metadata().
+    # =========================================================================
+    
     scan_origin "chef" "/hab/pkgs/chef" "${OUT_BASE}/chef-origin.json"
     scan_origin "core" "/hab/pkgs/core" "${OUT_BASE}/core-origin.json"
     
