@@ -22,10 +22,11 @@ RUN apt-get update && apt-get install -y \
 # Download and install Chef Automate CLI
 # Reference: https://docs.chef.io/automate/install/
 RUN curl -L https://packages.chef.io/files/current/latest/chef-automate-cli/chef-automate_linux_amd64.zip \
-    -o chef-automate.zip \
-    && unzip chef-automate.zip \
-    && chmod +x chef-automate \
-    && rm chef-automate.zip
+    -o /tmp/chef-automate.zip \
+    && unzip /tmp/chef-automate.zip -d /tmp \
+    && mv /tmp/chef-automate /usr/local/bin/chef-automate \
+    && chmod +x /usr/local/bin/chef-automate \
+    && rm /tmp/chef-automate.zip
 
 # Install Grype vulnerability scanner
 # Using official Anchore installation script
@@ -34,7 +35,7 @@ RUN curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
 
 # Verify installations
 # Note: chef-automate version requires deployment, so we just verify the binary exists
-RUN test -f ./chef-automate && echo "chef-automate binary present" && grype version
+RUN test -f /usr/local/bin/chef-automate && echo "chef-automate binary present" && grype version
 
 # Set working directory
 WORKDIR /root
