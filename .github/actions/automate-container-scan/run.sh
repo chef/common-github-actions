@@ -91,7 +91,7 @@ deploy_automate() {
     
     # Initialize Automate configuration
     log "Initializing Automate configuration..."
-    if ! docker exec -w /root "${CONTAINER_ID}" ./chef-automate init-config --upgrade-strategy none \
+    if ! docker exec -w /root "${CONTAINER_ID}" chef-automate init-config --upgrade-strategy none \
         > "${LOGS_DIR}/init-config.log" 2>&1; then
         log "ERROR: Failed to initialize Automate config"
         log "Last 20 lines of init-config.log:"
@@ -113,7 +113,7 @@ deploy_automate() {
     log "Progress will be logged to ${LOGS_DIR}/deploy.log"
     
     # Run deploy with timeout and capture output
-    if docker exec -w /root "${CONTAINER_ID}" timeout 1800 ./chef-automate deploy config.toml --accept-terms-and-mlsa \
+    if docker exec -w /root "${CONTAINER_ID}" timeout 1800 chef-automate deploy config.toml --accept-terms-and-mlsa \
         > "${LOGS_DIR}/deploy.log" 2>&1; then
         log "Automate deployment completed successfully"
     else
@@ -124,11 +124,11 @@ deploy_automate() {
     
     # Enter maintenance mode
     log "Entering maintenance mode..."
-    docker exec -w /root "${CONTAINER_ID}" ./chef-automate maintenance on \
+    docker exec -w /root "${CONTAINER_ID}" chef-automate maintenance on \
         > "${LOGS_DIR}/maintenance.log" 2>&1 || log "WARNING: Failed to enter maintenance mode (may not be critical)"
     
     # Capture Automate version
-    AUTOMATE_VERSION=$(docker exec -w /root "${CONTAINER_ID}" ./chef-automate version 2>/dev/null | head -n 1 | awk '{print $NF}')
+    AUTOMATE_VERSION=$(docker exec -w /root "${CONTAINER_ID}" chef-automate version 2>/dev/null | head -n 1 | awk '{print $NF}')
     log "Chef Automate version: ${AUTOMATE_VERSION}"
     
     # Verify Habitat packages are present

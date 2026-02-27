@@ -192,9 +192,9 @@ docker run -d --privileged --cgroupns=host \
 docker exec -it automate-test bash
 
 # Inside container, deploy Automate
-./chef-automate init-config
+chef-automate init-config
 sysctl -w vm.dirty_expire_centisecs=20000
-./chef-automate deploy config.toml --accept-terms-and-mlsa
+chef-automate deploy config.toml --accept-terms-and-mlsa
 
 # Scan packages
 cd /hab/pkgs/chef
