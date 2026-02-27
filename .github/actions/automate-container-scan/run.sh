@@ -303,48 +303,65 @@ generate_metadata() {
     chef_summary=$(extract_severity_summary "${OUT_BASE}/chef-origin.json")
     core_summary=$(extract_severity_summary "${OUT_BASE}/core-origin.json")
     
-    # Generate index.json
-    cat > "${index_file}" <<EOF
-{
-  "schema_version": "1.0",
-  "snapshot": {
-    "timestamp_utc": "${timestamp}",
-    "run_id": "${GITHUB_RUN_ID:-local}",
-    "pipeline": {
-      "repo": "${GITHUB_REPOSITORY:-chef/chef-vuln-scan-orchestrator}",
-      "workflow": "Automate Grype Scan",
-      "git_sha": "${GITHUB_SHA:-unknown}"
-    }
-  },
-  "target": {
-    "product": "chef-automate",
-    "channel": "${CHANNEL}",
-    "version": "${AUTOMATE_VERSION}",
-    "scan_type": "container"
-  },
-  "environment": {
-    "runner": "Linux",
-    "os": "ubuntu",
-    "os_version": "25.10",
-    "arch": "x86_64"
-  },
-  "scan": {
-    "mode": "container",
-    "origins_scanned": ["chef", "core"],
-    "grype": {
-      "version": "${GRYPE_VERSION}",
-      "db": {
-        "built": "${GRYPE_DB_BUILT}",
-        "schema_version": "${GRYPE_DB_SCHEMA}"
-      }
-    }
-  },
-  "summary": {
-    "chef_origin": $(echo "${chef_summary}" | jq -c '. + {path: "/hab/pkgs/chef", output_file: "chef-origin.json"}'),
-    "core_origin": $(echo "${core_summary}" | jq -c '. + {path: "/hab/pkgs/core", output_file: "core-origin.json"}')
-  }
-}
-EOF
+    # Build JSON structure with proper formatting
+    # Use jq to merge and format the entire structure properly
+    jq -n \
+        --arg timestamp "${timestamp}" \
+        --arg run_id "${GITHUB_RUN_ID:-local}" \
+        --arg repo "${GITHUB_REPOSITORY:-chef/chef-vuln-scan-orchestrator}" \
+        --arg git_sha "${GITHUB_SHA:-unknown}" \
+        --arg channel "${CHANNEL}" \
+        --arg version "${AUTOMATE_VERSION}" \
+        --arg grype_version "${GRYPE_VERSION}" \
+        --arg grype_db_built "${GRYPE_DB_BUILT}" \
+        --arg grype_db_schema "${GRYPE_DB_SCHEMA}" \
+        --argjson chef_summary "${chef_summary}" \
+        --argjson core_summary "${core_summary}" \
+        '{
+          "schema_version": "1.0",
+          "snapshot": {
+            "timestamp_utc": $timestamp,
+            "run_id": $run_id,
+            "pipeline": {
+              "repo": $repo,
+              "workflow": "Automate Grype Scan",
+              "git_sha": $git_sha
+            }
+          },
+          "target": {
+            "product": "chef-automate",
+            "channel": $channel,
+            "version": $version,
+            "scan_type": "container"
+          },
+          "environment": {
+            "runner": "Linux",
+            "os": "ubuntu",
+            "os_version": "25.10",
+            "arch": "x86_64"
+          },
+          "scan": {
+            "mode": "container",
+            "origins_scanned": ["chef", "core"],
+            "grype": {
+              "version": $grype_version,
+              "db": {
+                "built": $grype_db_built,
+                "schema_version": $grype_db_schema
+              }
+            }
+          },
+          "summary": {
+            "chef_origin": ($chef_summary + {
+              "path": "/hab/pkgs/chef",
+              "output_file": "chef-origin.json"
+            }),
+            "core_origin": ($core_summary + {
+              "path": "/hab/pkgs/core",
+              "output_file": "core-origin.json"
+            })
+          }
+        }' > "${index_file}"
     
     log "Metadata generated: ${index_file}"
     
