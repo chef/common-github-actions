@@ -19,3 +19,7 @@ This performs CI actions - build, test, scan, package - and is described in DEV-
 In the `workflow-supporting-files` you will find the following files:
 - Sonar project templates for GoLang, Ruby and Rust, which can becopied as`sonar-project.properties` into the root of a repo and modified
 - `.license_scout.yml` contains the default/reference fallback licenses for common Courier items
+
+# Copyright
+
+See [COPYRIGHT.md](./COPYRIGHT.md).
