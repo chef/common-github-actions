@@ -119,6 +119,7 @@ runs:
   using: "composite"
   steps:
     - name: Install Trivy
+      if: ${{ inputs.enable_trivy == 'true' }}
       shell: bash
       run: |
         set -euo pipefail
@@ -135,7 +136,7 @@ runs:
         #   - Poisoned GitHub Actions caches (March 2, 2026 incident)
         #   - Man-in-the-middle attacks during download
         #   - Compromised install scripts (we no longer use install.sh)
-        TRIVY_SHA256_LINUX_AMD64="d0dc5e646dc21f3cdbd6766a87f3eb9f6f8210ca55e531d8bf8f9e31af0f4401"
+        TRIVY_SHA256_LINUX_AMD64="a55443f5f8c4100020b7d453dd30328c5b55f88b2923daa81cca698053a4c561"
         TRIVY_SHA256_LINUX_ARM64="9bb98c4f7b32c58a8d9e59c6e7f0b0c8dc5d659e8dc9b5e8d6e9b6a2c6f7e8d9"
         
         # Export for use in run.py
