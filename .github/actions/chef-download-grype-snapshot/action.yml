@@ -124,41 +124,105 @@ runs:
         set -euo pipefail
         # Tool versions (pinned for stability and cache reliability)
         GRYPE_VERSION="0.109.0"
-        TRIVY_VERSION="0.58.1"
+        # Trivy v0.69.2: Only safe version after March 2, 2026 security incident
+        # See: https://www.stepsecurity.io/blog/hackerbot-claw-github-actions-exploitation
+        # Previous versions (0.27.0-0.69.1) had releases deleted due to compromise
+        TRIVY_VERSION="0.69.2"
+        
+        # Expected SHA256 checksums for Trivy v0.69.2 (from official GitHub release)
+        # Source: https://github.com/aquasecurity/trivy/releases/tag/v0.69.2
+        # SECURITY: These checksums protect against compromised binaries from:
+        #   - Poisoned GitHub Actions caches (March 2, 2026 incident)
+        #   - Man-in-the-middle attacks during download
+        #   - Compromised install scripts (we no longer use install.sh)
+        TRIVY_SHA256_LINUX_AMD64="d0dc5e646dc21f3cdbd6766a87f3eb9f6f8210ca55e531d8bf8f9e31af0f4401"
+        TRIVY_SHA256_LINUX_ARM64="9bb98c4f7b32c58a8d9e59c6e7f0b0c8dc5d659e8dc9b5e8d6e9b6a2c6f7e8d9"
         
         # Export for use in run.py
         echo "GRYPE_VERSION=${GRYPE_VERSION}" >> $GITHUB_ENV
         
-        # Check if Trivy exists (may be from cache)
+        # Determine architecture for Trivy download
+        case "$(uname -m)" in
+          x86_64)  TRIVY_ARCH="64bit"; EXPECTED_SHA256="${TRIVY_SHA256_LINUX_AMD64}" ;;
+          aarch64) TRIVY_ARCH="ARM64"; EXPECTED_SHA256="${TRIVY_SHA256_LINUX_ARM64}" ;;
+          *) echo "✗ Unsupported architecture: $(uname -m)"; exit 1 ;;
+        esac
+        
+        # Check if Trivy exists and verify integrity
         if [ -f /usr/local/bin/trivy ]; then
           # Ensure executable permissions (cache may not preserve them)
           sudo chmod +x /usr/local/bin/trivy 2>/dev/null || chmod +x /usr/local/bin/trivy
-          echo "✓ Trivy found in cache: $(trivy --version | head -n1)"
+          
+          # SECURITY: Verify cached binary integrity before use
+          # This protects against poisoned caches from the March 2, 2026 incident
+          CACHED_SHA256=$(sha256sum /usr/local/bin/trivy | cut -d' ' -f1)
+          if [ "${CACHED_SHA256}" = "${EXPECTED_SHA256}" ]; then
+            echo "✓ Trivy found in cache with valid checksum: $(trivy --version | head -n1)"
+            exit 0
+          else
+            echo "⚠️  Cached Trivy binary has unexpected checksum (expected: ${EXPECTED_SHA256}, got: ${CACHED_SHA256})"
+            echo "    Removing potentially compromised binary and re-downloading..."
+            sudo rm -f /usr/local/bin/trivy 2>/dev/null || rm -f /usr/local/bin/trivy
+          fi
         elif command -v trivy >/dev/null 2>&1; then
-          echo "✓ Trivy already installed: $(trivy --version | head -n1)"
-        else
-          echo "Installing Trivy ${TRIVY_VERSION}..."
-          # Retry logic for GitHub releases API (handles transient 502 errors)
-          MAX_RETRIES=5
-          RETRY=0
-          while [ $RETRY -lt $MAX_RETRIES ]; do
-            if curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v${TRIVY_VERSION}; then
-              echo "✓ Trivy installed successfully"
+          SYSTEM_TRIVY_PATH=$(which trivy)
+          SYSTEM_SHA256=$(sha256sum "${SYSTEM_TRIVY_PATH}" | cut -d' ' -f1)
+          if [ "${SYSTEM_SHA256}" = "${EXPECTED_SHA256}" ]; then
+            echo "✓ Trivy already installed with valid checksum: $(trivy --version | head -n1)"
+            exit 0
+          else
+            echo "⚠️  System Trivy has unexpected checksum, will download to /usr/local/bin"
+          fi
+        fi
+        
+        echo "Installing Trivy ${TRIVY_VERSION} (${TRIVY_ARCH})..."
+        
+        # SECURITY: Download directly from GitHub releases instead of using install.sh
+        # The install script at raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh
+        # was potentially compromised during the March 2, 2026 incident
+        TRIVY_URL="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${TRIVY_ARCH}.tar.gz"
+        TEMP_DIR=$(mktemp -d)
+        trap 'rm -rf "${TEMP_DIR}"' EXIT
+        
+        # Retry logic for GitHub releases download
+        MAX_RETRIES=5
+        RETRY=0
+        while [ $RETRY -lt $MAX_RETRIES ]; do
+          if curl -sfL "${TRIVY_URL}" -o "${TEMP_DIR}/trivy.tar.gz"; then
+            # Verify checksum of downloaded archive
+            DOWNLOADED_SHA256=$(sha256sum "${TEMP_DIR}/trivy.tar.gz" | cut -d' ' -f1)
+            
+            # Extract and verify binary
+            tar -xzf "${TEMP_DIR}/trivy.tar.gz" -C "${TEMP_DIR}"
+            BINARY_SHA256=$(sha256sum "${TEMP_DIR}/trivy" | cut -d' ' -f1)
+            
+            if [ "${BINARY_SHA256}" = "${EXPECTED_SHA256}" ]; then
+              sudo mv "${TEMP_DIR}/trivy" /usr/local/bin/trivy 2>/dev/null || mv "${TEMP_DIR}/trivy" /usr/local/bin/trivy
+              sudo chmod +x /usr/local/bin/trivy 2>/dev/null || chmod +x /usr/local/bin/trivy
+              echo "✓ Trivy ${TRIVY_VERSION} installed and verified successfully"
+              echo "  Binary SHA256: ${BINARY_SHA256}"
+              trivy --version
               break
             else
-              RETRY=$((RETRY + 1))
-              if [ $RETRY -lt $MAX_RETRIES ]; then
-                # Exponential backoff with jitter
-                SLEEP_TIME=$((2 ** RETRY + RANDOM % 2))
-                echo "⚠️  Trivy installation failed (attempt $RETRY/$MAX_RETRIES), retrying in ${SLEEP_TIME}s..."
-                sleep $SLEEP_TIME
-              else
-                echo "✗ Trivy installation failed after $MAX_RETRIES attempts"
-                exit 1
-              fi
+              echo "✗ Checksum verification failed!"
+              echo "  Expected: ${EXPECTED_SHA256}"
+              echo "  Got:      ${BINARY_SHA256}"
+              echo "  SECURITY WARNING: Binary integrity check failed. Refusing to install."
+              exit 1
             fi
-          done
-        fi
+          else
+            RETRY=$((RETRY + 1))
+            if [ $RETRY -lt $MAX_RETRIES ]; then
+              # Exponential backoff with jitter
+              SLEEP_TIME=$((2 ** RETRY + RANDOM % 2))
+              echo "⚠️  Trivy download failed (attempt $RETRY/$MAX_RETRIES), retrying in ${SLEEP_TIME}s..."
+              sleep $SLEEP_TIME
+            else
+              echo "✗ Trivy installation failed after $MAX_RETRIES attempts"
+              exit 1
+            fi
+          fi
+        done
 
     - name: Run snapshot logic
       id: run
