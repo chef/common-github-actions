@@ -3,6 +3,8 @@
 name: Trufflehog secret scan
 
 on:
+  push:
+  pull_request:
   workflow_call:
     inputs:
       fail-trufflehog-on-secrets-found:
@@ -22,7 +24,7 @@ jobs:
 
       - name: TruffleHog secret scan
         id: trufflehog-scan
-        uses: trufflesecurity/trufflehog@main
+        uses: prgs-community/githubactions-reusableworkflows/actions/trufflehog@latest
         with:
           path: ./
           extra_args: --only-verified
