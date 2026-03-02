@@ -2,6 +2,9 @@
 # Based on Ubuntu 25.10 with systemd support for Chef Automate deployment
 FROM ubuntu:25.10
 
+# Build argument for Chef Automate release channel (stable or current)
+ARG CHANNEL=current
+
 # Avoid interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -21,7 +24,7 @@ RUN apt-get update && apt-get install -y \
 
 # Download and install Chef Automate CLI
 # Reference: https://docs.chef.io/automate/install/
-RUN curl -L https://packages.chef.io/files/current/latest/chef-automate-cli/chef-automate_linux_amd64.zip \
+RUN curl -L https://packages.chef.io/files/${CHANNEL}/latest/chef-automate-cli/chef-automate_linux_amd64.zip \
     -o /tmp/chef-automate.zip \
     && unzip /tmp/chef-automate.zip -d /tmp \
     && mv /tmp/chef-automate /usr/local/bin/chef-automate \

@@ -18,8 +18,8 @@ runs:
     - name: Build Chef Automate container
       shell: bash
       run: |
-        echo "Building Chef Automate container image..."
-        docker build -t automate:latest "${{ github.action_path }}"
+        echo "Building Chef Automate container image for channel: ${{ inputs.channel }}..."
+        docker build --build-arg CHANNEL=${{ inputs.channel }} -t automate:latest "${{ github.action_path }}"
         echo "Container image built successfully"
 
     - name: Run Chef Automate deployment and scan
