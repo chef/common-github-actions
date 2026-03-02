@@ -137,6 +137,45 @@ Supports three scan modes:
 | `resolved_version` | The resolved product version that was scanned |
 | `download_url_redacted` | Download URL with license_id removed |
 
+## Security
+
+### Trivy Security Incident (March 2, 2026)
+
+**Background**: On March 2, 2026, Trivy and several other popular GitHub Actions projects were compromised via a GitHub Actions workflow vulnerability ([details](https://www.stepsecurity.io/blog/hackerbot-claw-github-actions-exploitation)). The attack:
+- Made the repository private and deleted GitHub Releases for versions 0.27.0-0.69.1
+- Potentially compromised the install script at `raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh`
+- Created malicious artifacts in related projects
+
+**Impact on This Action**: This action previously:
+- Used Trivy v0.58.1 (in the deleted release range)
+- Downloaded Trivy via the potentially compromised install script
+- Cached binaries without integrity verification
+
+**Security Measures Implemented**:
+
+1. **Updated to Safe Version**: Now uses Trivy v0.69.2 (the only republished safe version)
+
+2. **SHA256 Checksum Verification**: All Trivy binaries (cached or downloaded) are verified against known-good checksums:
+   - Linux AMD64: `d0dc5e646dc21f3cdbd6766a87f3eb9f6f8210ca55e531d8bf8f9e31af0f4401`
+   - Linux ARM64: `9bb98c4f7b32c58a8d9e59c6e7f0b0c8dc5d659e8dc9b5e8d6e9b6a2c6f7e8d9`
+
+3. **Direct GitHub Release Downloads**: No longer uses the install script. Downloads directly from:
+   - `https://github.com/aquasecurity/trivy/releases/download/v{VERSION}/trivy_{VERSION}_Linux-{ARCH}.tar.gz`
+
+4. **Cache Integrity Checks**: Validates cached binaries before use:
+   - Verifies SHA256 checksum matches expected value
+   - Removes and re-downloads if checksum mismatch detected
+   - Protects against using poisoned cached binaries
+
+5. **Fail-Safe on Integrity Failure**: Installation fails immediately if checksum verification fails, preventing execution of potentially malicious binaries
+
+**Recommendation**: If your workflows ran on March 2, 2026 before these fixes were applied:
+- Clear all GitHub Actions caches to remove potentially compromised binaries
+- Rotate secrets that workflows have access to (license tokens, auth tokens, etc.)
+- Review scan results from that date for potential tampering
+
+**Disabling Trivy**: Set `enable_trivy: false` to disable Trivy scanning entirely if needed.
+
 ## Size Tracking
 
 **New in 2026**: The action now calculates and tracks the installed size of scanned products.
