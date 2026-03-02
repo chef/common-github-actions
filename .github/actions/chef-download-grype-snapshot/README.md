@@ -156,7 +156,7 @@ Supports three scan modes:
 1. **Updated to Safe Version**: Now uses Trivy v0.69.2 (the only republished safe version)
 
 2. **SHA256 Checksum Verification**: All Trivy binaries (cached or downloaded) are verified against known-good checksums:
-   - Linux AMD64: `d0dc5e646dc21f3cdbd6766a87f3eb9f6f8210ca55e531d8bf8f9e31af0f4401`
+   - Linux AMD64: `a55443f5f8c4100020b7d453dd30328c5b55f88b2923daa81cca698053a4c561`
    - Linux ARM64: `9bb98c4f7b32c58a8d9e59c6e7f0b0c8dc5d659e8dc9b5e8d6e9b6a2c6f7e8d9`
 
 3. **Direct GitHub Release Downloads**: No longer uses the install script. Downloads directly from:
