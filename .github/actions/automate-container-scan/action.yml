@@ -7,6 +7,9 @@ inputs:
     description: "Release channel for Chef Automate (stable or current)"
     required: false
     default: "current"
+  license_id:
+    description: "Chef download license ID (required for commercial downloads)"
+    required: true
   out_dir:
     description: "Output directory for scan results and logs"
     required: false
@@ -19,7 +22,7 @@ runs:
       shell: bash
       run: |
         echo "Building Chef Automate container image for channel: ${{ inputs.channel }}..."
-        docker build --build-arg CHANNEL=${{ inputs.channel }} -t automate:latest "${{ github.action_path }}"
+        docker build --build-arg CHANNEL=${{ inputs.channel }} --build-arg LICENSE_ID=${{ inputs.license_id }} -t automate:latest "${{ github.action_path }}"
         echo "Container image built successfully"
 
     - name: Run Chef Automate deployment and scan
