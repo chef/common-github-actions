@@ -795,7 +795,7 @@ jobs:
   run-trufflehog:
     name: 'Trufflehog scan'
     if: ${{ inputs.perform-trufflehog-scan }}
-    uses: chef/common-github-actions/.github/workflows/trufflehog.yml@main
+    uses: chef/common-github-actions/.github/workflows/trufflehog.yml@sandhi/fixes-for-chef-org
     needs: checkout
     with:
       github-event-name: ${{ inputs.github-event-name }}
