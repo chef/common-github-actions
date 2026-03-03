@@ -213,7 +213,7 @@ jobs:
   generate-blackduck-sbom:
     name: Blackduck SCA Scan (PURPLE)
     runs-on: ubuntu-latest
-    if: ${{ inputs.perform-blackduck-sca-scan == true }} 
+    if: ${{ inputs.perform-blackduck-sca-scan == true }}
     steps:
       - name: 'Echo inputs'
         run: |
@@ -223,6 +223,8 @@ jobs:
           echo "DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name }}"
           echo "DETECT_PROJECT_NAME: ${{ inputs.blackduck-project-name }}"
           echo "DETECT_PROJECT_VERSION_NAME: ${{ inputs.version }}"
+          echo "GitHub branch: ${{ github.ref_name }}"
+          echo "GitHub event name (input): ${{ inputs.github-event-name }}"
          
       - name: Checkout source
         uses: actions/checkout@v6
@@ -349,7 +351,7 @@ jobs:
           blackducksca_scan_failure_severities: ${{ env.FAILURE_SEVERITIES }}
           blackducksca_scan_full: false
           detect_args: ${{ env.DETECT_ARGS }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
           blackducksca_prComment_enabled: true
           blackducksca_fixpr_enabled: true
 
