@@ -414,6 +414,7 @@ jobs:
           echo ""
           echo "============================================"
           echo "BlackDuck SCA Policy Violation Summary"
+          echo "Scan mode: $SCAN_MODE"
           echo "============================================"
           echo "BLOCKER  violations: ${BLOCKER_COUNT}"
           echo "CRITICAL violations: ${CRITICAL_COUNT}"
