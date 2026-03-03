@@ -222,7 +222,7 @@ jobs:
     steps:
       - name: 'Echo inputs'
         run: |
-          echo "Starting BlackDuck SCA scan"
+          echo "Starting BlackDuck SCA scan on branch: ${{ github.ref_name }} (event: ${{ inputs.github-event-name }})"
           echo "BlackDuck_SCA_URL: ${{ secrets.BLACKDUCK_SBOM_URL }}"
           echo "BLACKDUCK_SCA_TOKEN: ${{ secrets.BLACKDUCK_SCA_TOKEN }}"
           echo "DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name }}"
