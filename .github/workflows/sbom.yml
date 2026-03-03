@@ -29,11 +29,6 @@ name: Download SBOM from Insights and Convert to CSV
 on:
   workflow_call:
     inputs:
-      github-event-name:
-        description: 'GitHub event name (pass github.event_name from calling workflow)'
-        required: false
-        type: string
-        default: ''
       version:
         description: 'Version of the project'
         required: true
@@ -217,7 +212,7 @@ jobs:
     steps:
       - name: 'Echo inputs'
         run: |
-          echo "Starting BlackDuck SCA scan on branch: ${{ github.ref_name }} (event: ${{ inputs.github-event-name }})"
+          echo "Starting BlackDuck SCA scan"
           echo "BlackDuck_SCA_URL: ${{ secrets.BLACKDUCK_SBOM_URL }}"
           echo "BLACKDUCK_SCA_TOKEN: ${{ secrets.BLACKDUCK_SCA_TOKEN }}"
           echo "DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name }}"
@@ -325,7 +320,7 @@ jobs:
           blackducksca_url: ${{ secrets.BLACKDUCK_SBOM_URL }}  # BLACKDUCK_URL, should be https://progresssoftware.app.blackduck.com/ 
           blackducksca_token: ${{ secrets.BLACKDUCK_SCA_TOKEN }}  # was BLACKDUCK_API_KEY
           blackducksca_scan_failure_severities: ${{ env.FAILURE_SEVERITIES }}
-          blackducksca_scan_full: ${{ inputs.github-event-name != 'pull_request' }}  # INTELLIGENT scan for main/release branches; RAPID (policy-check only) for PRs
+          blackducksca_scan_full: true  # Force INTELLIGENT scan mode for all branches (uploads results to server)
           detect_args: ${{ env.DETECT_ARGS }}
           # ignore python per https://documentation.blackduck.com/bundle/detect/page/packagemgrs/python.html
 
@@ -333,120 +328,26 @@ jobs:
         if: ${{ always() && (inputs.blackduck-fail-on-blocker == true || inputs.blackduck-fail-on-critical == true || inputs.blackduck-fail-on-major == true) }}
         run: |
           BRIDGE_LOG=".bridge/bridge.log"
-          BLOCKER_COUNT=0
-          CRITICAL_COUNT=0
-          MAJOR_COUNT=0
-          SCAN_MODE="unknown"
           
           if [ ! -f "$BRIDGE_LOG" ]; then
-            echo "⚠️  Bridge log not found at $BRIDGE_LOG"
-            echo "Files in .bridge/ directory (if any):"
-            find .bridge -type f 2>/dev/null || echo "  (no .bridge directory found)"
+            echo "⚠️  Bridge log not found"
             exit 0
           fi
           
-          echo "--- Bridge log tail (last 60 lines) ---"
-          tail -60 "$BRIDGE_LOG"
-          echo "--- End of bridge log tail ---"
-          echo ""
-
-          # ── Strategy 1: Full / INTELLIGENT scan ──────────────────────────────
-          # Full scan emits: "Policy Severity counts: X match(es) have a severity level of BLOCKER ..."
           SEVERITY_LINE=$(grep "Policy Severity counts:" "$BRIDGE_LOG" || true)
-          if [ -n "$SEVERITY_LINE" ]; then
-            SCAN_MODE="full"
-            BLOCKER_COUNT=$(echo "$SEVERITY_LINE" | grep -oE '[0-9]+ match(es)? ha(s|ve) a severity level of BLOCKER' | grep -oE '^[0-9]+' || echo "0")
-            CRITICAL_COUNT=$(echo "$SEVERITY_LINE" | grep -oE '[0-9]+ match(es)? ha(s|ve) a severity level of CRITICAL' | grep -oE '^[0-9]+' || echo "0")
-            MAJOR_COUNT=$(echo "$SEVERITY_LINE" | grep -oE '[0-9]+ match(es)? ha(s|ve) a severity level of MAJOR' | grep -oE '^[0-9]+' || echo "0")
-          fi
-
-          # ── Strategy 2: RAPID scan (PR mode) ─────────────────────────────────
-          # RAPID scan logs the API response JSON which contains per-severity counts.
-          # Pattern A: {"BLOCKER":{"count":N},"CRITICAL":{"count":N},"MAJOR":{"count":N}}
-          if [ "$SCAN_MODE" == "unknown" ]; then
-            BLOCKER_JSON=$(grep -oP '"BLOCKER"\s*:\s*\{\s*"count"\s*:\s*\K[0-9]+' "$BRIDGE_LOG" | tail -1 || true)
-            CRITICAL_JSON=$(grep -oP '"CRITICAL"\s*:\s*\{\s*"count"\s*:\s*\K[0-9]+' "$BRIDGE_LOG" | tail -1 || true)
-            MAJOR_JSON=$(grep -oP '"MAJOR"\s*:\s*\{\s*"count"\s*:\s*\K[0-9]+' "$BRIDGE_LOG" | tail -1 || true)
-            if [ -n "$BLOCKER_JSON" ] || [ -n "$CRITICAL_JSON" ] || [ -n "$MAJOR_JSON" ]; then
-              SCAN_MODE="rapid-json-a"
-              BLOCKER_COUNT="${BLOCKER_JSON:-0}"
-              CRITICAL_COUNT="${CRITICAL_JSON:-0}"
-              MAJOR_COUNT="${MAJOR_JSON:-0}"
-            fi
-          fi
-
-          # Pattern B: "violatedPolicies" JSON array – count entries by severity
-          if [ "$SCAN_MODE" == "unknown" ]; then
-            BLOCKER_COUNT=$(grep -o '"severity":"BLOCKER"' "$BRIDGE_LOG" | wc -l | tr -d ' ' || echo "0")
-            CRITICAL_COUNT=$(grep -o '"severity":"CRITICAL"' "$BRIDGE_LOG" | wc -l | tr -d ' ' || echo "0")
-            MAJOR_COUNT=$(grep -o '"severity":"MAJOR"' "$BRIDGE_LOG" | wc -l | tr -d ' ' || echo "0")
-            if [ "$BLOCKER_COUNT" -gt 0 ] || [ "$CRITICAL_COUNT" -gt 0 ] || [ "$MAJOR_COUNT" -gt 0 ]; then
-              SCAN_MODE="rapid-json-b"
-            fi
-          fi
-
-          # Pattern C: "X BLOCKER policy violation(s)" plain-text summary lines
-          if [ "$SCAN_MODE" == "unknown" ]; then
-            BLOCKER_LINE=$(grep -iE '[0-9]+ BLOCKER' "$BRIDGE_LOG" | tail -1 || true)
-            CRITICAL_LINE=$(grep -iE '[0-9]+ CRITICAL' "$BRIDGE_LOG" | tail -1 || true)
-            MAJOR_LINE=$(grep -iE '[0-9]+ MAJOR' "$BRIDGE_LOG" | tail -1 || true)
-            BLOCKER_COUNT=$(echo "$BLOCKER_LINE" | grep -oE '^[0-9]+' || echo "0")
-            CRITICAL_COUNT=$(echo "$CRITICAL_LINE" | grep -oE '^[0-9]+' || echo "0")
-            MAJOR_COUNT=$(echo "$MAJOR_LINE" | grep -oE '^[0-9]+' || echo "0")
-            if [ -n "$BLOCKER_LINE" ] || [ -n "$CRITICAL_LINE" ] || [ -n "$MAJOR_LINE" ]; then
-              SCAN_MODE="rapid-text"
-            fi
-          fi
-
-          # ── Strategy 3: DeveloperMode (RAPID scan) JSON result file ─────────
-          # RAPID scan writes a *_BlackDuck_DeveloperMode_Result.json file.
-          # Structure: array of components, each with a "violatingPolicies" array
-          # where each entry has a "policySeverity" field (BLOCKER/CRITICAL/MAJOR/etc.)
-          if [ "$SCAN_MODE" == "unknown" ]; then
-            RESULT_JSON=$(find .bridge -name "*DeveloperMode_Result*.json" -o -name "*rapid*.json" 2>/dev/null | head -1 || true)
-            # Fallback: any non-input JSON in .bridge
-            if [ -z "$RESULT_JSON" ]; then
-              RESULT_JSON=$(find .bridge -name "*.json" -not -name "input.json" 2>/dev/null | head -1 || true)
-            fi
-            if [ -n "$RESULT_JSON" ]; then
-              echo "Found Bridge output JSON: $RESULT_JSON"
-              # Primary: use jq if available (accurate, handles nested arrays)
-              if command -v jq &>/dev/null; then
-                BLOCKER_COUNT=$(jq '[.. | objects | select(has("policySeverity")) | .policySeverity] | map(select(. == "BLOCKER")) | length' "$RESULT_JSON" 2>/dev/null || echo "0")
-                CRITICAL_COUNT=$(jq '[.. | objects | select(has("policySeverity")) | .policySeverity] | map(select(. == "CRITICAL")) | length' "$RESULT_JSON" 2>/dev/null || echo "0")
-                MAJOR_COUNT=$(jq '[.. | objects | select(has("policySeverity")) | .policySeverity] | map(select(. == "MAJOR")) | length' "$RESULT_JSON" 2>/dev/null || echo "0")
-                SCAN_MODE="rapid-json-jq"
-              else
-                # Fallback: count "policySeverity":"SEVERITY" occurrences via grep
-                BLOCKER_COUNT=$(grep -o '"policySeverity"\s*:\s*"BLOCKER"' "$RESULT_JSON" | wc -l | tr -d ' ' || echo "0")
-                CRITICAL_COUNT=$(grep -o '"policySeverity"\s*:\s*"CRITICAL"' "$RESULT_JSON" | wc -l | tr -d ' ' || echo "0")
-                MAJOR_COUNT=$(grep -o '"policySeverity"\s*:\s*"MAJOR"' "$RESULT_JSON" | wc -l | tr -d ' ' || echo "0")
-                SCAN_MODE="rapid-json-grep"
-              fi
-              [ -z "$BLOCKER_COUNT" ] && BLOCKER_COUNT="0"
-              [ -z "$CRITICAL_COUNT" ] && CRITICAL_COUNT="0"
-              [ -z "$MAJOR_COUNT" ] && MAJOR_COUNT="0"
-            fi
-          fi
-
-          if [ "$SCAN_MODE" == "unknown" ]; then
-            echo "⚠️  Could not extract policy violation counts from bridge.log using any known pattern."
-            echo "    Review the bridge log tail printed above to identify the correct format."
-            echo ""
-            echo "Files found in .bridge/ directory:"
-            find .bridge -type f 2>/dev/null || echo "  (none)"
+          
+          if [ -z "$SEVERITY_LINE" ]; then
+            echo "⚠️  Policy Severity counts line not found in bridge.log"
             exit 0
           fi
-
-          # Ensure counts are numeric
-          BLOCKER_COUNT=$(echo "${BLOCKER_COUNT:-0}" | grep -oE '^[0-9]+' || echo "0")
-          CRITICAL_COUNT=$(echo "${CRITICAL_COUNT:-0}" | grep -oE '^[0-9]+' || echo "0")
-          MAJOR_COUNT=$(echo "${MAJOR_COUNT:-0}" | grep -oE '^[0-9]+' || echo "0")
-
+          
+          BLOCKER_COUNT=$(echo "$SEVERITY_LINE" | grep -oE '[0-9]+ match(es)? ha(s|ve) a severity level of BLOCKER' | grep -oE '^[0-9]+' || echo "0")
+          CRITICAL_COUNT=$(echo "$SEVERITY_LINE" | grep -oE '[0-9]+ match(es)? ha(s|ve) a severity level of CRITICAL' | grep -oE '^[0-9]+' || echo "0")
+          MAJOR_COUNT=$(echo "$SEVERITY_LINE" | grep -oE '[0-9]+ match(es)? ha(s|ve) a severity level of MAJOR' | grep -oE '^[0-9]+' || echo "0")
+          
           echo ""
           echo "============================================"
           echo "BlackDuck SCA Policy Violation Summary"
-          echo "Scan mode: $SCAN_MODE"
           echo "============================================"
           echo "BLOCKER violations: $BLOCKER_COUNT"
           echo "CRITICAL violations: $CRITICAL_COUNT"

@@ -1460,11 +1460,10 @@ jobs:
     name: 'Generating SBOM'
     #    Create software bill-of-materials (SBOM) using SPDX format
     if: ${{ inputs.generate-sbom == true }}
-    uses: chef/common-github-actions/.github/workflows/sbom.yml@test-pipeline  # TODO: revert to @main after merging
+    uses: chef/common-github-actions/.github/workflows/sbom.yml@main
     needs: checkout # TODO: fix set-application-version
     secrets: inherit
     with:
-      github-event-name: ${{ inputs.github-event-name }}
       version: ${{ inputs.version }}
       export-github-sbom: ${{ inputs.export-github-sbom }}
       perform-blackduck-sca-scan: ${{ inputs.perform-blackduck-sca-scan }}
