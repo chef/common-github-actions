@@ -353,50 +353,78 @@ jobs:
           detect_args: ${{ env.DETECT_ARGS }}
           github_token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
           blackducksca_prComment_enabled: true
-          blackducksca_fixpr_enabled: true
 
       - name: Check BlackDuck SCA results and report violations
         if: ${{ always() && (inputs.blackduck-fail-on-blocker == true || inputs.blackduck-fail-on-critical == true || inputs.blackduck-fail-on-major == true) }}
         run: |
           BRIDGE_LOG=".bridge/bridge.log"
-          
+          BLOCKER_COUNT=0
+          CRITICAL_COUNT=0
+          MAJOR_COUNT=0
+
           if [ ! -f "$BRIDGE_LOG" ]; then
-            echo "⚠️  Bridge log not found"
+            echo "⚠️  Bridge log not found – skipping violation count check"
             exit 0
           fi
-          
-          SEVERITY_LINE=$(grep "Policy Severity counts:" "$BRIDGE_LOG" || true)
-          
-          if [ -z "$SEVERITY_LINE" ]; then
-            echo "⚠️  Policy Severity counts line not found in bridge.log"
-            exit 0
+
+          if [[ "${{ inputs.github-event-name }}" == "pull_request" ]]; then
+            # ── RAPID / PR scan ──────────────────────────────────────────────
+            # Bridge captures detect output in bridge.log, including lines like:
+            #   INFO: --- 			* Components: 0
+            # after the "Critical and blocking policy violations" header.
+            extract_count() {
+              local val
+              val=$(grep -A6 "Critical and blocking policy violations" "$BRIDGE_LOG" \
+                | grep "\* ${1}:" \
+                | awk '{print $NF}')
+              echo "${val:-0}"
+            }
+            BLOCKER_COUNT=$(extract_count "Components")
+            CRITICAL_COUNT=$(extract_count "Security")
+            MAJOR_COUNT=$(extract_count "License")
+            OTHER_COUNT=$(extract_count "Other")
+            [ "${OTHER_COUNT:-0}" -gt 0 ] && CRITICAL_COUNT=$((CRITICAL_COUNT + OTHER_COUNT))
+
+          else
+            # ── Full / INTELLIGENT scan ───────────────────────────────────────
+            SEVERITY_LINE=$(grep "Policy Severity counts:" "$BRIDGE_LOG" || true)
+            if [ -z "$SEVERITY_LINE" ]; then
+              echo "⚠️  Policy Severity counts line not found in bridge.log"
+              exit 0
+            fi
+            BLOCKER_COUNT=$(echo "$SEVERITY_LINE" \
+              | grep -oE '[0-9]+ match(es)? ha(s|ve) a severity level of BLOCKER' \
+              | grep -oE '^[0-9]+' || echo "0")
+            CRITICAL_COUNT=$(echo "$SEVERITY_LINE" \
+              | grep -oE '[0-9]+ match(es)? ha(s|ve) a severity level of CRITICAL' \
+              | grep -oE '^[0-9]+' || echo "0")
+            MAJOR_COUNT=$(echo "$SEVERITY_LINE" \
+              | grep -oE '[0-9]+ match(es)? ha(s|ve) a severity level of MAJOR' \
+              | grep -oE '^[0-9]+' || echo "0")
           fi
-          
-          BLOCKER_COUNT=$(echo "$SEVERITY_LINE" | grep -oE '[0-9]+ match(es)? ha(s|ve) a severity level of BLOCKER' | grep -oE '^[0-9]+' || echo "0")
-          CRITICAL_COUNT=$(echo "$SEVERITY_LINE" | grep -oE '[0-9]+ match(es)? ha(s|ve) a severity level of CRITICAL' | grep -oE '^[0-9]+' || echo "0")
-          MAJOR_COUNT=$(echo "$SEVERITY_LINE" | grep -oE '[0-9]+ match(es)? ha(s|ve) a severity level of MAJOR' | grep -oE '^[0-9]+' || echo "0")
-          
+
           echo ""
           echo "============================================"
           echo "BlackDuck SCA Policy Violation Summary"
+          echo "Scan mode: ${{ inputs.github-event-name == 'pull_request' && 'RAPID (PR)' || 'INTELLIGENT (Full)' }}"
           echo "============================================"
-          echo "BLOCKER violations: $BLOCKER_COUNT"
-          echo "CRITICAL violations: $CRITICAL_COUNT"
-          echo "MAJOR violations: $MAJOR_COUNT"
+          echo "BLOCKER  violations: ${BLOCKER_COUNT}"
+          echo "CRITICAL violations: ${CRITICAL_COUNT}"
+          echo "MAJOR    violations: ${MAJOR_COUNT}"
           echo "============================================"
-          
+
           VIOLATIONS=""
-          [ "${{ inputs.blackduck-fail-on-blocker }}" == "true" ] && [ "$BLOCKER_COUNT" -gt 0 ] && VIOLATIONS="${VIOLATIONS}$BLOCKER_COUNT BLOCKER, "
-          [ "${{ inputs.blackduck-fail-on-critical }}" == "true" ] && [ "$CRITICAL_COUNT" -gt 0 ] && VIOLATIONS="${VIOLATIONS}$CRITICAL_COUNT CRITICAL, "
-          [ "${{ inputs.blackduck-fail-on-major }}" == "true" ] && [ "$MAJOR_COUNT" -gt 0 ] && VIOLATIONS="${VIOLATIONS}$MAJOR_COUNT MAJOR, "
-          
+          [ "${{ inputs.blackduck-fail-on-blocker }}"  == "true" ] && [ "${BLOCKER_COUNT}"  -gt 0 ] && VIOLATIONS="${VIOLATIONS}${BLOCKER_COUNT} BLOCKER, "
+          [ "${{ inputs.blackduck-fail-on-critical }}" == "true" ] && [ "${CRITICAL_COUNT}" -gt 0 ] && VIOLATIONS="${VIOLATIONS}${CRITICAL_COUNT} CRITICAL, "
+          [ "${{ inputs.blackduck-fail-on-major }}"    == "true" ] && [ "${MAJOR_COUNT}"    -gt 0 ] && VIOLATIONS="${VIOLATIONS}${MAJOR_COUNT} MAJOR, "
+
           if [ -n "$VIOLATIONS" ]; then
             echo ""
-            echo "❌ Vulnerabilities Found: ${VIOLATIONS%, }"
+            echo "❌ Violations found: ${VIOLATIONS%, }"
             exit 1
           else
             echo ""
-            echo "✅ No policy-violating vulnerabilities found"
+            echo "✅ No blocking policy violations found"
           fi
 
 # original from https://github.com/progress-platform-services/common-github-actions/blob/main/.github/workflows/examples/ci-all-sbom-main.yml
