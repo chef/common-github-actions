@@ -363,7 +363,7 @@ jobs:
         continue-on-error: false
         env:
           GOPRIVATE: ${{ inputs.go-private-modules }}
-          DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name }}
+          DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name }} #'Chef-Agents' # <the_parent_group_of_your_target_project>, Chef, Chef-Agents, Chef-Automate, Chef-Chef360, Chef-Habitat, Chef-Infrastructure-Server, Chef-Shared-Services
           DETECT_PROJECT_NAME: ${{ inputs.blackduck-project-name }}
           DETECT_PROJECT_VERSION_NAME: ${{ inputs.version }}
           DETECT_BLACKDUCK_RAPID_COMPARE_MODE: BOM_COMPARE
@@ -375,20 +375,6 @@ jobs:
           detect_args: ${{ env.DETECT_ARGS }}
           github_token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
           blackducksca_prComment_enabled: true
-
-      - name: Debug – dump bridge.log
-        if: always()
-        run: |
-          BRIDGE_LOG=".bridge/bridge.log"
-          if [ -f "$BRIDGE_LOG" ]; then
-            echo "========== bridge.log START =========="
-            cat "$BRIDGE_LOG"
-            echo "========== bridge.log END =========="
-          else
-            echo "bridge.log not found"
-            echo "Contents of .bridge/:"
-            ls -la .bridge/ || true
-          fi
 
       - name: Check BlackDuck SCA results and report violations
         if: ${{ always() && (inputs.blackduck-fail-on-blocker == true || inputs.blackduck-fail-on-critical == true || inputs.blackduck-fail-on-major == true) }}
@@ -442,11 +428,11 @@ jobs:
 
           if [ -n "$VIOLATIONS" ]; then
             echo ""
-            echo "❌ Violations found: ${VIOLATIONS%, }"
+            echo "❌ Vulnerabilities Found: ${VIOLATIONS%, }"
             exit 1
           else
             echo ""
-            echo "✅ No blocking policy violations found"
+            echo "✅ No policy-violating vulnerabilities found"
           fi
 
 # original from https://github.com/progress-platform-services/common-github-actions/blob/main/.github/workflows/examples/ci-all-sbom-main.yml
