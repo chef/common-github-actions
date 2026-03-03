@@ -414,6 +414,7 @@ jobs:
           echo ""
           echo "============================================"
           echo "BlackDuck SCA Policy Violation Summary"
+          echo "Scan mode: ${{ inputs.github-event-name == 'pull_request' && 'RAPID (PR)' || 'INTELLIGENT (Full)' }}"
           echo "============================================"
           echo "BLOCKER  violations: ${BLOCKER_COUNT}"
           echo "CRITICAL violations: ${CRITICAL_COUNT}"
@@ -427,11 +428,11 @@ jobs:
 
           if [ -n "$VIOLATIONS" ]; then
             echo ""
-            echo "❌ Vulnerabilities Found: ${VIOLATIONS%, }"
+            echo "❌ Violations found: ${VIOLATIONS%, }"
             exit 1
           else
             echo ""
-            echo "✅ No policy-violating vulnerabilities found"
+            echo "✅ No blocking policy violations found"
           fi
 
 # original from https://github.com/progress-platform-services/common-github-actions/blob/main/.github/workflows/examples/ci-all-sbom-main.yml
