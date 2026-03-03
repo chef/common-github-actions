@@ -29,6 +29,11 @@ name: Download SBOM from Insights and Convert to CSV
 on:
   workflow_call:
     inputs:
+      github-event-name:
+        description: 'GitHub event name (pass github.event_name from calling workflow)'
+        required: false
+        type: string
+        default: ''
       version:
         description: 'Version of the project'
         required: true
@@ -212,7 +217,7 @@ jobs:
     steps:
       - name: 'Echo inputs'
         run: |
-          echo "Starting BlackDuck SCA scan"
+          echo "Starting BlackDuck SCA scan on branch: ${{ github.ref_name }} (event: ${{ inputs.github-event-name }})"
           echo "BlackDuck_SCA_URL: ${{ secrets.BLACKDUCK_SBOM_URL }}"
           echo "BLACKDUCK_SCA_TOKEN: ${{ secrets.BLACKDUCK_SCA_TOKEN }}"
           echo "DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name }}"
@@ -320,7 +325,7 @@ jobs:
           blackducksca_url: ${{ secrets.BLACKDUCK_SBOM_URL }}  # BLACKDUCK_URL, should be https://progresssoftware.app.blackduck.com/ 
           blackducksca_token: ${{ secrets.BLACKDUCK_SCA_TOKEN }}  # was BLACKDUCK_API_KEY
           blackducksca_scan_failure_severities: ${{ env.FAILURE_SEVERITIES }}
-          blackducksca_scan_full: true  # Force INTELLIGENT scan mode for all branches (uploads results to server)
+          blackducksca_scan_full: ${{ inputs.github-event-name != 'pull_request' }}  # INTELLIGENT scan for main/release branches; RAPID (policy-check only) for PRs
           detect_args: ${{ env.DETECT_ARGS }}
           # ignore python per https://documentation.blackduck.com/bundle/detect/page/packagemgrs/python.html
 
