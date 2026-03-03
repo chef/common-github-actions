@@ -29,6 +29,11 @@ name: Download SBOM from Insights and Convert to CSV
 on:
   workflow_call:
     inputs:
+      github-event-name:
+        description: 'GitHub event name (pass github.event_name from calling workflow to split full vs PR scan)'
+        required: false
+        type: string
+        default: ''
       version:
         description: 'Version of the project'
         required: true
