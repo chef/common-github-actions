@@ -354,6 +354,20 @@ jobs:
           github_token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
           blackducksca_prComment_enabled: true
 
+      - name: Debug – dump bridge.log
+        if: always()
+        run: |
+          BRIDGE_LOG=".bridge/bridge.log"
+          if [ -f "$BRIDGE_LOG" ]; then
+            echo "========== bridge.log START =========="
+            cat "$BRIDGE_LOG"
+            echo "========== bridge.log END =========="
+          else
+            echo "bridge.log not found"
+            echo "Contents of .bridge/:"
+            ls -la .bridge/ || true
+          fi
+
       - name: Check BlackDuck SCA results and report violations
         if: ${{ always() && (inputs.blackduck-fail-on-blocker == true || inputs.blackduck-fail-on-critical == true || inputs.blackduck-fail-on-major == true) }}
         run: |
