@@ -398,19 +398,34 @@ jobs:
             fi
           fi
 
-          # ── Strategy 3: JSON output files produced by Bridge in .bridge/ ─────
-          # RAPID scan results are sometimes written to .bridge/blackducksca/ as JSON
+          # ── Strategy 3: DeveloperMode (RAPID scan) JSON result file ─────────
+          # RAPID scan writes a *_BlackDuck_DeveloperMode_Result.json file.
+          # Structure: array of components, each with a "violatingPolicies" array
+          # where each entry has a "policySeverity" field (BLOCKER/CRITICAL/MAJOR/etc.)
           if [ "$SCAN_MODE" == "unknown" ]; then
-            RESULT_JSON=$(find .bridge -name "*.json" -not -name "input.json" 2>/dev/null | head -1 || true)
+            RESULT_JSON=$(find .bridge -name "*DeveloperMode_Result*.json" -o -name "*rapid*.json" 2>/dev/null | head -1 || true)
+            # Fallback: any non-input JSON in .bridge
+            if [ -z "$RESULT_JSON" ]; then
+              RESULT_JSON=$(find .bridge -name "*.json" -not -name "input.json" 2>/dev/null | head -1 || true)
+            fi
             if [ -n "$RESULT_JSON" ]; then
               echo "Found Bridge output JSON: $RESULT_JSON"
-              BLOCKER_COUNT=$(grep -oP '"BLOCKER"\s*:\s*\{\s*"count"\s*:\s*\K[0-9]+' "$RESULT_JSON" | tail -1 || echo "0")
-              CRITICAL_COUNT=$(grep -oP '"CRITICAL"\s*:\s*\{\s*"count"\s*:\s*\K[0-9]+' "$RESULT_JSON" | tail -1 || echo "0")
-              MAJOR_COUNT=$(grep -oP '"MAJOR"\s*:\s*\{\s*"count"\s*:\s*\K[0-9]+' "$RESULT_JSON" | tail -1 || echo "0")
+              # Primary: use jq if available (accurate, handles nested arrays)
+              if command -v jq &>/dev/null; then
+                BLOCKER_COUNT=$(jq '[.. | objects | select(has("policySeverity")) | .policySeverity] | map(select(. == "BLOCKER")) | length' "$RESULT_JSON" 2>/dev/null || echo "0")
+                CRITICAL_COUNT=$(jq '[.. | objects | select(has("policySeverity")) | .policySeverity] | map(select(. == "CRITICAL")) | length' "$RESULT_JSON" 2>/dev/null || echo "0")
+                MAJOR_COUNT=$(jq '[.. | objects | select(has("policySeverity")) | .policySeverity] | map(select(. == "MAJOR")) | length' "$RESULT_JSON" 2>/dev/null || echo "0")
+                SCAN_MODE="rapid-json-jq"
+              else
+                # Fallback: count "policySeverity":"SEVERITY" occurrences via grep
+                BLOCKER_COUNT=$(grep -o '"policySeverity"\s*:\s*"BLOCKER"' "$RESULT_JSON" | wc -l | tr -d ' ' || echo "0")
+                CRITICAL_COUNT=$(grep -o '"policySeverity"\s*:\s*"CRITICAL"' "$RESULT_JSON" | wc -l | tr -d ' ' || echo "0")
+                MAJOR_COUNT=$(grep -o '"policySeverity"\s*:\s*"MAJOR"' "$RESULT_JSON" | wc -l | tr -d ' ' || echo "0")
+                SCAN_MODE="rapid-json-grep"
+              fi
               [ -z "$BLOCKER_COUNT" ] && BLOCKER_COUNT="0"
               [ -z "$CRITICAL_COUNT" ] && CRITICAL_COUNT="0"
               [ -z "$MAJOR_COUNT" ] && MAJOR_COUNT="0"
-              SCAN_MODE="bridge-json-file"
             fi
           fi
 
