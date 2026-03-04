@@ -286,6 +286,10 @@ jobs:
           if [[ -n "${{ inputs.ruby-app-directory }}" ]]; then
             DETECT_ARGS="${DETECT_ARGS} --detect.source.path=${{ inputs.ruby-app-directory }}"
           fi
+
+          if [[ "${{ inputs.github-event-name }}" == "pull_request" ]]; then
+            DETECT_ARGS="${DETECT_ARGS} --detect.blackduck.scan.mode=RAPID"
+          fi
           
           echo "DETECT_ARGS=${DETECT_ARGS}" >> $GITHUB_ENV
           echo "Constructed detect_args: ${DETECT_ARGS}"
@@ -329,7 +333,7 @@ jobs:
           GOPRIVATE: ${{ inputs.go-private-modules }}
           DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name }}
           DETECT_PROJECT_NAME: ${{ inputs.blackduck-project-name }}
-          DETECT_PROJECT_VERSION_NAME: "pr-test"
+          DETECT_PROJECT_VERSION_NAME: ${{ inputs.version }}
         with:
           blackducksca_url: ${{ secrets.BLACKDUCK_SBOM_URL }}
           blackducksca_token: ${{ secrets.BLACKDUCK_SCA_TOKEN }}
@@ -346,9 +350,10 @@ jobs:
         continue-on-error: false
         env:
           GOPRIVATE: ${{ inputs.go-private-modules }}
-          DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name }} #'Chef-Agents' # <the_parent_group_of_your_target_project>, Chef, Chef-Agents, Chef-Automate, Chef-Chef360, Chef-Habitat, Chef-Infrastructure-Server, Chef-Shared-Services
-          DETECT_PROJECT_NAME: ${{ inputs.blackduck-project-name }}
-          DETECT_PROJECT_VERSION_NAME: ${{ inputs.version }} # <the_existing_version_in_your_project>
+          # DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name }} #'Chef-Agents' # <the_parent_group_of_your_target_project>, Chef, Chef-Agents, Chef-Automate, Chef-Chef360, Chef-Habitat, Chef-Infrastructure-Server, Chef-Shared-Services
+          # DETECT_PROJECT_NAME: ${{ inputs.blackduck-project-name }}
+          # DETECT_PROJECT_VERSION_NAME: ${{ inputs.version }} # <the_existing_version_in_your_project>
+          DETECT_BLACKDUCK_SCAN_MODE: RAPID
         with:
           blackducksca_url: ${{ secrets.BLACKDUCK_SBOM_URL }} # BLACKDUCK_URL, should be https://progresssoftware.app.blackduck.com/ 
           blackducksca_token: ${{ secrets.BLACKDUCK_SCA_TOKEN }}  # was BLACKDUCK_API_KEY
