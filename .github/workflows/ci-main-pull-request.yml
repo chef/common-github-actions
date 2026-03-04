@@ -1196,7 +1196,6 @@ jobs:
     needs: checkout
     secrets: inherit
     with:
-      github-token: ${{ inputs.github-token }}
       github-event-name: ${{ inputs.github-event-name }}
       github-branch-name: ${{ inputs.github-branch-name }}
       language: ${{ inputs.language }}

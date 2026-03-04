@@ -9,11 +9,6 @@ name: BlackDuck Polaris SAST scan
 on:
   workflow_call:
     inputs:
-      github-token:
-        description: 'GitHub token for private repo access'
-        required: false
-        type: string
-        default: ''
       github-event-name:
         description: 'GitHub event name (pass github.event_name from calling workflow for PR comment detection)'
         required: false
@@ -111,13 +106,7 @@ jobs:
       
       - name: Configure git for private repos
         run: |
-          GITHUB_TOKEN_TO_USE="${{ inputs.github-token }}"
-          if [ -z "$GITHUB_TOKEN_TO_USE" ]; then
-            GITHUB_TOKEN_TO_USE="${{ secrets.GH_TOKEN }}"
-          fi
-          if [ -z "$GITHUB_TOKEN_TO_USE" ]; then
-            GITHUB_TOKEN_TO_USE="${{ secrets.GITHUB_TOKEN }}"
-          fi
+          GITHUB_TOKEN_TO_USE="${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}"
           git config --global url."https://${GITHUB_TOKEN_TO_USE}@github.com/".insteadOf "https://github.com/"
 
       - name: Install build tools for Erlang
@@ -211,7 +200,7 @@ jobs:
           # polaris_branch_parent_name: ${{ inputs.github-event-name == 'pull_request' && 'main' || null }}
           # polaris_branch_name: ${{ inputs.github-event-name == 'pull_request' && inputs.github-branch-name || null }}
           # polaris_prComment_severities: "CRITICAL,HIGH"
-          github_token: ${{ inputs.github-token || secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
         continue-on-error: false
 
       - name: BlackDuck Polaris PR scan
