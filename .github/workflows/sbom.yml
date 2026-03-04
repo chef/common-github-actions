@@ -277,6 +277,9 @@ jobs:
           # Start with base arguments (always exclude PIP detector)
           DETECT_ARGS="--detect.excluded.detector.types=PIP"
           
+          # Add timeout configurations to prevent FAILURE_TIMEOUT errors
+          DETECT_ARGS="${DETECT_ARGS} --detect.timeout=1800"
+          
           # Add low accuracy mode if requested
           if [[ "${{ inputs.blackduck-force-low-accuracy-mode }}" == "true" ]]; then
             DETECT_ARGS="${DETECT_ARGS} --detect.accuracy.required=NONE"
@@ -288,6 +291,7 @@ jobs:
           fi
 
           if [[ "${{ inputs.github-event-name }}" == "pull_request" ]]; then
+            # RAPID scan for PRs - automatically compares against baseline from target branch
             DETECT_ARGS="${DETECT_ARGS} --detect.blackduck.scan.mode=RAPID"
           fi
           
@@ -350,10 +354,10 @@ jobs:
         continue-on-error: false
         env:
           GOPRIVATE: ${{ inputs.go-private-modules }}
-          # DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name }} #'Chef-Agents' # <the_parent_group_of_your_target_project>, Chef, Chef-Agents, Chef-Automate, Chef-Chef360, Chef-Habitat, Chef-Infrastructure-Server, Chef-Shared-Services
-          # DETECT_PROJECT_NAME: ${{ inputs.blackduck-project-name }}
-          # DETECT_PROJECT_VERSION_NAME: ${{ inputs.version }} # <the_existing_version_in_your_project>
-          DETECT_BLACKDUCK_SCAN_MODE: RAPID
+          DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name }}
+          DETECT_PROJECT_NAME: ${{ inputs.blackduck-project-name }}
+          DETECT_PROJECT_VERSION_NAME: ${{ inputs.version }}
+          DETECT_BLACKDUCK_RAPID_COMPARE_MODE: BOM_COMPARE
         with:
           blackducksca_url: ${{ secrets.BLACKDUCK_SBOM_URL }} # BLACKDUCK_URL, should be https://progresssoftware.app.blackduck.com/ 
           blackducksca_token: ${{ secrets.BLACKDUCK_SCA_TOKEN }}  # was BLACKDUCK_API_KEY
@@ -390,46 +394,31 @@ jobs:
             exit 0
           fi
 
-          if [[ "${{ inputs.github-event-name }}" == "pull_request" ]]; then
-            # ── RAPID / PR scan ──────────────────────────────────────────────
-            # Bridge captures detect output in bridge.log, including lines like:
-            #   INFO: --- 			* Components: 0
-            # after the "Critical and blocking policy violations" header.
-            extract_count() {
-              local val
-              val=$(grep -A6 "Critical and blocking policy violations" "$BRIDGE_LOG" \
-                | grep "\* ${1}:" \
-                | awk '{print $NF}')
-              echo "${val:-0}"
-            }
-            BLOCKER_COUNT=$(extract_count "Components")
-            CRITICAL_COUNT=$(extract_count "Security")
-            MAJOR_COUNT=$(extract_count "License")
-            OTHER_COUNT=$(extract_count "Other")
-            [ "${OTHER_COUNT:-0}" -gt 0 ] && CRITICAL_COUNT=$((CRITICAL_COUNT + OTHER_COUNT))
+          # Works for both RAPID and Full scans:
+          # - RAPID log has: "Critical and blocking policy violations" → "* Components: N", "* Security: N", etc.
+          # - Full  log has: "Policy Severity counts:" → "N matches have a severity level of BLOCKER", etc.
+          extract() { grep "$1" "$BRIDGE_LOG" | awk '{print $NF}' | head -1; }
 
+          if grep -q "Critical and blocking policy violations" "$BRIDGE_LOG"; then
+            # RAPID scan — map categories to severity levels
+            BLOCKER_COUNT=$(extract "\* Components:" || echo 0)
+            CRITICAL_COUNT=$(extract "\* Security:" || echo 0)
+            MAJOR_COUNT=$(extract "\* License:" || echo 0)
+            OTHER_COUNT=$(extract "\* Other:" || echo 0)
+            [ "${OTHER_COUNT:-0}" -gt 0 ] && CRITICAL_COUNT=$((CRITICAL_COUNT + OTHER_COUNT))
+          elif grep -q "Policy Severity counts:" "$BRIDGE_LOG"; then
+            # Full scan
+            BLOCKER_COUNT=$(grep "severity level of BLOCKER" "$BRIDGE_LOG" | grep -oE '^[0-9]+' || echo 0)
+            CRITICAL_COUNT=$(grep "severity level of CRITICAL" "$BRIDGE_LOG" | grep -oE '^[0-9]+' || echo 0)
+            MAJOR_COUNT=$(grep "severity level of MAJOR" "$BRIDGE_LOG" | grep -oE '^[0-9]+' || echo 0)
           else
-            # ── Full / INTELLIGENT scan ───────────────────────────────────────
-            SEVERITY_LINE=$(grep "Policy Severity counts:" "$BRIDGE_LOG" || true)
-            if [ -z "$SEVERITY_LINE" ]; then
-              echo "⚠️  Policy Severity counts line not found in bridge.log"
-              exit 0
-            fi
-            BLOCKER_COUNT=$(echo "$SEVERITY_LINE" \
-              | grep -oE '[0-9]+ match(es)? ha(s|ve) a severity level of BLOCKER' \
-              | grep -oE '^[0-9]+' || echo "0")
-            CRITICAL_COUNT=$(echo "$SEVERITY_LINE" \
-              | grep -oE '[0-9]+ match(es)? ha(s|ve) a severity level of CRITICAL' \
-              | grep -oE '^[0-9]+' || echo "0")
-            MAJOR_COUNT=$(echo "$SEVERITY_LINE" \
-              | grep -oE '[0-9]+ match(es)? ha(s|ve) a severity level of MAJOR' \
-              | grep -oE '^[0-9]+' || echo "0")
+            echo "⚠️  No policy violation summary found in bridge.log"
+            exit 0
           fi
 
           echo ""
           echo "============================================"
           echo "BlackDuck SCA Policy Violation Summary"
-          echo "Scan mode: ${{ inputs.github-event-name == 'pull_request' && 'RAPID (PR)' || 'INTELLIGENT (Full)' }}"
           echo "============================================"
           echo "BLOCKER  violations: ${BLOCKER_COUNT}"
           echo "CRITICAL violations: ${CRITICAL_COUNT}"
