@@ -428,7 +428,6 @@ jobs:
           echo ""
           echo "============================================"
           echo "BlackDuck SCA Policy Violation Summary"
-          echo "Scan mode: ${{ inputs.github-event-name == 'pull_request' && 'RAPID (PR)' || 'INTELLIGENT (Full)' }}"
           echo "============================================"
           echo "BLOCKER  violations: ${BLOCKER_COUNT}"
           echo "CRITICAL violations: ${CRITICAL_COUNT}"
