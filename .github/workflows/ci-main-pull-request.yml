@@ -1464,7 +1464,8 @@ jobs:
     needs: checkout # TODO: fix set-application-version
     secrets: inherit
     with:
-      github-event-name: ${{ github.event_name }}
+      github-event-name: ${{ inputs.github-event-name }}
+      github-branch-name: ${{ inputs.github-branch-name }}
       version: ${{ inputs.version }}
       export-github-sbom: ${{ inputs.export-github-sbom }}
       perform-blackduck-sca-scan: ${{ inputs.perform-blackduck-sca-scan }}
