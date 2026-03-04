@@ -346,7 +346,7 @@ jobs:
           GOPRIVATE: ${{ inputs.go-private-modules }}
           DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name }}
           DETECT_PROJECT_NAME: ${{ inputs.blackduck-project-name }}
-          DETECT_PROJECT_VERSION_NAME: "pr-test"
+          DETECT_PROJECT_VERSION_NAME: ${{ inputs.version }}
         with:
           blackducksca_url: ${{ secrets.BLACKDUCK_SBOM_URL }}
           blackducksca_token: ${{ secrets.BLACKDUCK_SCA_TOKEN }}
