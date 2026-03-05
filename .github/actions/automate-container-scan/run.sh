@@ -14,6 +14,7 @@ ACTION_DIR="${ACTION_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 # Container and Automate state
 CONTAINER_ID=""
 AUTOMATE_VERSION=""
+AUTOMATE_CLI_BUILD=""
 GRYPE_VERSION=""
 GRYPE_DB_BUILT=""
 GRYPE_DB_SCHEMA=""
@@ -127,11 +128,15 @@ deploy_automate() {
     docker exec -w /root "${CONTAINER_ID}" chef-automate maintenance on \
         > "${LOGS_DIR}/maintenance.log" 2>&1 || log "WARNING: Failed to enter maintenance mode (may not be critical)"
     
-    # Capture Automate version (disable pipefail to avoid SIGPIPE from head)
+    # Capture Automate version and CLI build (disable pipefail to avoid SIGPIPE from grep/head)
     set +o pipefail
-    AUTOMATE_VERSION=$(docker exec -w /root "${CONTAINER_ID}" chef-automate version 2>/dev/null | head -n 1 | awk '{print $NF}')
+    local automate_version_output
+    automate_version_output=$(docker exec -w /root "${CONTAINER_ID}" chef-automate version 2>/dev/null)
+    AUTOMATE_VERSION=$(echo "${automate_version_output}" | grep "^Version:" | awk '{print $NF}')
+    AUTOMATE_CLI_BUILD=$(echo "${automate_version_output}" | grep "CLI Build:" | awk '{print $NF}')
     set -o pipefail
     log "Chef Automate version: ${AUTOMATE_VERSION}"
+    log "Chef Automate CLI build: ${AUTOMATE_CLI_BUILD}"
     
     # Verify Habitat packages are present
     log "Verifying Habitat packages are installed..."
@@ -356,6 +361,7 @@ generate_metadata() {
         --arg git_sha "${GITHUB_SHA:-unknown}" \
         --arg channel "${CHANNEL}" \
         --arg version "${AUTOMATE_VERSION}" \
+        --arg cli_build "${AUTOMATE_CLI_BUILD}" \
         --arg grype_version "${GRYPE_VERSION}" \
         --arg grype_db_built "${GRYPE_DB_BUILT}" \
         --arg grype_db_schema "${GRYPE_DB_SCHEMA}" \
@@ -378,6 +384,7 @@ generate_metadata() {
             "product": "chef-automate",
             "channel": $channel,
             "version": $version,
+            "cli_build": $cli_build,
             "scan_type": "container"
           },
           "environment": {
@@ -416,7 +423,7 @@ generate_metadata() {
     # Display summary (disable pipefail for safe jq parsing)
     set +o pipefail
     log "=== SCAN SUMMARY ==="
-    log "Chef Automate version: ${AUTOMATE_VERSION}"
+    log "Chef Automate version: ${AUTOMATE_VERSION} (CLI build: ${AUTOMATE_CLI_BUILD})"
     log "Channel: ${CHANNEL}"
     log "Chef origin: $(echo "${chef_summary}" | jq -r '.total_vulnerabilities') vulnerabilities across $(echo "${chef_summary}" | jq -r '.total_packages') packages"
     log "Core origin: $(echo "${core_summary}" | jq -r '.total_vulnerabilities') vulnerabilities across $(echo "${core_summary}" | jq -r '.total_packages') packages"
