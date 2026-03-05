@@ -1,0 +1,116 @@
+# wiz.yml
+# Wiz CLI security scan for Docker image vulnerabilities and policy violations
+# Uses the prgs-community/githubactions-reusableworkflows/actions/wizcli composite action
+# which handles Wiz CLI install, AKeyless auth, scanning, and job summary automatically.
+# https://docs.wiz.io/wiz-docs/docs/wiz-cli-overview
+
+name: Wiz CLI security scan
+
+on:
+  workflow_call:
+    inputs:
+      fail-build:
+        description: 'Fail the build on Wiz policy violations'
+        required: false
+        type: boolean
+        default: true
+      wiz-image-skip-aws:
+        description: 'Skip AWS ECR login (assumes images are scanned elsewhere)'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  wiz-scan:
+    name: Wiz CLI container image scan
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Configure git for private repos
+        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+
+      # - name: Configure AWS credentials
+      #   uses: aws-actions/configure-aws-credentials@v4
+      #   if: ${{ !inputs.wiz-image-skip-aws }}
+      #   with:
+      #     aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      #     aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+      #     aws-region: us-east-2
+
+      # - name: Login to Amazon ECR
+      #   id: login-ecr
+      #   if: ${{ !inputs.wiz-image-skip-aws }}
+      #   uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker image
+        id: build-image
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          REPO_NAME=$(basename $(pwd))
+
+          if [ ! -f "Dockerfile" ]; then
+            echo "❌ No Dockerfile found - this workflow requires a Dockerfile to scan Docker image"
+            exit 1
+          fi
+
+          echo "Building Docker image..."
+
+          # Strategy 1: Check for build-docker.sh script (e.g., dsm-erchef)
+          if [ -f "build-docker.sh" ]; then
+            echo "Found build-docker.sh script - using it to build images"
+            chmod +x build-docker.sh
+            GITHUB_TOKEN="${{ secrets.GH_TOKEN }}" ./build-docker.sh
+
+            IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -E "^${REPO_NAME}" | grep -v "^<none>" | head -1)
+
+            if [ -z "$IMAGE" ]; then
+              echo "⚠️ No image found with prefix ${REPO_NAME} after build-docker.sh"
+              echo "Checking for any recently built images..."
+              IMAGE=$(docker images --format "{{.CreatedAt}}\t{{.Repository}}:{{.Tag}}" | sort -r | head -1 | cut -f2)
+            fi
+          # Strategy 2: Check for Makefile with compose-build target
+          elif [ -f "Makefile" ] && grep -q "^compose-build:" Makefile; then
+            echo "Using Makefile compose-build target with GITHUB_TOKEN"
+            export GITHUB_TOKEN="${{ secrets.GH_TOKEN }}"
+            make compose-build
+
+            echo "Detecting built image..."
+            docker compose images
+
+            IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "^${REPO_NAME}" | grep -v "^<none>" | head -1)
+
+            if [ -z "$IMAGE" ]; then
+              echo "No image found with prefix ${REPO_NAME}, using most recent image"
+              IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -v "^<none>" | head -1)
+            fi
+          # Strategy 3: Fallback to standard docker build
+          else
+            echo "Using standard docker build with GITHUB_TOKEN build arg"
+            docker build --build-arg GITHUB_TOKEN="${{ secrets.GH_TOKEN }}" -t "${REPO_NAME}:latest" .
+            IMAGE="${REPO_NAME}:latest"
+          fi
+
+          if [ -z "$IMAGE" ]; then
+            echo "❌ No Docker image found after build"
+            exit 1
+          fi
+
+          echo "Image to scan: $IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Wiz CLI container image scan
+        id: wiz-scan
+        uses: prgs-community/githubactions-reusableworkflows/actions/wizcli@latest
+        with:
+          scan-type: 'container-image'
+          scan-target: ${{ steps.build-image.outputs.IMAGE }}
+          fail-build: ${{ inputs.fail-build }}
