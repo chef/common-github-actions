@@ -783,9 +783,16 @@ if scan_mode == "habitat":
     # Calculate aggregate counts
     total_matches = sum(d["matches_total"] for d in dep_results)
     aggregate_counts = {k: 0 for k in ["Critical", "High", "Medium", "Low", "Negligible", "Unknown"]}
+    main_counts = {k: 0 for k in ["Critical", "High", "Medium", "Low", "Negligible", "Unknown"]}
+    direct_counts = {k: 0 for k in ["Critical", "High", "Medium", "Low", "Negligible", "Unknown"]}
+    transitive_counts = {k: 0 for k in ["Critical", "High", "Medium", "Low", "Negligible", "Unknown"]}
     for d in dep_results:
         for sev, count in d["severity_counts"].items():
             aggregate_counts[sev] += count
+        dtype = d.get("dependency_type", "main")
+        type_bucket = main_counts if dtype == "main" else direct_counts if dtype == "direct" else transitive_counts
+        for sev, count in d["severity_counts"].items():
+            type_bucket[sev] += count
     
     # Calculate aggregate size (total disk footprint of all dependencies)
     total_size_bytes = sum(d.get("size", {}).get("installed_bytes", 0) for d in dep_results)
@@ -841,7 +848,10 @@ if scan_mode == "habitat":
         "summary": {
             "dependencies_scanned": len(dep_results),
             "total_matches": total_matches,
-            "aggregate_severity_counts": aggregate_counts
+            "aggregate_severity_counts": aggregate_counts,
+            "main_severity_counts": main_counts,
+            "direct_severity_counts": direct_counts,
+            "transitive_severity_counts": transitive_counts
         },
         "dependencies": dep_results
     }
