@@ -41,6 +41,16 @@ name: CI flow containing PR checks for main & release, v2
 on:
   workflow_call:
     inputs:
+      github-event-name:
+        description: 'GitHub event name (pass github.event_name from calling workflow for PR comment detection)'
+        required: false
+        type: string
+        default: ''
+      github-branch-name:
+        description: 'GitHub branch name (pass github.ref_name from calling workflow for branch-specific logic)'
+        required: false
+        type: string
+        default: ''
       application:
         # NEW IN 1.0.7 
         description: 'Application set in repository custom properties, typically primaryApplication'
@@ -143,6 +153,11 @@ on:
         default: false
       grype-image-fail-on-critical:
         description: 'Fail pipeline if Grype image scan finds CRITICAL vulnerabilities'
+        required: false
+        type: boolean
+        default: false
+      grype-image-skip-aws:
+        description: 'Skip Grype image scan on AWS ECR images to avoid rate limits (assumes these images are scanned with Amazon ECR scan or Trivy)'
         required: false
         type: boolean
         default: false
@@ -509,7 +524,7 @@ jobs:
           echo "GA_BUILD_PROFILE=$GABuildProfile" >> $GITHUB_ENV
         continue-on-error: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }} 
           
       - name: generate-filename-slug
         # description: Generate a simple slug based on repo and date for use in any output artifacts
@@ -713,7 +728,7 @@ jobs:
         if: inputs.language == 'go'
         env:
           GOPRIVATE: ${{ inputs.go-private-modules }}
-        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: git config --global url."https://${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
       - name: Go linting and security checks  
         if: inputs.language == 'go'
         run: echo "Running Go linting and security checks"
@@ -782,6 +797,8 @@ jobs:
     uses: chef/common-github-actions/.github/workflows/trufflehog.yml@main
     needs: checkout
     with:
+      github-event-name: ${{ inputs.github-event-name }}
+      github-branch-name: ${{ inputs.github-branch-name }}
       fail-trufflehog-on-secrets-found: ${{ inputs.fail-trufflehog-on-secrets-found }}
 
   run-trivy:
@@ -890,6 +907,7 @@ jobs:
     with:
       fail-grype-on-high: ${{ inputs.grype-image-fail-on-high }}
       fail-grype-on-critical: ${{ inputs.grype-image-fail-on-critical }}
+      grype-image-skip-aws: ${{ inputs.grype-image-skip-aws }}
   
     # run-srcclr:
     #   if: ${{ inputs.perform-srcclr-scan == true }}
@@ -922,7 +940,7 @@ jobs:
         if: inputs.language == 'go'
         env:
           GOPRIVATE: ${{ inputs.go-private-modules }}
-        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: git config --global url."https://${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
       - name: 'Go build'
         if: ${{ inputs.language == 'go' && env.GA_BUILD_PROFILE == 'cli' }}
         continue-on-error: true
@@ -1172,176 +1190,29 @@ jobs:
   #     udf3: ${{ inputs.udf3 }}
       
   BlackDuck-Polaris-SAST:
-    # branding: applied at action.yml level, not workflow, see https://docs.github.com/en/actions/reference/workflows-and-actions/metadata-syntax#branding
-    #   icon: 'shield'
-    #   color: 'red'
-    # TODO: add new flags to BLACKDUCK ${{ polaris-blackduck-executable }} && ${{ polaris-executable-detect-path }}
-    # NOW THE LATEST COMMUNITY - https://github.com/prgs-community/githubactions-securityscans/blob/main/polaris/action.yml 
-    # # updated to https://documentation.blackduck.com/bundle/bridge/page/documentation/c_download.html#polaris-download
-    # # https://github.com/marketplace/actions/black-duck-security-scan
-    # NOT USED - from https://documentation.blackduck.com/bundle/bridge/page/documentation/t_github-polaris-quickstart.html
-    # parameters @ https://documentation.blackduck.com/bundle/bridge/page/documentation/c_github-polaris.html
-    # internal confluence https://progresssoftware.atlassian.net/wiki/spaces/TCE/pages/1010336076/Polaris#Examples
-    #   and https://progresssoftware.atlassian.net/wiki/spaces/TCE/pages/1010303415/Polaris+-+Github+Actions+Templates
-    # chef-vault at https://polaris.blackduck.com/portfolio/portfolios/8b7ad6f7-6dcb-49ec-bded-bfc4f190d4f8/portfolio-items/fe369baf-11d2-4989-bcb7-045577856dcc/projects/2460eabd-d033-48a1-a378-6cadd49be6d1/tests/sast?branchId=a6d2c02a-05f8-4557-bfa1-c40e9337ee5d
-    if: ${{ inputs.perform-blackduck-polaris == true }}
-    runs-on: ubuntu-latest
-    needs: checkout # TODO: fix set-application-version
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      
-      - name: Configure git for private
-        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
-
-      - name: Install build tools for Erlang
-        if: inputs.language == 'erlang'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential
-
-      - name: Set up Erlang/OTP and rebar3
-        if: inputs.language == 'erlang'
-        uses: erlef/setup-beam@v1
-        with:
-          otp-version: '25.3.2.16'
-          rebar3-version: '3.22.0'
-
-      - name: Set up Ruby
-        if: inputs.language == 'ruby'
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.4'
-          bundler-cache: false
-      
-      - name: Create bundle stub for Erlang SAST scan
-        if: inputs.language == 'erlang'
-        working-directory: ${{ github.workspace }}
-        run: |
-          # Polaris scans Erlang source code for SAST - Ruby gems not needed
-          # System ruby-dev from apt provides Ruby runtime (already installed)
-          # Create bundle stub to skip gem installation during Polaris scan
-          echo "Creating bundle stub to bypass Ruby gem installation"
-          
-          # Create no-op bundle script
-          mkdir -p "$HOME/.polaris-stubs"
-          cat > "$HOME/.polaris-stubs/bundle" << 'EOF'
-          #!/bin/bash
-          # Stub: skips gem installation during SAST scan
-          echo "[STUB] Skipping bundle $@ - not needed for Erlang SAST"
-          exit 0
-          EOF
-          chmod +x "$HOME/.polaris-stubs/bundle"
-          
-          # Prepend to PATH so stub is found before any system bundler
-          echo "$HOME/.polaris-stubs" >> $GITHUB_PATH
-          
-          echo "Bundle stub created and added to PATH"
-          
-      - name: Starting Black Duck Polaris scan
-        run: |
-          echo "Starting Polaris SAST scan"
-          echo "Below variable should be https://polaris.blackduck.com"
-          echo "POLARIS_SERVER_URL: ${{ secrets.POLARIS_SERVER_URL }}"
-          echo "Polaris application name: ${{ inputs.polaris-application-name }}"
-          echo "Polaris project name: ${{ inputs.polaris-project-name }}"
-          echo "POLARIS_ACCESS_TOKEN: ${{ secrets.POLARIS_ACCESS_TOKEN }}"
-        continue-on-error: true
-        # other polaris/coverity flags (unused): working-directory, config-path, coverity-config-path, coverity-build-command, coverity-clean-command, coverity-args,
-        #   detect-search-depth, detect-args, assessment-mode, source-archive, source-excludes, preserve-symlinks, wait-for-scan, mark-build-status:, pr-comment-severities, diagnostic
-
-      - name: Check input variables
-        run: |
-          if [[ -z "${{ inputs.polaris-application-name }}" ]] || [[ -z "${{ inputs.polaris-project-name }}" ]]; then
-              echo "Polaris application name and project name must be set"
-              exit 1
-          fi
-      
-      - name: BlackDuck Polaris scan
-        id: polaris-scan
-        uses: blackduck-inc/black-duck-security-scan@v2
-        # copied from uses: prgs-community/githubactions-securityscans/polaris@v0.5 in https://github.com/prgs-community/githubactions-securityscans/blob/main/polaris/README.md
-        # uses: blackduck-inc/black-duck-security-scan@805cbd09e806b01907bbea0f990723c2bb85abe9 # 2.0.0 - Jan's version
-        with:
-          ### SCANNING: Required fields
-          polaris_server_url: ${{ secrets.POLARIS_SERVER_URL }} # https://polaris.blackduck.com
-          polaris_access_token: ${{ secrets.POLARIS_ACCESS_TOKEN }}
-          polaris_application_name: "${{ inputs.polaris-application-name }}"  
-          # project name schema: <Solution>-<Product>-<Module If Applicable>-<Optional Numeric Suffix If Needed>
-          polaris_project_name: ${{ inputs.polaris-project-name }}  # typically GitHub repo name 
-          polaris_assessment_types: "SAST" # or "CI" or "SOURCE_UPLOAD", a license type
-          # new in 1.0.7, OPTIONAL FIELDS
-          project_directory: ${{ inputs.polaris-working-directory }}
-          detect_config_path: ${{ inputs.polaris-config-path != '' && inputs.polaris-config-path || null}}
-          coverity_config_path: ${{ inputs.polaris-coverity-config-path != '' && inputs.polaris-coverity-config-path || null }}
-          coverity_build_command: ${{ inputs.polaris-coverity-build-command != '' && inputs.polaris-coverity-build-command || null }}
-          coverity_clean_command: ${{ inputs.polaris-coverity-clean-command != '' && inputs.polaris-coverity-clean-command || null }}
-          coverity_args: ${{ inputs.polaris-coverity-args != '' && inputs.polaris-coverity-args || null }}
-          detect_search_depth: ${{ inputs.polaris-detect-search-depth != '' && inputs.polaris-detect-search-depth || null }}
-          detect_args: ${{ inputs.polaris-detect-args != '' && inputs.polaris-detect-args || null }}
-          polaris_assessment_mode: ${{ inputs.polaris-assessment-mode }}
-          # TODO: warning in GA - polaris_assessment_mode is deprecated. Use polaris_test_sast_location=remote and/or polaris_test_sca_location=remote for source upload scans instead.
-          polaris_waitForScan: 'true' #  ${{ inputs.polaris-wait-for-scan }} # defaults to true - is this a boolean or string?
-          # not yet enabled from https://github.com/prgs-community/githubactions-securityscans/blob/main/polaris/README.md 
-          # project_source_archive: ${{ inputs.polaris-source-archive != '' && inputs.polaris-source-archive || null }}
-          # project_source_excludes: ${{ inputs.polaris-source-excludes != '' && inputs.polaris-source-excludes || null }}
-          # project_source_preserveSymLinks: ${{ inputs.polaris-preserve-symlinks }}
-          # include_diagnostics: ${{ inputs.polaris-diagnostic }}
-          # mark_build_status: ${{ inputs.polaris-mark-build-status != '' && inputs.polaris-mark-build-status || null }}
-          # pr-comment-severities: "CRITICAL,HIGH"
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          
-          # options from Jan's (FlowMon. GitLab)
-          #   polaris_prComment_enabled: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
-          #   polaris_prComment_severities: "CRITICAL,HIGH"
-          # from Blackduck page at https://polaris.blackduck.com/portfolio/portfolios/8b7ad6f7-6dcb-49ec-bded-bfc4f190d4f8/portfolio-items/fe369baf-11d2-4989-bcb7-045577856dcc/projects
-          #   SARIF report parameters
-          #   polaris_reports_sarif_create: true
-          #   polaris_upload_sarif_report: true
-          # Mark build status if policy violating issues are found
-          #   mark_build_status: 'success'
-        continue-on-error: false
-      
-      - name: Check Polaris scan results and fail on HIGH or CRITICAL vulnerabilities
-        if: ${{ inputs.polaris-fail-on-high == true || inputs.polaris-fail-on-critical == true }}
-        run: |
-          echo "Checking Polaris SAST scan results..."
-          echo "Enforcement policy: HIGH=${{ inputs.polaris-fail-on-high }}, CRITICAL=${{ inputs.polaris-fail-on-critical }}"
-          
-          # Parse bridge.log for vulnerability counts
-          BRIDGE_LOG=".bridge/bridge.log"
-          
-          if [ ! -f "$BRIDGE_LOG" ]; then
-            echo "⚠️  Bridge log not found - failing as precaution"
-            exit 1
-          fi
-          
-          # Extract vulnerability counts from log
-          HIGH_COUNT=$(grep -oP '"high":\s*\K\d+' "$BRIDGE_LOG" | tail -1 || echo 0)
-          CRITICAL_COUNT=$(grep -oP '"critical":\s*\K\d+' "$BRIDGE_LOG" | tail -1 || echo 0)
-          
-          echo "Found HIGH: $HIGH_COUNT, CRITICAL: $CRITICAL_COUNT"
-          
-          # Check for policy violations
-          SHOULD_FAIL=false
-          
-          if [ "${{ inputs.polaris-fail-on-critical }}" == "true" ] && [ "$CRITICAL_COUNT" -gt 0 ]; then
-            echo "❌ Found $CRITICAL_COUNT CRITICAL vulnerabilities (policy violation)"
-            SHOULD_FAIL=true
-          fi
-          
-          if [ "${{ inputs.polaris-fail-on-high }}" == "true" ] && [ "$HIGH_COUNT" -gt 0 ]; then
-            echo "❌ Found $HIGH_COUNT HIGH vulnerabilities (policy violation)"
-            SHOULD_FAIL=true
-          fi
-          
-          if [ "$SHOULD_FAIL" == "true" ]; then
-            exit 1
-          else
-            echo "✅ No policy-violating vulnerabilities found"
-          fi
+    name: 'BlackDuck Polaris SAST scan'
+    if: ${{ inputs.perform-blackduck-polaris }}
+    uses: chef/common-github-actions/.github/workflows/polaris-sast.yml@main
+    needs: checkout
+    secrets: inherit
+    with:
+      github-event-name: ${{ inputs.github-event-name }}
+      github-branch-name: ${{ inputs.github-branch-name }}
+      language: ${{ inputs.language }}
+      polaris-application-name: ${{ inputs.polaris-application-name }}
+      polaris-project-name: ${{ inputs.polaris-project-name }}
+      polaris-working-directory: ${{ inputs.polaris-working-directory }}
+      polaris-config-path: ${{ inputs.polaris-config-path }}
+      polaris-coverity-config-path: ${{ inputs.polaris-coverity-config-path }}
+      polaris-coverity-clean-command: ${{ inputs.polaris-coverity-clean-command }}
+      polaris-coverity-build-command: ${{ inputs.polaris-coverity-build-command }}
+      polaris-coverity-args: ${{ inputs.polaris-coverity-args }}
+      polaris-detect-search-depth: ${{ inputs.polaris-detect-search-depth }}
+      polaris-detect-args: ${{ inputs.polaris-detect-args }}
+      polaris-assessment-mode: ${{ inputs.polaris-assessment-mode }}
+      wait-for-scan: ${{ inputs.wait-for-scan }}
+      polaris-fail-on-high: ${{ inputs.polaris-fail-on-high }}
+      polaris-fail-on-critical: ${{ inputs.polaris-fail-on-critical }}
        
   package-binary:
     name: 'Creating packaged binaries'
@@ -1592,6 +1463,8 @@ jobs:
     needs: checkout # TODO: fix set-application-version
     secrets: inherit
     with:
+      github-event-name: ${{ inputs.github-event-name }}
+      github-branch-name: ${{ inputs.github-branch-name }}
       version: ${{ inputs.version }}
       export-github-sbom: ${{ inputs.export-github-sbom }}
       perform-blackduck-sca-scan: ${{ inputs.perform-blackduck-sca-scan }}

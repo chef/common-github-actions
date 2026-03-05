@@ -1,0 +1,311 @@
+# polaris-sast.yml
+# BlackDuck Polaris SAST (Static Application Security Testing) scan
+# See https://github.com/prgs-community/githubactions-securityscans/blob/main/polaris/action.yml
+# Updated to https://documentation.blackduck.com/bundle/bridge/page/documentation/c_download.html#polaris-download
+# Parameters @ https://documentation.blackduck.com/bundle/bridge/page/documentation/c_github-polaris.html
+
+name: BlackDuck Polaris SAST scan
+
+on:
+  workflow_call:
+    inputs:
+      github-event-name:
+        description: 'GitHub event name (pass github.event_name from calling workflow for PR comment detection)'
+        required: false
+        type: string
+        default: ''
+      github-branch-name:
+        description: 'GitHub branch name (pass github.ref_name from calling workflow for branch-specific logic)'
+        required: false
+        type: string
+        default: ''
+      language:
+        description: 'Build language (Go, Ruby, Rust, Erlang, etc.)'
+        required: false
+        type: string
+        default: 'ruby'
+      polaris-application-name:
+        description: 'Polaris application name, one of these {Chef-Agents | Chef-Automate | Chef-Chef360 | Chef-Habitat | Chef-Infrastructure-Server | Chef-Shared-Services}'
+        required: true
+        type: string
+      polaris-project-name:
+        description: 'Polaris project name, typically the application name, followed by - and the repository name'
+        required: false
+        default: "${{ github.event.repository.name }}"
+        type: string
+      polaris-working-directory:
+        description: 'Working directory for the scan, defaults to . but usually lang-dependent like ./src'
+        required: false
+        default: '.'
+        type: string
+      polaris-config-path:
+        description: 'Path to Detect configuration file'
+        required: false
+        default: ''
+        type: string
+      polaris-coverity-config-path:
+        description: 'Path to Coverity configuration file'
+        required: false
+        default: ''
+        type: string
+      polaris-coverity-clean-command:
+        description: 'Coverity clean command. Leave empty for buildless analysis (Ruby, Python, etc.)'
+        required: false
+        default: ''
+        type: string
+      polaris-coverity-build-command:
+        description: 'Coverity build command. Leave empty for buildless analysis (Ruby, Python, etc.)'
+        required: false
+        default: ''
+        type: string
+      polaris-coverity-args:
+        description: 'Additional Coverity arguments'
+        required: false
+        default: ''
+        type: string
+      polaris-detect-search-depth:
+        description: 'Detect search depth'
+        required: false
+        default: ''
+        type: string
+      polaris-detect-args:
+        description: 'Additional Detect arguments'
+        required: false
+        default: ''
+        type: string
+      polaris-assessment-mode:
+        description: 'Assessment mode (CI or SOURCE_UPLOAD)'
+        required: false
+        default: 'CI'
+        type: string
+      wait-for-scan:
+        description: 'Wait for scan completion'
+        required: false
+        default: true
+        type: boolean
+      polaris-fail-on-high:
+        description: 'Fail the pipeline if Polaris SAST scan finds HIGH vulnerabilities'
+        required: false
+        type: boolean
+        default: false
+      polaris-fail-on-critical:
+        description: 'Fail the pipeline if Polaris SAST scan finds CRITICAL vulnerabilities'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  polaris-sast-scan:
+    name: 'BlackDuck Polaris SAST scan'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      
+      - name: Configure git for private repos
+        run: |
+          GITHUB_TOKEN_TO_USE="${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}"
+          git config --global url."https://${GITHUB_TOKEN_TO_USE}@github.com/".insteadOf "https://github.com/"
+
+      - name: Install build tools for Erlang
+        if: inputs.language == 'erlang'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+
+      - name: Set up Erlang/OTP and rebar3
+        if: inputs.language == 'erlang'
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: '25.3.2.16'
+          rebar3-version: '3.22.0'
+
+      - name: Set up Ruby
+        if: inputs.language == 'ruby'
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: false
+
+      - name: Fetch base branch for PR scan
+        if: ${{ inputs.github-event-name == 'pull_request' }}
+        run: |
+          git fetch origin main
+      
+      - name: Create bundle stub for Erlang SAST scan
+        if: inputs.language == 'erlang'
+        working-directory: ${{ github.workspace }}
+        run: |
+          # Polaris scans Erlang source code for SAST - Ruby gems not needed
+          # System ruby-dev from apt provides Ruby runtime (already installed)
+          # Create bundle stub to skip gem installation during Polaris scan
+          echo "Creating bundle stub to bypass Ruby gem installation"
+          
+          # Create no-op bundle script
+          mkdir -p "$HOME/.polaris-stubs"
+          cat > "$HOME/.polaris-stubs/bundle" << 'EOF'
+          #!/bin/bash
+          # Stub: skips gem installation during SAST scan
+          echo "[STUB] Skipping bundle $@ - not needed for Erlang SAST"
+          exit 0
+          EOF
+          chmod +x "$HOME/.polaris-stubs/bundle"
+          
+          # Prepend to PATH so stub is found before any system bundler
+          echo "$HOME/.polaris-stubs" >> $GITHUB_PATH
+          
+          echo "Bundle stub created and added to PATH"
+          
+      - name: Starting Black Duck Polaris scan
+        run: |
+          echo "Starting Polaris SAST scan"
+          echo "Below variable should be https://polaris.blackduck.com"
+          echo "POLARIS_SERVER_URL: ${{ secrets.POLARIS_SERVER_URL }}"
+          echo "Polaris application name: ${{ inputs.polaris-application-name }}"
+          echo "Polaris project name: ${{ inputs.polaris-project-name }}"
+        continue-on-error: true
+
+      - name: Check input variables
+        run: |
+          if [[ -z "${{ inputs.polaris-application-name }}" ]] || [[ -z "${{ inputs.polaris-project-name }}" ]]; then
+              echo "Polaris application name and project name must be set"
+              exit 1
+          fi
+      
+      - name: BlackDuck Polaris Full scan
+        id: polaris-full-scan
+        if: ${{ inputs.github-event-name != 'pull_request' }}
+        uses: blackduck-inc/black-duck-security-scan@v2
+        with:
+          ### SCANNING: Required fields
+          polaris_server_url: ${{ secrets.POLARIS_SERVER_URL }}
+          polaris_access_token: ${{ secrets.POLARIS_ACCESS_TOKEN }}
+          polaris_application_name: "${{ inputs.polaris-application-name }}"  
+          polaris_project_name: ${{ inputs.polaris-project-name }}
+          polaris_assessment_types: "SAST"
+          # Optional fields
+          project_directory: ${{ inputs.polaris-working-directory }}
+          detect_config_path: ${{ inputs.polaris-config-path != '' && inputs.polaris-config-path || null}}
+          coverity_config_path: ${{ inputs.polaris-coverity-config-path != '' && inputs.polaris-coverity-config-path || null }}
+          coverity_build_command: ${{ inputs.polaris-coverity-build-command != '' && inputs.polaris-coverity-build-command || null }}
+          coverity_clean_command: ${{ inputs.polaris-coverity-clean-command != '' && inputs.polaris-coverity-clean-command || null }}
+          coverity_args: ${{ inputs.polaris-coverity-args != '' && inputs.polaris-coverity-args || null }}
+          detect_search_depth: ${{ inputs.polaris-detect-search-depth != '' && inputs.polaris-detect-search-depth || null }}
+          detect_args: ${{ inputs.polaris-detect-args != '' && inputs.polaris-detect-args || null }}
+          polaris_assessment_mode: ${{ inputs.polaris-assessment-mode }}
+          polaris_waitForScan: 'true'
+          # polaris_prComment_enabled: ${{ inputs.github-event-name == 'pull_request' && 'true' || 'false' }}
+          # polaris_branch_parent_name: ${{ inputs.github-event-name == 'pull_request' && 'main' || null }}
+          # polaris_branch_name: ${{ inputs.github-event-name == 'pull_request' && inputs.github-branch-name || null }}
+          # polaris_prComment_severities: "CRITICAL,HIGH"
+          github_token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+        continue-on-error: false
+
+      - name: BlackDuck Polaris PR scan
+        id: polaris-pr-scan
+        if: ${{ inputs.github-event-name == 'pull_request' }}
+        uses: blackduck-inc/black-duck-security-scan@v2
+        with:
+          ### SCANNING: Required fields
+          polaris_server_url: ${{ secrets.POLARIS_SERVER_URL }}
+          polaris_access_token: ${{ secrets.POLARIS_ACCESS_TOKEN }}
+          polaris_application_name: "${{ inputs.polaris-application-name }}"  
+          polaris_project_name: ${{ inputs.polaris-project-name }}
+          polaris_assessment_types: "SAST"
+          polaris_test_sast_type: "SAST_RAPID"
+          # Optional fields
+          project_directory: ${{ inputs.polaris-working-directory }}
+          detect_config_path: ${{ inputs.polaris-config-path != '' && inputs.polaris-config-path || null}}
+          coverity_config_path: ${{ inputs.polaris-coverity-config-path != '' && inputs.polaris-coverity-config-path || null }}
+          coverity_build_command: ${{ inputs.polaris-coverity-build-command != '' && inputs.polaris-coverity-build-command || null }}
+          coverity_clean_command: ${{ inputs.polaris-coverity-clean-command != '' && inputs.polaris-coverity-clean-command || null }}
+          coverity_args: ${{ inputs.polaris-coverity-args != '' && inputs.polaris-coverity-args || null }}
+          detect_search_depth: ${{ inputs.polaris-detect-search-depth != '' && inputs.polaris-detect-search-depth || null }}
+          detect_args: ${{ inputs.polaris-detect-args != '' && inputs.polaris-detect-args || null }}
+          polaris_assessment_mode: ${{ inputs.polaris-assessment-mode }}
+          polaris_waitForScan: 'true'
+          polaris_prComment_enabled: true
+          polaris_branch_parent_name: 'main'
+          polaris_branch_name: ${{ inputs.github-branch-name }}
+          polaris_prComment_severities: "CRITICAL,HIGH,MEDIUM"
+          github_token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+        continue-on-error: false
+      
+      - name: Check Polaris scan results and fail on HIGH or CRITICAL vulnerabilities
+        if: ${{ inputs.polaris-fail-on-high == true || inputs.polaris-fail-on-critical == true }}
+        run: |
+          echo "Checking Polaris SAST scan results..."
+          echo "Enforcement policy: HIGH=${{ inputs.polaris-fail-on-high }}, CRITICAL=${{ inputs.polaris-fail-on-critical }}"
+          
+          # Parse bridge.log for vulnerability counts
+          BRIDGE_LOG=".bridge/bridge.log"
+          
+          if [ ! -f "$BRIDGE_LOG" ]; then
+            echo "⚠️  Bridge log not found - failing as precaution"
+            exit 1
+          fi
+          
+          # For PR scans, check for NEW issues in the PR changes
+          # For full scans, check total issues
+          if [ "${{ inputs.github-event-name }}" == "pull_request" ]; then
+            echo "This is a PR scan - checking for NEW issues introduced in this PR"
+            
+            # Check if PR-specific issues were found
+            NO_PR_ISSUES=$(grep -i "Could not find.*issues for changes in the current branch" "$BRIDGE_LOG" || echo "")
+            
+            if [ -n "$NO_PR_ISSUES" ]; then
+              echo "✅ No new vulnerabilities introduced in this PR"
+              echo "Note: Total project issues may exist, but this PR does not introduce new ones"
+              exit 0
+            fi
+            
+            # Check if PR issues were added to commenter
+            PR_ISSUES_FOUND=$(grep -i "Added entry to resource 'commenter.issues'" "$BRIDGE_LOG" || echo "")
+            
+            if [ -n "$PR_ISSUES_FOUND" ]; then
+              echo "❌ NEW vulnerabilities found in this PR"
+              echo "Check the PR comment for details on the specific issues introduced"
+              echo "Note: Failing because new issues were detected in PR changes"
+              exit 1
+            fi
+          else
+            echo "This is a full scan - checking total project issues"
+            
+            # Extract total vulnerability counts from log
+            HIGH_COUNT=$(grep -oP '"high":\s*\K\d+' "$BRIDGE_LOG" | tail -1 || echo "0")
+            CRITICAL_COUNT=$(grep -oP '"critical":\s*\K\d+' "$BRIDGE_LOG" | tail -1 || echo "0")
+            MEDIUM_COUNT=$(grep -oP '"medium":\s*\K\d+' "$BRIDGE_LOG" | tail -1 || echo "0")
+            
+            echo "Found total issues - HIGH: $HIGH_COUNT, CRITICAL: $CRITICAL_COUNT, MEDIUM: $MEDIUM_COUNT"
+          fi
+          
+          # Ensure counts are numeric
+          HIGH_COUNT=${HIGH_COUNT:-0}
+          CRITICAL_COUNT=${CRITICAL_COUNT:-0}
+          MEDIUM_COUNT=${MEDIUM_COUNT:-0}
+          
+          # Check for policy violations
+          SHOULD_FAIL=false
+          
+          if [ "${{ inputs.polaris-fail-on-critical }}" == "true" ] && [ "$CRITICAL_COUNT" -gt 0 ]; then
+            echo "❌ Found $CRITICAL_COUNT CRITICAL vulnerabilities (policy violation)"
+            SHOULD_FAIL=true
+          fi
+          
+          if [ "${{ inputs.polaris-fail-on-high }}" == "true" ] && [ "$HIGH_COUNT" -gt 0 ]; then
+            echo "❌ Found $HIGH_COUNT HIGH vulnerabilities (policy violation)"
+            SHOULD_FAIL=true
+          fi
+
+          if [ "$MEDIUM_COUNT" -gt 0 ]; then
+            echo "⚠️  Found $MEDIUM_COUNT MEDIUM vulnerabilities (not a policy violation but should be reviewed)"
+            SHOULD_FAIL=true
+          fi
+          
+          if [ "$SHOULD_FAIL" == "true" ]; then
+            exit 1
+          else
+            echo "✅ No policy-violating vulnerabilities found"
+          fi
