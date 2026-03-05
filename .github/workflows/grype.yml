@@ -17,6 +17,11 @@ on:
         required: false
         type: boolean
         default: false
+      grype-image-skip-aws:
+        description: 'Skip Grype image scan on AWS ECR images to avoid rate limits (assumes these images are scanned with Amazon ECR scan or Trivy)'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   grype-scan:
@@ -42,6 +47,7 @@ jobs:
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
+        if: ${{ !inputs.grype-image-skip-aws }}
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -50,6 +56,7 @@ jobs:
 
       - name: Login to Amazon ECR
         id: login-ecr
+        if: ${{ !inputs.grype-image-skip-aws }}
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Scan with Grype
@@ -133,9 +140,9 @@ jobs:
           fi
           
           # Extract vulnerability counts by severity from multiple JSON documents
-          # Use jq -s to slurp all JSON objects and combine matches
-          CRITICAL_COUNT=$(jq -s '[.[] | .matches[]? | select(.vulnerability.severity == "Critical")] | length' "$JSON_FILE" 2>/dev/null || echo "0")
-          HIGH_COUNT=$(jq -s '[.[] | .matches[]? | select(.vulnerability.severity == "High")] | length' "$JSON_FILE" 2>/dev/null || echo "0")
+          # Use jq -s to slurp, deduplicate by CVE+package+version, then count
+          CRITICAL_COUNT=$(jq -s '[.[] | .matches[]? | select(.vulnerability.severity == "Critical")] | unique_by(.vulnerability.id + .artifact.name + .artifact.version) | length' "$JSON_FILE" 2>/dev/null || echo "0")
+          HIGH_COUNT=$(jq -s '[.[] | .matches[]? | select(.vulnerability.severity == "High")] | unique_by(.vulnerability.id + .artifact.name + .artifact.version) | length' "$JSON_FILE" 2>/dev/null || echo "0")
           
           echo ""
           echo "============================================"
