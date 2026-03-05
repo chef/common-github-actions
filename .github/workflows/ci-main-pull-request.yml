@@ -161,6 +161,21 @@ on:
         required: false
         type: boolean
         default: false
+      perform-wiz-scan:
+        description: 'Perform Wiz CLI scan on Docker image'
+        required: false
+        type: boolean
+        default: false
+      wiz-fail-build:
+        description: 'Fail the build on Wiz policy violations'
+        required: false
+        type: boolean
+        default: true
+      wiz-image-skip-aws:
+        description: 'Skip AWS ECR login for Wiz image scan'
+        required: false
+        type: boolean
+        default: false
       build:
         description: 'CI Build (language-specific)'
         required: false
@@ -908,6 +923,16 @@ jobs:
       fail-grype-on-high: ${{ inputs.grype-image-fail-on-high }}
       fail-grype-on-critical: ${{ inputs.grype-image-fail-on-critical }}
       grype-image-skip-aws: ${{ inputs.grype-image-skip-aws }}
+
+  run-wiz-image:
+    name: 'Wiz CLI Docker image scan'
+    if: ${{ inputs.perform-wiz-scan }}
+    uses: chef/common-github-actions/.github/workflows/wiz.yml@test-pipeline
+    needs: checkout
+    secrets: inherit
+    with:
+      fail-build: ${{ inputs.wiz-fail-build }}
+      wiz-image-skip-aws: ${{ inputs.wiz-image-skip-aws }}
   
     # run-srcclr:
     #   if: ${{ inputs.perform-srcclr-scan == true }}
