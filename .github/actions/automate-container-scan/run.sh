@@ -114,7 +114,7 @@ deploy_automate() {
     log "Progress will be logged to ${LOGS_DIR}/deploy.log"
     
     # Run deploy with timeout and capture output
-    if docker exec -w /root "${CONTAINER_ID}" timeout 1800 chef-automate deploy config.toml --accept-terms-and-mlsa \
+    if docker exec -w /root "${CONTAINER_ID}" timeout 1800 chef-automate deploy --channel ${CHANNEL} config.toml --accept-terms-and-mlsa \
         > "${LOGS_DIR}/deploy.log" 2>&1; then
         log "Automate deployment completed successfully"
     else

@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y \
 # Download and install Chef Automate CLI
 # Reference: https://docs.chef.io/automate/install/
 # Uses chefdownload-commercial API: /{channel}/automate/download?p=linux&m=amd64&v=latest&eol=false&license_id={license}
-RUN curl -L "https://chefdownload-commercial.chef.io/${CHANNEL}/automate/download?p=linux&m=amd64&v=latest&eol=false&license_id=${LICENSE_ID}" \
+RUN curl -L "https://chefdownload-commercial.chef.io/current/automate/download?p=linux&m=amd64&v=latest&eol=false&license_id=${LICENSE_ID}" \
     -o /tmp/chef-automate.zip \
     && unzip /tmp/chef-automate.zip -d /tmp \
     && mv /tmp/chef-automate /usr/local/bin/chef-automate \
