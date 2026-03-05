@@ -277,8 +277,9 @@ jobs:
           # Start with base arguments (always exclude PIP detector)
           DETECT_ARGS="--detect.excluded.detector.types=PIP"
           
-          # Add timeout configurations to prevent FAILURE_TIMEOUT errors
-          DETECT_ARGS="${DETECT_ARGS} --detect.timeout=1800"
+          # Add timeout configurations to prevent BOM scan timeouts
+          DETECT_ARGS="${DETECT_ARGS} --detect.timeout=3600"
+          DETECT_ARGS="${DETECT_ARGS} --blackduck.timeout=1200"
           
           # Add low accuracy mode if requested
           if [[ "${{ inputs.blackduck-force-low-accuracy-mode }}" == "true" ]]; then
