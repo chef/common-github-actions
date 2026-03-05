@@ -512,7 +512,13 @@ if scan_mode == "habitat":
         )
     
     # Ensure hab CLI is available
-    run(["bash", "-lc", "command -v hab >/dev/null 2>&1 || (curl -fsSL https://raw.githubusercontent.com/habitat-sh/habitat/master/components/hab/install.sh | sudo bash)"], check=True)
+    # Note: chef/hab itself now requires HAB_AUTH_TOKEN even from stable channel.
+    # sudo strips environment variables by default, so pass the token inline when available.
+    if hab_auth_token:
+        install_hab_cmd = f"command -v hab >/dev/null 2>&1 || (curl -fsSL https://raw.githubusercontent.com/habitat-sh/habitat/master/components/hab/install.sh | sudo HAB_AUTH_TOKEN={hab_auth_token} bash)"
+    else:
+        install_hab_cmd = "command -v hab >/dev/null 2>&1 || (curl -fsSL https://raw.githubusercontent.com/habitat-sh/habitat/master/components/hab/install.sh | sudo bash)"
+    run(["bash", "-lc", install_hab_cmd], check=True)
     
     # Accept the Chef License for Habitat (CI environment - create marker file for root)
     run(["bash", "-lc", "sudo mkdir -p /hab/accepted-licenses && sudo touch /hab/accepted-licenses/habitat"], check=True)
