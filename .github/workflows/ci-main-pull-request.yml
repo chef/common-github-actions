@@ -784,15 +784,16 @@ jobs:
     with:
       fail-trufflehog-on-secrets-found: ${{ inputs.fail-trufflehog-on-secrets-found }}
 
-  run-trivy:
-    name: 'Trivy scan'
-    if: ${{ inputs.perform-trivy-scan }}
-    uses: chef/common-github-actions/.github/workflows/trivy.yml@main
-    needs: checkout
-    with:
-      version: ${{ inputs.version }}
-      trivy-fail-on-high: ${{ inputs.trivy-fail-on-high }}
-      trivy-fail-on-critical: ${{ inputs.trivy-fail-on-critical }}
+      # temporarily commenting out trivy scan due to https://www.stepsecurity.io/blog/hackerbot-claw-github-actions-exploitation
+  # run-trivy:
+  #   name: 'Trivy scan'
+  #   if: ${{ inputs.perform-trivy-scan }}
+  #   uses: chef/common-github-actions/.github/workflows/trivy.yml@main
+  #   needs: checkout
+  #   with:
+  #     version: ${{ inputs.version }}
+  #     trivy-fail-on-high: ${{ inputs.trivy-fail-on-high }}
+  #     trivy-fail-on-critical: ${{ inputs.trivy-fail-on-critical }}
 
   run-grype:
     name: 'Grype scan'
