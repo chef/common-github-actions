@@ -998,7 +998,7 @@ jobs:
         if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y autoconf automake
+          sudo apt-get install -y autoconf automake gnu-config
 
       - name: 'Ruby build'
         if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}

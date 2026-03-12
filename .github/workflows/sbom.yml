@@ -254,7 +254,7 @@ jobs:
         if: ${{ inputs.run-bundle-install == true && inputs.language == 'ruby' }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y autoconf automake
+          sudo apt-get install -y autoconf automake gnu-config
 
       - name: Set up Erlang/OTP and rebar3
         if: inputs.language == 'erlang'
