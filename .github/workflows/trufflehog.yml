@@ -38,12 +38,6 @@ jobs:
           git fetch origin main
           git branch main origin/main
 
-      - name: Setup git refs for PR scan
-        if: ${{ inputs.github-event-name == 'pull_request' }}
-        run: |
-          git fetch origin main
-          git branch main origin/main
-
       - name: TruffleHog Full secret scan
         id: trufflehog-full-scan
         if: ${{ inputs.github-event-name != 'pull_request' }}
