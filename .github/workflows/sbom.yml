@@ -250,6 +250,12 @@ jobs:
           fi
           bundle config set --local github.com "x-access-token:${{ secrets.PRIVATE_ACCESS_KITCHEN_CHEF_ENTERPRISE }}"
 
+      - name: Install autoconf and automake for dep-selector-libgecode
+        if: ${{ inputs.run-bundle-install == true && inputs.language == 'ruby' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y autoconf automake
+
       - name: Set up Erlang/OTP and rebar3
         if: inputs.language == 'erlang'
         uses: erlef/setup-beam@v1

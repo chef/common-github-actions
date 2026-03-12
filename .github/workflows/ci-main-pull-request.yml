@@ -994,6 +994,12 @@ jobs:
           fi
           bundle config set --local github.com "x-access-token:${{ secrets.PRIVATE_ACCESS_KITCHEN_CHEF_ENTERPRISE }}"
 
+      - name: Install autoconf and automake for dep-selector-libgecode
+        if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y autoconf automake
+
       - name: 'Ruby build'
         if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}
         continue-on-error: true
@@ -1471,7 +1477,7 @@ jobs:
     name: 'Generating SBOM'
     #    Create software bill-of-materials (SBOM) using SPDX format
     if: ${{ inputs.generate-sbom == true }}
-    uses: chef/common-github-actions/.github/workflows/sbom.yml@main
+    uses: chef/common-github-actions/.github/workflows/sbom.yml@nikhil/fix-package-dep-issue
     needs: checkout # TODO: fix set-application-version
     secrets: inherit
     with:
