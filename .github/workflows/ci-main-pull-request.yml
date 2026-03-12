@@ -985,6 +985,14 @@ jobs:
           ruby-version: '3.4'
           bundler-cache: false
 
+      - name: Install Ruby native extension build dependencies
+        if: ${{ inputs.language == 'ruby' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y autotools-dev
+          # Copy config.guess and config.sub to where legacy configure scripts can find them
+          sudo cp /usr/share/misc/config.guess /usr/share/misc/config.sub /usr/local/share/ 2>/dev/null || true
+
       - name: Configure Bundler for private Ruby gems
         if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}
         run: |
@@ -993,12 +1001,6 @@ jobs:
             exit 0
           fi
           bundle config set --local github.com "x-access-token:${{ secrets.PRIVATE_ACCESS_KITCHEN_CHEF_ENTERPRISE }}"
-
-      - name: Install autoconf and automake for dep-selector-libgecode
-        if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y autoconf automake gnu-config
 
       - name: 'Ruby build'
         if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}
