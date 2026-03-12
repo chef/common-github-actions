@@ -989,7 +989,7 @@ jobs:
         if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}
         run: |
           if [ -z "${{ secrets.PRIVATE_ACCESS_KITCHEN_CHEF_ENTERPRISE }}" ]; then
-            echo "⚠️  Skipping: PRIVATE_ACCESS_KITCHEN_CHEF_ENTERPRISE secret not configured or not in scope"
+            echo "Skipping: PRIVATE_ACCESS_KITCHEN_CHEF_ENTERPRISE secret not configured or not in scope"
             exit 0
           fi
           bundle config set --local github.com "x-access-token:${{ secrets.PRIVATE_ACCESS_KITCHEN_CHEF_ENTERPRISE }}"
