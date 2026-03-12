@@ -245,9 +245,7 @@ jobs:
         if: ${{ inputs.language == 'ruby' }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y autotools-dev
-          # Copy config.guess and config.sub to where legacy configure scripts can find them
-          sudo cp /usr/share/misc/config.guess /usr/share/misc/config.sub /usr/local/share/ 2>/dev/null || true
+          sudo apt-get install -y automake
 
       - name: Configure Bundler for private Ruby gems
         if: ${{ inputs.run-bundle-install == true && inputs.language == 'ruby' }}
