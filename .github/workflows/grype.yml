@@ -73,6 +73,9 @@ jobs:
           
           echo "Building Docker image..."
           REPO_NAME=$(basename $(pwd))
+          export APP_VERSION=${{ inputs.app_version || 'latest'}}
+          export GIT_SHA=${{ github.sha }}
+          export DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           
           # Strategy 1: Check for build-docker.sh script (e.g., dsm-erchef)
           if [ -f "build-docker.sh" ]; then
