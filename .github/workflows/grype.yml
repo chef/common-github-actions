@@ -79,22 +79,17 @@ jobs:
             echo "Found build-docker.sh script - using it to build images"
             chmod +x build-docker.sh
             
-            # Snapshot image IDs before build to detect newly built images
-            BEFORE_IMAGES=$(docker images --format "{{.ID}}" | sort)
+            # Snapshot image names before build to detect newly built images
+            BEFORE_IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -v "^<none>" | sort)
             
             GITHUB_TOKEN="${{ secrets.GH_TOKEN }}" ./build-docker.sh
             
             # Detect newly built images by comparing before/after snapshots
-            AFTER_IMAGES=$(docker images --format "{{.ID}}" | sort)
-            NEW_IDS=$(comm -13 <(echo "$BEFORE_IMAGES") <(echo "$AFTER_IMAGES"))
+            AFTER_IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -v "^<none>" | sort)
+            IMAGES=$(comm -13 <(echo "$BEFORE_IMAGES") <(echo "$AFTER_IMAGES"))
             
-            if [ -n "$NEW_IDS" ]; then
-              IMAGES=""
-              for ID in $NEW_IDS; do
-                IMG=$(docker images --format "{{.Repository}}:{{.Tag}}" --filter "id=$ID" | grep -v "^<none>" | head -1)
-                [ -n "$IMG" ] && IMAGES="${IMAGES}${IMG}"$'\n'
-              done
-              IMAGES=$(echo "$IMAGES" | sed '/^$/d')
+            if [ -n "$IMAGES" ]; then
+              echo "Detected newly built images via before/after diff"
             fi
             
             # Fallback: try matching by repo name prefix

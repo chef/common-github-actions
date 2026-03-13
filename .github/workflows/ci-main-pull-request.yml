@@ -42,399 +42,399 @@ on:
   workflow_call:
     inputs:
       github-event-name:
-        description: "GitHub event name (pass github.event_name from calling workflow for PR comment detection)"
+        description: 'GitHub event name (pass github.event_name from calling workflow for PR comment detection)'
         required: false
         type: string
-        default: ""
+        default: ''
       github-branch-name:
-        description: "GitHub branch name (pass github.ref_name from calling workflow for branch-specific logic)"
+        description: 'GitHub branch name (pass github.ref_name from calling workflow for branch-specific logic)'
         required: false
         type: string
-        default: ""
+        default: ''
       application:
         # NEW IN 1.0.7
-        description: "Application set in repository custom properties, typically primaryApplication"
+        description: 'Application set in repository custom properties, typically primaryApplication'
         required: false
         type: string
       visibility:
-        description: "Visibility of the repository"
+        description: 'Visibility of the repository'
         required: false
         type: string
-        default: "public" # (private, public, or internal) TODO: should be removed, we know this from github.event.repository.visibility
+        default: 'public' # (private, public, or internal) TODO: should be removed, we know this from github.event.repository.visibility
       go-private-modules:
-        description: "GOPRIVATE for Go private modules"
+        description: 'GOPRIVATE for Go private modules'
         required: false
         type: string
-        default: "github.com/progress-platform-services/*"
+        default: 'github.com/progress-platform-services/*'
       version:
-        description: "Version of the project"
+        description: 'Version of the project'
         required: false
         type: string
-        default: "1.0.0"
+        default: '1.0.0'
       detect-version-source-type: # options include "none" (do not detect), "file", "github-tag" or "github-release"
-        description: "flag to determine how to detect version dynamically"
+        description: 'flag to determine how to detect version dynamically'
         required: false
         type: string
-        default: "none"
+        default: 'none'
       detect-version-source-parameter: # use for file name
         required: false
         type: string
-        default: ""
+        default: ''
       language:
-        description: "Build language (Go, Ruby, Rust, PL/pgSQL, etc.), typically from the repository custom property GABuildLanguage"
+        description: 'Build language (Go, Ruby, Rust, PL/pgSQL, etc.), typically from the repository custom property GABuildLanguage'
         required: false
         type: string
-        default: "ruby"
+        default: 'ruby'
 
       perform-complexity-checks:
-        description: "Perform complexity checks with SCC"
+        description: 'Perform complexity checks with SCC'
         required: false
         type: boolean
         default: true
       scc-output-filename:
-        description: "Name of the SCC complexity output file artifact, do not add file extension"
+        description: 'Name of the SCC complexity output file artifact, do not add file extension'
         required: false
         type: string
-        default: "scc-complexity"
+        default: 'scc-complexity'
       perform-language-linting:
-        description: "Perform language-specific linting and pre-compilation checks"
+        description: 'Perform language-specific linting and pre-compilation checks'
         required: false
         type: boolean
         default: true
       perform-trufflehog-scan:
-        description: "Perform trufflehog scan"
+        description: 'Perform trufflehog scan'
         required: false
         type: boolean
         default: true
       fail-trufflehog-on-secrets-found:
-        description: "Fail the pipeline if Trufflehog finds verified secrets"
+        description: 'Fail the pipeline if Trufflehog finds verified secrets'
         required: false
         type: boolean
         default: true
       perform-trivy-scan:
-        description: "Perform Trivy scan"
+        description: 'Perform Trivy scan'
         required: false
         type: boolean
         default: true
       trivy-fail-on-high:
-        description: "Fail pipeline if Trivy finds HIGH vulnerabilities"
+        description: 'Fail pipeline if Trivy finds HIGH vulnerabilities'
         required: false
         type: boolean
         default: false
       trivy-fail-on-critical:
-        description: "Fail pipeline if Trivy finds CRITICAL vulnerabilities"
+        description: 'Fail pipeline if Trivy finds CRITICAL vulnerabilities'
         required: false
         type: boolean
         default: false
       perform-grype-scan:
-        description: "Perform Grype scan on source code"
+        description: 'Perform Grype scan on source code'
         required: false
         type: boolean
         default: false
       grype-fail-on-high:
-        description: "Fail pipeline if Grype finds HIGH vulnerabilities"
+        description: 'Fail pipeline if Grype finds HIGH vulnerabilities'
         required: false
         type: boolean
         default: false
       grype-fail-on-critical:
-        description: "Fail pipeline if Grype finds CRITICAL vulnerabilities"
+        description: 'Fail pipeline if Grype finds CRITICAL vulnerabilities'
         required: false
         type: boolean
         default: false
       perform-grype-image-scan:
-        description: "Perform Grype scan on Docker image"
+        description: 'Perform Grype scan on Docker image'
         required: false
         type: boolean
         default: false
       grype-image-fail-on-high:
-        description: "Fail pipeline if Grype image scan finds HIGH vulnerabilities"
+        description: 'Fail pipeline if Grype image scan finds HIGH vulnerabilities'
         required: false
         type: boolean
         default: false
       grype-image-fail-on-critical:
-        description: "Fail pipeline if Grype image scan finds CRITICAL vulnerabilities"
+        description: 'Fail pipeline if Grype image scan finds CRITICAL vulnerabilities'
         required: false
         type: boolean
         default: false
       grype-image-skip-aws:
-        description: "Skip Grype image scan on AWS ECR images to avoid rate limits (assumes these images are scanned with Amazon ECR scan or Trivy)"
+        description: 'Skip Grype image scan on AWS ECR images to avoid rate limits (assumes these images are scanned with Amazon ECR scan or Trivy)'
         required: false
         type: boolean
         default: false
       build:
-        description: "CI Build (language-specific)"
+        description: 'CI Build (language-specific)'
         required: false
         type: boolean
         default: true
       build-profile:
         # NEW IN 1.0.7
-        description: "Build profile for build step and Sonar, typically from the custom property GABuildProfile on the repository"
+        description: 'Build profile for build step and Sonar, typically from the custom property GABuildProfile on the repository'
         required: false
         type: string
-        default: "cli"
+        default: 'cli'
       unit-tests:
-        description: "Run unit tests (language-specific)"
+        description: 'Run unit tests (language-specific)'
         required: false
         type: boolean
         default: true
       unit-test-output-path:
         # NEW IN 1.0.7
-        description: "Path to test results folder"
+        description: 'Path to test results folder'
         required: false
         type: string
-        default: "test/unittest"
+        default: 'test/unittest'
       unit-test-command-override:
         # NEW IN 1.0.7
-        description: "Command line for running tests in this repo, if not the language default"
+        description: 'Command line for running tests in this repo, if not the language default'
         required: false
         type: string
 
       perform-blackduck-polaris:
-        description: "Perform BlackDuck Polaris (SAST) scan"
+        description: 'Perform BlackDuck Polaris (SAST) scan'
         required: false
         type: boolean
         default: false
       polaris-application-name:
-        description: "Polaris application name, one of these {Chef-Agents | Chef-Automate | Chef-Chef360 | Chef-Habitat | Chef-Infrastructure-Server | Chef-Shared-Services}"
+        description: 'Polaris application name, one of these {Chef-Agents | Chef-Automate | Chef-Chef360 | Chef-Habitat | Chef-Infrastructure-Server | Chef-Shared-Services}'
         required: false
         type: string
       polaris-project-name:
-        description: "Polaris project name, typically the application name, followed by - and the repository name, for example Chef-Chef360-chef-vault"
+        description: 'Polaris project name, typically the application name, followed by - and the repository name, for example Chef-Chef360-chef-vault'
         required: false
-        default: "${{ github.event.repository.name }}"
+        default: '${{ github.event.repository.name }}'
         type: string
       polaris-working-directory:
         # NEW IN 1.0.7
-        description: "Working directory for the scan, defaults to . but usually lang-dependent like ./src"
+        description: 'Working directory for the scan, defaults to . but usually lang-dependent like ./src'
         required: false
-        default: "."
+        default: '.'
         type: string
       polaris-config-path:
         # NEW IN 1.0.7
-        description: "Path to Detect configuration file, typically a file supplied at root level like ./detect-config.yml"
+        description: 'Path to Detect configuration file, typically a file supplied at root level like ./detect-config.yml'
         required: false
-        default: ""
+        default: ''
         type: string
       polaris-coverity-config-path:
         # NEW IN 1.0.7
-        description: "Path to Coverity configuration file, typically a file supplied at root level like ./coverity.yml"
+        description: 'Path to Coverity configuration file, typically a file supplied at root level like ./coverity.yml'
         required: false
-        default: ""
+        default: ''
         type: string
       polaris-coverity-clean-command:
         # NEW IN 1.0.7
         description: 'Coverity clean command, typically done before build stage by language or here as param 1-liner like "mvn clean". Leave empty for buildless analysis (Ruby, Python, etc.)'
         required: false
-        default: ""
+        default: ''
         type: string
       polaris-coverity-build-command:
         # NEW IN 1.0.7
         description: 'Coverity build command, typically done in build stage by language or here as param 1-liner like "mvn clean install". Leave empty for buildless analysis (Ruby, Python, etc.)'
         required: false
-        default: ""
+        default: ''
         type: string
       polaris-coverity-args:
         # NEW IN 1.0.7
         description: 'Additional Coverity arguments,can supply extra arguments like "--config-override capture.build.build-command=make'
         required: false
-        default: ""
+        default: ''
         type: string
       polaris-detect-search-depth:
         # NEW IN 1.0.7
         description: 'Detect search depth, blank but can be set to "3" to search up to 3 levels of subdirectories for code to scan'
         required: false
-        default: ""
+        default: ''
         type: string
       polaris-detect-args:
         # NEW IN 1.0.7
         description: 'Additional Detect arguments, can supply extra arguments like "--detect.diagnostic=true"'
         required: false
-        default: ""
+        default: ''
         type: string
       polaris-assessment-mode:
         # NEW IN 1.0.7
-        description: "Assessment mode (CI or SOURCE_UPLOAD)"
+        description: 'Assessment mode (CI or SOURCE_UPLOAD)'
         required: false
-        default: "CI"
+        default: 'CI'
         type: string
       wait-for-scan:
         # NEW IN 1.0.7
-        description: "Wait for scan completion"
+        description: 'Wait for scan completion'
         required: false
         default: true
         type: boolean
       polaris-fail-on-high:
-        description: "Fail the pipeline if Polaris SAST scan finds HIGH vulnerabilities"
+        description: 'Fail the pipeline if Polaris SAST scan finds HIGH vulnerabilities'
         required: false
         type: boolean
         default: false
       polaris-fail-on-critical:
-        description: "Fail the pipeline if Polaris SAST scan finds CRITICAL vulnerabilities"
+        description: 'Fail the pipeline if Polaris SAST scan finds CRITICAL vulnerabilities'
         required: false
         type: boolean
         default: false
 
       perform-sonarqube-scan:
-        description: "Perform basic SonarQube scan"
+        description: 'Perform basic SonarQube scan'
         required: false
         type: boolean
         default: true
       perform-docker-scan:
-        description: "Perform Docker scan of Dockerfile and built images in chef360 and other containerized applications"
+        description: 'Perform Docker scan of Dockerfile and built images in chef360 and other containerized applications'
         required: false
         type: boolean
         default: false
       report-unit-test-coverage:
-        description: "Perform unit tests and report coverage to SonarQube"
+        description: 'Perform unit tests and report coverage to SonarQube'
         required: false
         type: boolean
         default: true
       report-to-atlassian-dashboard:
-        description: "Report Sonar test coverage and other metrics to Atlassian dashboard (Irfans QA dashboard)"
+        description: 'Report Sonar test coverage and other metrics to Atlassian dashboard (Irfans QA dashboard)'
         required: false
         type: boolean
         default: true
       quality-product-name:
-        description: "Product name for quality reporting (Chef360, Courier, Inspec)"
+        description: 'Product name for quality reporting (Chef360, Courier, Inspec)'
         required: false
         type: string
-        default: "Chef360"
+        default: 'Chef360'
       quality-sonar-app-name:
-        description: "Sonar application name for quality reporting"
+        description: 'Sonar application name for quality reporting'
         required: false
         type: string
-        default: "YourSonarAppName"
+        default: 'YourSonarAppName'
       quality-testing-type:
-        description: "Testing type for quality reporting (Unit, Integration, e2e, api, Performance, Security)"
+        description: 'Testing type for quality reporting (Unit, Integration, e2e, api, Performance, Security)'
         required: false
         type: string
-        default: "Integration"
+        default: 'Integration'
       quality-service-name:
-        description: "Service or repository name for quality reporting"
+        description: 'Service or repository name for quality reporting'
         required: false
         type: string
-        default: "YourServiceOrRepoName"
+        default: 'YourServiceOrRepoName'
       quality-junit-report:
-        description: "Path to JUnit report for quality reporting"
+        description: 'Path to JUnit report for quality reporting'
         required: false
         type: string
-        default: "path/to/junit/report"
+        default: 'path/to/junit/report'
       package-binaries:
-        description: "Package binaries (e.g., RPM, DEB, MSI, dpkg + signing + SHA)"
+        description: 'Package binaries (e.g., RPM, DEB, MSI, dpkg + signing + SHA)'
         required: false
         type: boolean
         default: true
       habitat-build:
-        description: "Create Habitat packages"
+        description: 'Create Habitat packages'
         required: false
         type: boolean
         default: true
       publish-habitat-packages:
         # NEW IN 1.0.7
-        description: "Publish Habitat packages to Builder"
+        description: 'Publish Habitat packages to Builder'
         required: false
         type: boolean
         default: false
       publish-habitat-hab_package:
         # NEW IN 1.0.7
-        description: "Chef Habitat package to install (e.g., core/nginx)"
+        description: 'Chef Habitat package to install (e.g., core/nginx)'
         required: false
         type: string
-        default: "core/nginx"
+        default: 'core/nginx'
         # TODO: detect from plan file if not provided
       publish-habitat-hab_version:
         # NEW IN 1.0.7
-        description: "Chef Habitat package version (optional)"
+        description: 'Chef Habitat package version (optional)'
         required: false
         type: string
       publish-habitat-hab_release:
         # NEW IN 1.0.7
-        description: "Chef Habitat package release (optional)"
+        description: 'Chef Habitat package release (optional)'
         required: false
         type: string
       publish-habitat-hab_channel:
         # NEW IN 1.0.7
-        description: "Chef Habitat package channel (e.g., stable, base, base-2025); default is stable"
+        description: 'Chef Habitat package channel (e.g., stable, base, base-2025); default is stable'
         required: false
         type: string
-        default: "stable"
+        default: 'stable'
       publish-habitat-hab_auth_token:
         # NEW IN 1.0.7
         required: false
         type: string
         # TODO: use secret if not provided
       publish-habitat-runner_os:
-        description: "Runner OS to use (ubuntu-latest or windows-latest)"
+        description: 'Runner OS to use (ubuntu-latest or windows-latest)'
         type: string
         # TODO: these should be options: ubuntu-latest, windows-latest, both, and add MacOS support
         required: false
         default: ubuntu-latest
       habitat-grype-scan:
         # NEW IN 1.0.7
-        description: "Scan built Habitat packages with Grype for vulnerabilities"
+        description: 'Scan built Habitat packages with Grype for vulnerabilities'
         required: false
         type: boolean
         default: false
       publish-packages:
-        description: "Publish packages (e.g., container from Dockerfile to ECR, go-releaser binary to releases page, omnibus to artifactory, gems, choco, homebrew, other app stores)"
+        description: 'Publish packages (e.g., container from Dockerfile to ECR, go-releaser binary to releases page, omnibus to artifactory, gems, choco, homebrew, other app stores)'
         required: false
         type: boolean
         default: true
 
       generate-sbom:
-        description: "Generate software bill-of-materials (SPDX SBOM)"
+        description: 'Generate software bill-of-materials (SPDX SBOM)'
         required: false
         type: boolean
         default: true
       export-github-sbom:
-        description: "Export SBOM to GitHub"
+        description: 'Export SBOM to GitHub'
         required: false
         type: boolean
         default: true
       generate-msft-sbom:
-        description: "Generate SBOM using MSFT tools"
+        description: 'Generate SBOM using MSFT tools'
         required: false
         type: boolean
         default: true
       license_scout:
-        description: "Run license scout for license compliance"
+        description: 'Run license scout for license compliance'
         required: false
         type: boolean
         default: true
 
       perform-blackduck-sca-scan: # combined with generate sbom below, also needs version above
-        description: "Perform BlackDuck SCA scan"
+        description: 'Perform BlackDuck SCA scan'
         required: false
         type: boolean
         default: false
       blackduck-project-group-name:
-        description: "BlackDuck project group name, typically one of (Chef), Chef-Agents, Chef-Automate, Chef-Chef360, Chef-Habitat, Chef-Infrastructure-Server, Chef-Shared-Services"
+        description: 'BlackDuck project group name, typically one of (Chef), Chef-Agents, Chef-Automate, Chef-Chef360, Chef-Habitat, Chef-Infrastructure-Server, Chef-Shared-Services'
         required: false
         type: string
-        default: "Chef"
+        default: 'Chef'
       blackduck-project-name:
-        description: "BlackDuck project name, typically the repository name"
+        description: 'BlackDuck project name, typically the repository name'
         required: false
         type: string
         default: ${{ github.event.repository.name }}
       polaris-blackduck-executable:
         # TODO: this will be obsolete with built-in polaris in action
-        description: "Path to BlackDuck polaris executable after build or download step"
+        description: 'Path to BlackDuck polaris executable after build or download step'
         required: false
         type: string
-        default: "path/to/blackduck/binary"
+        default: 'path/to/blackduck/binary'
       polaris-executable-detect-path:
-        description: "Additions to $PATH for BlackDuck polaris to find executable"
+        description: 'Additions to $PATH for BlackDuck polaris to find executable'
         required: false
         type: string
-        default: "path/to/detect"
+        default: 'path/to/detect'
       blackduck-force-low-accuracy-mode:
-        description: "Force low accuracy mode for BlackDuck SCA scan to speed up scan time at the cost of accuracy (not recommended for production use)"
+        description: 'Force low accuracy mode for BlackDuck SCA scan to speed up scan time at the cost of accuracy (not recommended for production use)'
         required: false
         type: boolean
         default: false
       run-bundle-install: # Added to support projects without committed Gemfile.lock (e.g., chef-cli)
-        description: "Run bundle install before scanning to generate Gemfile.lock at runtime"
+        description: 'Run bundle install before scanning to generate Gemfile.lock at runtime'
         required: false
         type: boolean
         default: false
@@ -442,42 +442,42 @@ on:
         description: 'Subdirectory containing Ruby Gemfile (e.g., "src/supermarket" for repos with non-root Gemfile location). Leave empty if Gemfile is in root.'
         required: false
         type: string
-        default: ""
+        default: ''
       blackduck-fail-on-blocker:
-        description: "Fail the pipeline if BlackDuck SCA scan finds BLOCKER vulnerabilities"
+        description: 'Fail the pipeline if BlackDuck SCA scan finds BLOCKER vulnerabilities'
         required: false
         type: boolean
         default: false
       blackduck-fail-on-critical:
-        description: "Fail the pipeline if BlackDuck SCA scan finds CRITICAL vulnerabilities"
+        description: 'Fail the pipeline if BlackDuck SCA scan finds CRITICAL vulnerabilities'
         required: false
         type: boolean
         default: false
       blackduck-fail-on-major:
-        description: "Fail the pipeline if BlackDuck SCA scan finds MAJOR vulnerabilities"
+        description: 'Fail the pipeline if BlackDuck SCA scan finds MAJOR vulnerabilities'
         required: false
         type: boolean
         default: false
 
       udf1:
-        description: "User defined flag 1"
+        description: 'User defined flag 1'
         required: false
         type: string
-        default: "default"
+        default: 'default'
       udf2:
-        description: "User defined flag 2"
+        description: 'User defined flag 2'
         required: false
         type: string
-        default: "default"
+        default: 'default'
       udf3:
-        description: "User defined flag 3"
+        description: 'User defined flag 3'
         required: false
         type: string
-        default: "default"
+        default: 'default'
 
       # no longer used (retained just for older stub versions)
       generate-blackduck-sbom: # obsolete
-        description: "Generate SBOM using BlackDuck polaris (OBSOLETE, use perform-blackduck-sca-scan instead)"
+        description: 'Generate SBOM using BlackDuck polaris (OBSOLETE, use perform-blackduck-sca-scan instead)'
         required: false
         type: boolean
         default: false
@@ -492,17 +492,17 @@ env:
   PRIMARY_APPLICATION: ${{ inputs.application }} # was 'default'   # Custom repo property [primaryApplication]: chef360, automate, infra-server, habitat, supermarket, licensing, downloads, chef-client, inspec, chef-workstation (or derivatives like habitat-builder)
   REPO_VISIBILITY: ${{ github.event.repository.visibility }}
   REPO_NAME: ${{ github.event.repository.name }}
-  PIPELINE_VERSION: "1.0.7" # version of this CI pipeline
+  PIPELINE_VERSION: '1.0.7' # version of this CI pipeline
   GA_BUILD_LANGUAGE: ${{ inputs.language}} # Custom repo property [GABuildLanguage]: go, ruby, erlang, rust, plpgsql (replaces Language input)
   GA_BUILD_PROFILE: ${{ inputs.build-profile }} # Custom repo property [GABuildProfile]: TBD
   # APP_VERSION: $(cat VERSION)
   FILE_PREFIX: $(echo "${{ github.repository }}" | sed 's|/|-|g')-$(date +%Y%m%d%H%M%S)
-  DEFAULT_FILE_EXTENSION: ".json"
-  DEFAULT_SEPARATOR: "-"
+  DEFAULT_FILE_EXTENSION: '.json'
+  DEFAULT_SEPARATOR: '-'
 
 jobs:
   precompilation-checks:
-    name: "Pre-compilation checks"
+    name: 'Pre-compilation checks'
     runs-on: ubuntu-latest
     steps:
       - name: detect-custom-properties
@@ -533,7 +533,7 @@ jobs:
           echo "FILE_PREFIX=${FILE_PREFIX}" >> $GITHUB_ENV
         # FILE_NAME=$(echo "${{ env.FILE_PREFIX }}${{ env.DEFAULT_SEPARATOR }}${{ env.DEFAULT_FILE_NAME }}${{ env.DEFAULT_FILE_EXTENSION }}")
 
-      - name: "Echo inputs"
+      - name: 'Echo inputs'
         run: |
           echo "CI pipeline execution plan for repository [$REPO_NAME] with pipeline version $PIPELINE_VERSION"
           echo "Environment variables"
@@ -658,7 +658,7 @@ jobs:
           # echo ${{ secrets.GITHUB_TOKEN }} DO NOT ECHO THIS
 
   checkout:
-    name: "Checkout repository"
+    name: 'Checkout repository'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -667,7 +667,7 @@ jobs:
           fetch-depth: 0
 
   scc:
-    name: "Source code complexity checks"
+    name: 'Source code complexity checks'
     if: ${{ inputs.perform-complexity-checks == true }}
     uses: chef/common-github-actions/.github/workflows/scc.yml@main
     needs: checkout
@@ -675,7 +675,7 @@ jobs:
       outputfilename: ${{ inputs.scc-output-filename }}
 
   language-specific-checks:
-    name: "Language-specific pre-compilation steps and linting"
+    name: 'Language-specific pre-compilation steps and linting'
     # TODO: make three separate flows, by language with all steps (as oposed to one file per step with language-branching in each)
     # language specific tests (gosec, rubocop, linters, etc.)
     # ${{ inputs.language == 'rust' && inputs.perform-language-linting == true }}
@@ -699,7 +699,7 @@ jobs:
         if: inputs.language == 'ruby'
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "3.4"
+          ruby-version: '3.4'
           bundler-cache: true # runs 'bundle install' and caches installed gems automatically
         # generate gemfile.lock (TODO: move this below to OWASP)
       - name: RuboCop Lint
@@ -722,7 +722,7 @@ jobs:
         if: inputs.language == 'go'
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: '1.24'
           check-latest: true
       - name: Configure git for private Go modules
         if: inputs.language == 'go'
@@ -805,7 +805,7 @@ jobs:
           done
 
   language-agnostic-checks:
-    name: "Language-agnostic pre-compilation steps"
+    name: 'Language-agnostic pre-compilation steps'
     if: inputs.perform-language-linting
     runs-on: ubuntu-latest
     needs: checkout
@@ -840,7 +840,7 @@ jobs:
         # TODO: correct artifact upload names like Sonu's in sbom.yml
 
   run-trufflehog:
-    name: "Trufflehog scan"
+    name: 'Trufflehog scan'
     if: ${{ inputs.perform-trufflehog-scan }}
     uses: chef/common-github-actions/.github/workflows/trufflehog.yml@main
     needs: checkout
@@ -861,7 +861,7 @@ jobs:
   #     trivy-fail-on-critical: ${{ inputs.trivy-fail-on-critical }}
 
   run-grype:
-    name: "Grype scan"
+    name: 'Grype scan'
     if: ${{ inputs.perform-grype-scan }}
     runs-on: ubuntu-latest
     needs: checkout # TODO: fix set-application-version
@@ -947,9 +947,9 @@ jobs:
       #     severity-cutoff: high
 
   run-grype-image:
-    name: "Grype Docker image scan"
+    name: 'Grype Docker image scan'
     if: ${{ inputs.perform-grype-image-scan }}
-    uses: chef/common-github-actions/.github/workflows/grype.yml@main
+    uses: chef/common-github-actions/.github/workflows/grype.yml@add-plpgsql-support
     needs: checkout
     secrets: inherit
     with:
@@ -969,14 +969,14 @@ jobs:
     #   secrets: inherit
 
   ci-build:
-    name: "Build/compilation and unit tests (CI)"
+    name: 'Build/compilation and unit tests (CI)'
     if: ${{ inputs.build == true }}
     needs: checkout
     timeout-minutes: 40 # Maximum allowed minutes for GitHub-hosted runners (6 hours = 360 minutes)
     runs-on: ubuntu-latest
     # TODO: make this matrix strategy, and allow language compiler version overrides
     steps:
-      - name: "Build language: ${{ inputs.language }}"
+      - name: 'Build language: ${{ inputs.language }}'
         run: |
           echo "Building application in language ${{ env.GA_BUILD_LANGUAGE }}"
           echo " passed in with ${{ inputs.language }}"
@@ -989,7 +989,7 @@ jobs:
         env:
           GOPRIVATE: ${{ inputs.go-private-modules }}
         run: git config --global url."https://${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
-      - name: "Go build"
+      - name: 'Go build'
         if: ${{ inputs.language == 'go' && env.GA_BUILD_PROFILE == 'cli' }}
         continue-on-error: true
         # TODO: make this a matrix on WIndows/Mac/Linux
@@ -999,7 +999,7 @@ jobs:
           pwd
           go mod tidy
           go build -o ./bin/${{ env.REPO_NAME }} .
-      - name: "Go unit tests"
+      - name: 'Go unit tests'
         if: ${{ inputs.language == 'go' && inputs.unit-tests == true && inputs.build-profile == 'cli' }}
         continue-on-error: true
         run: |
@@ -1028,7 +1028,7 @@ jobs:
         if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "3.4"
+          ruby-version: '3.4'
           bundler-cache: false
 
       - name: Configure Bundler for private Ruby gems
@@ -1040,7 +1040,7 @@ jobs:
           fi
           bundle config set --local github.com "x-access-token:${{ secrets.PRIVATE_ACCESS_KITCHEN_CHEF_ENTERPRISE }}"
 
-      - name: "Ruby build"
+      - name: 'Ruby build'
         if: ${{ inputs.language == 'ruby' && inputs.build-profile == 'cli' }}
         continue-on-error: true
         run: |
@@ -1054,7 +1054,7 @@ jobs:
           bundle exec rake build
       # this does not work on all repos - chef-telemetry needs bundle install to generate gemfile.lock, but chef-cli does not commit gemfile.lock and needs bundle install to generate it at runtime - add flag to control whether bundle install is run in ci-build or language-specific checks
       # TODO: detect if rakefile exists, else do bundler default
-      - name: "Ruby unit tests"
+      - name: 'Ruby unit tests'
         if: ${{ inputs.language == 'ruby' && inputs.unit-tests == true && inputs.build-profile == 'cli' }}
         continue-on-error: true
         run: |
@@ -1062,7 +1062,7 @@ jobs:
         # bundle exec rake spec --trace > ${{ inputs.unit-test-output-path }}
 
       # PL/pgSQL build validation - validates Dockerfiles and shell scripts
-      - name: "PL/pgSQL Docker build validation"
+      - name: 'PL/pgSQL Docker build validation'
         if: ${{ inputs.language == 'plpgsql' }}
         continue-on-error: true
         run: |
@@ -1104,7 +1104,7 @@ jobs:
 
   set-application-version:
     runs-on: ubuntu-latest
-    name: "Detect SBOM version for application"
+    name: 'Detect SBOM version for application'
     if: (inputs.version == '') && (inputs.detect-version-source-parameter != '')
     needs: ci-build
     steps:
@@ -1143,14 +1143,14 @@ jobs:
 
   ci-unit-test: # FROM CHEF-VAULT
     # TODO: add language-specific unit tests
-    name: "Unit tests"
+    name: 'Unit tests'
     if: ${{ inputs.unit-tests == true && success() && inputs.language == 'Ruby' }}
     needs: ci-build
     strategy:
       fail-fast: false
       matrix:
         os-version: [ubuntu-latest, ubuntu-22.04, macos-latest] # ubuntu-22.04 was original chef-vault
-        ruby-version: ["3.4"] # '2.7', '3.1',
+        ruby-version: ['3.4'] # '2.7', '3.1',
     runs-on: ${{ matrix.os-version }}
     steps:
       - uses: actions/checkout@v6
@@ -1272,7 +1272,7 @@ jobs:
   #     udf3: ${{ inputs.udf3 }}
 
   BlackDuck-Polaris-SAST:
-    name: "BlackDuck Polaris SAST scan"
+    name: 'BlackDuck Polaris SAST scan'
     if: ${{ inputs.perform-blackduck-polaris }}
     uses: chef/common-github-actions/.github/workflows/polaris-sast.yml@main
     needs: checkout
@@ -1297,32 +1297,32 @@ jobs:
       polaris-fail-on-critical: ${{ inputs.polaris-fail-on-critical }}
 
   package-binary:
-    name: "Creating packaged binaries"
+    name: 'Creating packaged binaries'
     # TODO: Add packaging steps – rpm, deb, MSI, dpkg + signing + SHA
     runs-on: ubuntu-latest
     if: ${{ success() && inputs.package-binaries == true }}
     needs: ci-build
     steps:
-      - name: "Create packaged binaries"
+      - name: 'Create packaged binaries'
         run: echo "Creating packaged binaries"
 
     #    TODO: Add habitat build steps from plan.sh for various packages/platforms/machine archs, optionally publish to Builder, then optionally test with grype
   habitat-build:
-    name: "Creating Habitat packages"
+    name: 'Creating Habitat packages'
     runs-on: ubuntu-latest
     if: ${{ success() && inputs.habitat-build == true }}
     needs: package-binary
     steps:
-      - name: "Create Habitat packages"
+      - name: 'Create Habitat packages'
         run: echo "Creating Habitat packages"
     # TODO: add flag for any params needed
   habitat-publish:
-    name: "Publishing Habitat packages to Builder"
+    name: 'Publishing Habitat packages to Builder'
     runs-on: ubuntu-latest
     if: ${{ success() && inputs.publish-habitat-packages == true }}
     needs: habitat-build
     steps:
-      - name: "Publishing Habitat packages to Builder"
+      - name: 'Publishing Habitat packages to Builder'
         run: echo "Publishing Habitat packages to Builder"
 
   habitat-grype-scan-linux:
@@ -1342,7 +1342,7 @@ jobs:
     # --channel stable \
     # --target x86_64-linux \
     # --download-directory /tmp/habitat_packages
-    name: "Grype scan of Habitat packages"
+    name: 'Grype scan of Habitat packages'
     runs-on: ubuntu-latest
     if: ${{ success() && inputs.habitat-grype-scan == true && inputs.publish-habitat-runner_os == 'ubuntu-latest' }}
     # TODO: make this a matrix operation
@@ -1420,7 +1420,7 @@ jobs:
           path: ${{ env.OUTPUT_FILE }}
 
   habitat-grype-scan-windows:
-    name: "Grype scan of Habitat packages (Windows)"
+    name: 'Grype scan of Habitat packages (Windows)'
     runs-on: windows-latest
     if: ${{ success() && inputs.habitat-grype-scan == true && inputs.publish-habitat-runner_os == 'windows-latest' }}
     # TODO: make this a matrix operation
@@ -1527,18 +1527,18 @@ jobs:
           path: ${{ env.OUTPUT_FILE }}
 
   publish:
-    name: "Publishing packages"
+    name: 'Publishing packages'
     #    TODO: Add binary publishing steps – container from Dockerfile to ECR, go-releaser binary to releases page,
     #       omnibus to artifactory, gems, choco, homebrew, other app stores
     runs-on: ubuntu-latest
     if: ${{ success() && inputs.publish-packages == true }}
     needs: habitat-build
     steps:
-      - name: "Publishing packages"
+      - name: 'Publishing packages'
         run: echo "Publishing packages"
 
   generate-sbom:
-    name: "Generating SBOM"
+    name: 'Generating SBOM'
     #    Create software bill-of-materials (SBOM) using SPDX format
     if: ${{ inputs.generate-sbom == true }}
     uses: chef/common-github-actions/.github/workflows/sbom.yml@main
@@ -1565,7 +1565,7 @@ jobs:
       blackduck-fail-on-major: ${{ inputs.blackduck-fail-on-major }}
 
   quality-dashboard:
-    name: "Reporting to quality dashboard"
+    name: 'Reporting to quality dashboard'
     needs: generate-sbom
     secrets: inherit
     permissions:
