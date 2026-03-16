@@ -917,7 +917,7 @@ jobs:
   run-grype-image:
     name: 'Grype Docker image scan'
     if: ${{ inputs.perform-grype-image-scan }}
-    uses: chef/common-github-actions/.github/workflows/grype.yml@sandhi/fixes-for-chef-org
+    uses: chef/common-github-actions/.github/workflows/grype.yml@test-pipeline
     needs: checkout
     secrets: inherit
     with:
