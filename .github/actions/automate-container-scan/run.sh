@@ -119,7 +119,8 @@ deploy_automate() {
         log "Automate deployment completed successfully"
     else
         log "ERROR: Automate deployment failed or timed out"
-        log "Check ${LOGS_DIR}/deploy.log for details"
+        log "Last 50 lines of deploy.log:"
+        tail -n 50 "${LOGS_DIR}/deploy.log" || true
         fail "Automate deployment failed"
     fi
     
