@@ -291,13 +291,18 @@ jobs:
       - name: Construct BlackDuck detect arguments
         id: detect-args
         run: |
+          echo "DEBUG: Language parameter is: ${{ inputs.language }}"
+          
           # Start with base arguments (always exclude PIP detector)
           DETECT_ARGS="--detect.excluded.detector.types=PIP"
           
           # For Erlang projects, also exclude HEX detector if rebar3 setup fails
           # The Signature Scanner will still scan the code
           if [[ "${{ inputs.language }}" == "erlang" || "${{ inputs.language }}" == "ruby-erlang" ]]; then
+            echo "DEBUG: Excluding HEX detector for Erlang project"
             DETECT_ARGS="--detect.excluded.detector.types=PIP,HEX"
+          else
+            echo "DEBUG: Not an Erlang project, keeping default exclusions"
           fi
           
           # Add timeout configurations to prevent FAILURE_TIMEOUT errors
