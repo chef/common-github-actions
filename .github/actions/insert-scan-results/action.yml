@@ -1,0 +1,107 @@
+name: "Insert Scan Results into Analytics DB"
+description: >
+  Reads summary-level metadata JSON produced by chef-download-grype-snapshot or
+  automate-container-scan and inserts one or more rows into the vulnerability
+  trend analytics Postgres database.
+
+  Only count-level data is stored (no individual CVE IDs). All inserts use
+  ON CONFLICT DO NOTHING, so the step is safe to re-run.
+
+  DB failures are reported as workflow warnings and do NOT fail the scan workflow.
+
+inputs:
+  # ── Scan classification ──────────────────────────────────────────────────
+  scan_mode:
+    description: "'native', 'modern', 'habitat', or 'container'"
+    required: true
+
+  # ── Matrix dimensions (native / modern) ──────────────────────────────────
+  product:
+    description: "Product name e.g. 'chef', 'inspec', 'chef-workstation'"
+    required: false
+    default: ""
+  channel:
+    description: "Release channel e.g. 'stable', 'current', 'unstable'"
+    required: false
+    default: ""
+  download_site:
+    description: "Download site e.g. 'commercial', 'community', 'cinc'"
+    required: false
+    default: ""
+  os:
+    description: "Runner OS name e.g. 'ubuntu'"
+    required: false
+    default: ""
+  os_version:
+    description: "Runner OS version e.g. '24.04'"
+    required: false
+    default: ""
+  arch:
+    description: "Runner architecture e.g. 'x86_64'"
+    required: false
+    default: "x86_64"
+  package_manager:
+    description: "Package manager e.g. 'deb', 'rpm' (modern mode only)"
+    required: false
+    default: ""
+
+  # ── Habitat ──────────────────────────────────────────────────────────────
+  hab_ident:
+    description: "Habitat package identifier e.g. 'chef/chef-infra-client'"
+    required: false
+    default: ""
+
+  # ── Output directory ─────────────────────────────────────────────────────
+  out_dir:
+    description: "Directory where the scan action wrote its output (default: 'out')"
+    required: false
+    default: "out"
+
+  # ── GitHub context ────────────────────────────────────────────────────────
+  run_id:
+    description: "GitHub Actions run ID — used as the primary key for scan_runs"
+    required: false
+    default: ${{ github.run_id }}
+  workflow:
+    description: "Workflow name written to scan_runs.workflow"
+    required: false
+    default: ${{ github.workflow }}
+
+  # ── Database ─────────────────────────────────────────────────────────────
+  db_url:
+    description: >
+      Full PostgreSQL DSN for the scanwriter role.
+      Format: postgresql://scanwriter:PASSWORD@HOST:5432/vuln_trends?sslmode=require
+      Pass the SCAN_DB_URL secret from the calling workflow.
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install psycopg2
+      shell: bash
+      run: |
+        pip install --quiet --disable-pip-version-check psycopg2-binary
+
+    - name: Insert scan results
+      shell: python
+      env:
+        SCAN_MODE:       ${{ inputs.scan_mode }}
+        PRODUCT:         ${{ inputs.product }}
+        CHANNEL:         ${{ inputs.channel }}
+        DOWNLOAD_SITE:   ${{ inputs.download_site }}
+        OS_NAME:         ${{ inputs.os }}
+        OS_VERSION:      ${{ inputs.os_version }}
+        ARCH:            ${{ inputs.arch }}
+        PACKAGE_MANAGER: ${{ inputs.package_manager }}
+        HAB_IDENT:       ${{ inputs.hab_ident }}
+        OUT_DIR:         ${{ inputs.out_dir }}
+        RUN_ID:          ${{ inputs.run_id }}
+        WORKFLOW:        ${{ inputs.workflow }}
+        DATABASE_URL:    ${{ inputs.db_url }}
+        ACTION_PATH:     ${{ github.action_path }}
+      run: |
+        import os, sys
+        sys.path.insert(0, os.environ["ACTION_PATH"])
+        import insert
+        insert.main()
