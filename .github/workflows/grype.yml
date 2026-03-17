@@ -125,8 +125,8 @@ jobs:
           for IMAGE_NAME in $IMAGES; do
             echo ""
             echo "Scanning Docker image: $IMAGE_NAME"
-            grype "$IMAGE_NAME" --name "$SCAN_NAME-$(basename $IMAGE_NAME)" --output json >> grype-scan.json
-            grype "$IMAGE_NAME" --name "$SCAN_NAME-$(basename $IMAGE_NAME)" --output table >> grype-scan.log || true
+            grype "$IMAGE_NAME" --name "$SCAN_NAME-$(basename $IMAGE_NAME)" --only-fixed --output json >> grype-scan.json
+            grype "$IMAGE_NAME" --name "$SCAN_NAME-$(basename $IMAGE_NAME)" --only-fixed --output table >> grype-scan.log || true
           done
 
       - name: Check Grype results and fail if vulnerabilities found

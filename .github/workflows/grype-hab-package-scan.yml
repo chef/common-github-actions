@@ -155,7 +155,9 @@ jobs:
             source results/last_build.env
             cat results/last_build.env
             echo "BUILT_PACKAGE=${pkg_ident}" >> $GITHUB_ENV
+            echo "BUILT_PKG_PATH=/hab/pkgs/${pkg_ident}" >> $GITHUB_ENV
             echo "Built package: ${pkg_ident}"
+            echo "Installed Path: /hab/pkgs/${pkg_ident}"
 
       - name: Install Grype
         continue-on-error: true
@@ -208,7 +210,8 @@ jobs:
             # Use built package if available, otherwise use input package name
             if [ -n "${BUILT_PACKAGE}" ]; then
                 SCAN_PACKAGE="${BUILT_PACKAGE}"
-                PKG_PATH="/hab/pkgs/${SCAN_PACKAGE}"
+                # PKG_PATH="/hab/pkgs/${SCAN_PACKAGE}"
+                PKG_PATH="${BUILT_PKG_PATH}"
             else
                 SCAN_PACKAGE="${{ inputs.hab_origin }}/${{ inputs.hab_package }}"
                 PKG_PATH=$(hab pkg path ${SCAN_PACKAGE})
@@ -216,17 +219,14 @@ jobs:
             
             echo "Scanning package at: ${PKG_PATH}"
             
-            # Run grype scan (display in logs)
-            grype dir:$PKG_PATH --name ${SCAN_PACKAGE} 
-            
             # Save results to files
             OUTPUT_FILE="grype-results-linux-${SCAN_PACKAGE}.txt"
             OUTPUT_FILE="${OUTPUT_FILE//\//-}"
-            grype dir:$PKG_PATH --name ${SCAN_PACKAGE} > $OUTPUT_FILE
+            grype dir:$PKG_PATH --name ${SCAN_PACKAGE} --only-fixed --output table > $OUTPUT_FILE
             
             JSON_FILE="grype-results-linux-${SCAN_PACKAGE}.json"
             JSON_FILE="${JSON_FILE//\//-}"
-            grype dir:$PKG_PATH --name ${SCAN_PACKAGE} --output json > $JSON_FILE
+            grype dir:$PKG_PATH --name ${SCAN_PACKAGE} --only-fixed --output json > $JSON_FILE
             
             echo "OUTPUT_FILE=$OUTPUT_FILE" >> $GITHUB_ENV
             echo "JSON_FILE=$JSON_FILE" >> $GITHUB_ENV
@@ -335,8 +335,14 @@ jobs:
         if: ${{ inputs.build_package == true }}
         run: |
             . ./results/last_build.ps1
+            cat ./results/last_build.ps1
+            $PkgIdentPath = $pkg_ident -replace '/', '\'
+            $RepoName = "${{ github.event.repository.name }}"
+            $InstalledPath = "D:\hab\studios\a--${RepoName}--${RepoName}\hab\pkgs\$PkgIdentPath"
             echo "BUILT_PACKAGE=$pkg_ident" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            echo "BUILT_PKG_PATH=$InstalledPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
             Write-Host "Built package: $pkg_ident"
+            Write-Host "Installed Path: $InstalledPath"
             
       - name: Install Grype (Windows)
         continue-on-error: true
@@ -352,6 +358,15 @@ jobs:
             echo "$grypeDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
             
             & "$grypeDir\grype.exe" version
+            
+            # Create grype config to ignore unfixable vulnerabilities
+            @"
+            match:
+              exclude:
+                - fix-state: wont-fix
+                - fix-state: not-fixed
+                - fix-state: unknown
+            "@ | Out-File -FilePath ".grype.yaml" -Encoding utf8
 
       - name: Generate Artifact Name
         run: |
@@ -393,7 +408,8 @@ jobs:
             # Use built package if available, otherwise use input package name
             if ($env:BUILT_PACKAGE) {
                 $ScanPackage = $env:BUILT_PACKAGE
-                $PkgPath = "D:\\hab\\studios\\a--${{ inputs.hab_package }}--${{ inputs.hab_package }}\/hab/pkgs/${ScanPackage}"
+                # $PkgPath = "D:\\hab\\studios\\a--${{ inputs.hab_package }}--${{ inputs.hab_package }}\/hab/pkgs/${ScanPackage}"
+                $PkgPath = $env:BUILT_PKG_PATH
             } else {
                 $ScanPackage = "${{ inputs.hab_origin }}/${{ inputs.hab_package }}"
                 $PkgPath = hab pkg path $ScanPackage
@@ -401,17 +417,14 @@ jobs:
             
             Write-Host "Scanning package at: $PkgPath"
             
-            # Run grype scan (display in logs)
-            grype dir:$PkgPath --name $ScanPackage
-            
             # Save results to files
             $OutputFile = "grype-results-windows-$ScanPackage.txt"
             $OutputFile = $OutputFile -replace '/', '-'
-            grype dir:$PkgPath --name $ScanPackage | Out-File -FilePath $OutputFile -Encoding utf8
+            grype dir:$PkgPath --name $ScanPackage --only-fixed --output table | Out-File -FilePath $OutputFile -Encoding utf8
             
             $JsonFile = "grype-results-windows-$ScanPackage.json"
             $JsonFile = $JsonFile -replace '/', '-'
-            grype dir:$PkgPath --name $ScanPackage --output json | Out-File -FilePath $JsonFile -Encoding utf8
+            grype dir:$PkgPath --name $ScanPackage --only-fixed --output json | Out-File -FilePath $JsonFile -Encoding utf8
             
             echo "OUTPUT_FILE=$OutputFile" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
             echo "JSON_FILE=$JsonFile" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -522,12 +535,23 @@ jobs:
         run: |
             source results/last_build.env
             echo "BUILT_PACKAGE=${pkg_ident}" >> $GITHUB_ENV
+            echo "BUILT_PKG_PATH=/hab/pkgs/${pkg_ident}" >> $GITHUB_ENV
             echo "Built package: ${pkg_ident}"
+            echo "Installed Path: /hab/pkgs/${pkg_ident}"
 
       - name: Install Grype
         continue-on-error: true
         run: |
             curl -sSfL https://get.anchore.io/grype | sh -s -- -b /usr/local/bin
+            
+            # Create grype config to ignore unfixable vulnerabilities
+            cat > .grype.yaml << 'EOF'
+            match:
+              exclude:
+                - fix-state: wont-fix
+                - fix-state: not-fixed
+                - fix-state: unknown
+            EOF
 
       - name: Generate Artifact Name
         run: |
@@ -568,24 +592,23 @@ jobs:
             # Use built package if available, otherwise use input package name
             if [ -n "${BUILT_PACKAGE}" ]; then
                 SCAN_PACKAGE="${BUILT_PACKAGE}"
+                PKG_PATH="${BUILT_PKG_PATH}"
             else
                 SCAN_PACKAGE="${{ inputs.hab_origin }}/${{ inputs.hab_package }}"
+                PKG_PATH=$(hab pkg path ${SCAN_PACKAGE})
             fi
             
-            PKG_PATH=$(hab pkg path ${SCAN_PACKAGE})
             echo "Scanning package at: ${PKG_PATH}"
             
-            # Run grype scan (display in logs)
-            grype dir:$PKG_PATH --name ${SCAN_PACKAGE} 
             
             # Save results to files
             OUTPUT_FILE="grype-results-macos-${SCAN_PACKAGE}.txt"
             OUTPUT_FILE="${OUTPUT_FILE//\//-}"
-            grype dir:$PKG_PATH --name ${SCAN_PACKAGE} > $OUTPUT_FILE
+            grype dir:$PKG_PATH --name ${SCAN_PACKAGE} --only-fixed --output table > $OUTPUT_FILE
             
             JSON_FILE="grype-results-macos-${SCAN_PACKAGE}.json"
             JSON_FILE="${JSON_FILE//\//-}"
-            grype dir:$PKG_PATH --name ${SCAN_PACKAGE} --output json > $JSON_FILE
+            grype dir:$PKG_PATH --name ${SCAN_PACKAGE} --only-fixed --output json > $JSON_FILE
             
             echo "OUTPUT_FILE=$OUTPUT_FILE" >> $GITHUB_ENV
             echo "JSON_FILE=$JSON_FILE" >> $GITHUB_ENV
