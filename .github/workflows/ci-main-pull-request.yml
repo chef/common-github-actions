@@ -756,53 +756,6 @@ jobs:
 
         # https://go.googlesource.com/vuln - govulncheck is same as BlackDuck SCA backend, redundant to add it here
 
-      - name: Checkout repository for PL/pgSQL checks
-        if: inputs.language == 'plpgsql'
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - name: PL/pgSQL language checks - ShellCheck
-        if: inputs.language == 'plpgsql'
-        run: |
-          echo "Running ShellCheck on shell scripts"
-          sudo apt-get update && sudo apt-get install -y shellcheck
-          find . -name '*.sh' -not -path './.git/*' -print0 | xargs -0 shellcheck --severity=warning || true
-      - name: PL/pgSQL language checks - SQL lint
-        if: inputs.language == 'plpgsql'
-        run: |
-          echo "Running SQL syntax validation on PL/pgSQL files"
-          # Basic SQL syntax check: filter comments and validate non-empty SQL statements
-          ERRORS=0
-          for f in $(find . -name '*.sql' -not -path './.git/*' -not -path '*/revert/*'); do
-            # Strip comments and check for basic syntax issues
-            perl -e '
-              local $/;
-              $_ = <>;
-              s/--.*$//gm;
-              s!/\*.*?\*/!!gs;
-              s/^\s+//; s/\s+$//;
-              exit 0 if /\A\s*\z/;
-              exit 0;
-            ' "$f"
-            if [ $? -ne 0 ]; then
-              echo "⚠️  Syntax issue in: $f"
-              ERRORS=$((ERRORS + 1))
-            fi
-          done
-          echo "SQL validation complete. Issues found: $ERRORS"
-      - name: PL/pgSQL language checks - Dockerfile lint
-        if: inputs.language == 'plpgsql'
-        run: |
-          echo "Validating Dockerfiles"
-          for df in $(find . -name 'Dockerfile' -not -path './.git/*'); do
-            echo "Checking $df"
-            # Basic Dockerfile validation - check for FROM instruction
-            if ! grep -q '^FROM' "$df"; then
-              echo "⚠️  Missing FROM instruction in $df"
-            else
-              echo "✅ $df is valid"
-            fi
-          done
   language-agnostic-checks:
     name: 'Language-agnostic pre-compilation steps'
     if: inputs.perform-language-linting 
