@@ -118,10 +118,83 @@ jobs:
           echo "Image to scan: $IMAGE"
           echo "IMAGE=$IMAGE" >> "$GITHUB_OUTPUT"
 
+      - name: Fetch Wiz credentials from AKeyless
+        id: fetch-secrets
+        uses: LanceMcCarthy/akeyless-action@ca2424bb132118c0b907f38e6dae0475acc0fac4 # v5.2.1
+        with:
+          access-id: "p-5g555fgryzj2om"
+          static-secrets: '{"/ProductSecurity/Tools/WIZ_CLIENT_ID":"WIZ_CLIENT_ID","/ProductSecurity/Tools/WIZ_CLIENT_SECRET":"WIZ_CLIENT_SECRET"}'
+
+      - name: Download Wiz CLI
+        run: |
+          curl -fsSL -o wizcli https://downloads.wiz.io/v1/wizcli/latest/wizcli-linux-amd64
+          chmod +x wizcli
+
       - name: Wiz CLI container image scan
         id: wiz-scan
-        uses: prgs-community/githubactions-reusableworkflows/actions/wizcli@latest
-        with:
-          scan-type: 'container-image'
-          scan-target: ${{ steps.build-image.outputs.IMAGE }}
-          fail-build: ${{ inputs.fail-build }}
+        continue-on-error: ${{ inputs.fail-build != true }}
+        env:
+          WIZ_CLIENT_ID: ${{ steps.fetch-secrets.outputs.WIZ_CLIENT_ID }}
+          WIZ_CLIENT_SECRET: ${{ steps.fetch-secrets.outputs.WIZ_CLIENT_SECRET }}
+        run: |
+          set -o pipefail
+
+          SCAN_TYPE='container-image'
+          SCAN_TARGET='${{ steps.build-image.outputs.IMAGE }}'
+
+          case "$SCAN_TYPE" in
+            dir|container-image)
+              ;;
+            *)
+              echo "Invalid scan-type: '$SCAN_TYPE'. Allowed values are 'dir' or 'container-image'." >&2
+              exit 1
+              ;;
+          esac
+
+          args=("$SCAN_TYPE")
+          if [ -n "$SCAN_TARGET" ]; then
+            args+=("$SCAN_TARGET")
+          fi
+
+          ./wizcli scan "${args[@]}" 2>&1 | tee /tmp/wiz-scan-results.txt
+          EXIT_CODE=${PIPESTATUS[0]}
+
+          echo ""
+          echo "============================================"
+          echo "Wiz CLI Scan Output"
+          echo "============================================"
+          cat /tmp/wiz-scan-results.txt
+          echo "============================================"
+          echo ""
+
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "scan-result=passed" >> $GITHUB_OUTPUT
+          else
+            echo "scan-result=failed" >> $GITHUB_OUTPUT
+          fi
+          exit $EXIT_CODE
+
+      - name: Write Job Summary
+        if: always()
+        run: |
+          RESULT="${{ steps.wiz-scan.outputs.scan-result }}"
+          if [ "$RESULT" = "passed" ]; then
+            ICON="✅"
+          else
+            ICON="❌"
+          fi
+
+          {
+            echo "## ${ICON} Wiz CLI Scan Results"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| **Scan type** | \`container-image\` |"
+            echo "| **Target** | \`${{ steps.build-image.outputs.IMAGE }}\` |"
+            echo "| **Result** | **${RESULT}** |"
+            echo ""
+            echo "### Scan Output"
+            echo '```'
+            cat /tmp/wiz-scan-results.txt 2>/dev/null || echo "(no output captured)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
