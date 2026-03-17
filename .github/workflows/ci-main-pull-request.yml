@@ -963,7 +963,7 @@ jobs:
   run-grype-image:
     name: 'Grype Docker image scan'
     if: ${{ inputs.perform-grype-image-scan }}
-    uses: chef/common-github-actions/.github/workflows/grype.yml@sandhi/add-hab-grype
+    uses: chef/common-github-actions/.github/workflows/grype.yml@main
     needs: checkout
     secrets: inherit
     with:
@@ -974,7 +974,7 @@ jobs:
   run-grype-hab-package-scan:
     name: 'Grype scan Habitat packages from bldr.habitat.sh'
     if: ${{ inputs.perform-grype-hab-scan == true }}
-    uses: chef/common-github-actions/.github/workflows/grype-hab-package-scan.yml@sandhi/add-hab-grype
+    uses: chef/common-github-actions/.github/workflows/grype-hab-package-scan.yml@main
     needs: checkout
     secrets: inherit
     with:

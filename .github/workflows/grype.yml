@@ -45,6 +45,12 @@ jobs:
         run: |
           curl -sSfL https://get.anchore.io/grype | sh -s -- -b /usr/local/bin
 
+      - name: Generate Artifact Name
+        run: |
+            TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+            ARTIFACT_NAME=$(echo "grype-scan-${{ github.event.repository.name }}-${TIMESTAMP}" | sed 's|/|-|g')
+            echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >> $GITHUB_ENV
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         if: ${{ !inputs.grype-image-skip-aws }}
@@ -169,7 +175,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: grype-scan-results
+          name: ${{ env.ARTIFACT_NAME }}
           path: |
             grype-scan.json
             grype-scan.log

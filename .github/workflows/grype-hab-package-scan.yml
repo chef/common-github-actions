@@ -153,7 +153,6 @@ jobs:
         if: ${{ inputs.build_package == true }}
         run: |
             source results/last_build.env
-            cat results/last_build.env
             echo "BUILT_PACKAGE=${pkg_ident}" >> $GITHUB_ENV
             echo "BUILT_PKG_PATH=/hab/pkgs/${pkg_ident}" >> $GITHUB_ENV
             echo "Built package: ${pkg_ident}"
@@ -166,7 +165,8 @@ jobs:
 
       - name: Generate Artifact Name
         run: |
-            ARTIFACT_NAME=$(echo "grype-scan-linux-${{ inputs.hab_package }}" | sed 's|/|-|g')
+            TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+            ARTIFACT_NAME=$(echo "grype-scan-linux-${{ inputs.hab_package }}-${TIMESTAMP}" | sed 's|/|-|g')
             echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >> $GITHUB_ENV
 
       - name: Install Habitat Package (Linux)
@@ -196,13 +196,6 @@ jobs:
             
             echo "Installing: ${INSTALL_CMD}"
             eval ${INSTALL_CMD}
-
-      - name: Debug data
-        if: ${{ inputs.build_package == true }}
-        run: |
-            echo "Package to scan: ${BUILT_PACKAGE}"
-            echo "Pkg path $(ls /hab/pkgs)"
-            echo "Contents: $(ls /hab/pkgs/${BUILT_PACKAGE})"
 
       - name: Run Grype Scan on Habitat Package
         timeout-minutes: 15
@@ -335,7 +328,6 @@ jobs:
         if: ${{ inputs.build_package == true }}
         run: |
             . ./results/last_build.ps1
-            cat ./results/last_build.ps1
             $PkgIdentPath = $pkg_ident -replace '/', '\'
             $RepoName = "${{ github.event.repository.name }}"
             $InstalledPath = "D:\hab\studios\a--${RepoName}--${RepoName}\hab\pkgs\$PkgIdentPath"
@@ -370,7 +362,8 @@ jobs:
 
       - name: Generate Artifact Name
         run: |
-            $ArtifactName = "grype-scan-windows-${{ inputs.hab_package }}"
+            $Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+            $ArtifactName = "grype-scan-windows-${{ inputs.hab_package }}-$Timestamp"
             $ArtifactName = $ArtifactName -replace '/', '-'
             echo "ARTIFACT_NAME=$ArtifactName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
@@ -555,7 +548,8 @@ jobs:
 
       - name: Generate Artifact Name
         run: |
-            ARTIFACT_NAME=$(echo "grype-scan-macos-${{ inputs.hab_package }}" | sed 's|/|-|g')
+            TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+            ARTIFACT_NAME=$(echo "grype-scan-macos-${{ inputs.hab_package }}-${TIMESTAMP}" | sed 's|/|-|g')
             echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >> $GITHUB_ENV
 
       - name: Install Habitat Package (MacOS)
