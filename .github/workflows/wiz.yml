@@ -14,8 +14,13 @@ on:
         required: false
         type: boolean
         default: true
-      wiz-image-skip-aws:
-        description: 'Skip AWS ECR login (assumes images are scanned elsewhere)'
+      fail-on-critical:
+        description: 'Fail the build if Wiz finds CRITICAL vulnerabilities'
+        required: false
+        type: boolean
+        default: false
+      fail-on-high:
+        description: 'Fail the build if Wiz finds HIGH vulnerabilities'
         required: false
         type: boolean
         default: false
@@ -55,14 +60,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          REPO_NAME=$(basename $(pwd))
-
           if [ ! -f "Dockerfile" ]; then
-            echo "❌ No Dockerfile found - this workflow requires a Dockerfile to scan Docker image"
+            echo "❌ No Dockerfile found - cannot scan"
             exit 1
           fi
 
           echo "Building Docker image..."
+          REPO_NAME=$(basename $(pwd))
 
           # Strategy 1: Check for build-docker.sh script (e.g., dsm-erchef)
           if [ -f "build-docker.sh" ]; then
@@ -94,14 +98,21 @@ jobs:
             
             if [ -n "$NEW_IDS" ]; then
               for id in $NEW_IDS; do
-                IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" --filter "id=${id}" | grep -v "<none>" | head -1)
-                [ -n "$IMAGE" ] && break
+                # Use docker inspect instead of --filter (compatible with all Docker versions)
+                IMAGE=$(docker inspect --format '{{index .RepoTags 0}}' "$id" 2>/dev/null || true)
+                [ -n "$IMAGE" ] && [ "$IMAGE" != "<none>:<none>" ] && break
+                IMAGE=""
               done
             fi
 
             if [ -z "$IMAGE" ]; then
-              echo "No new image detected, using most recent image"
-              IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -v "^<none>" | head -1)
+              echo "No new image detected by ID comparison, falling back to repo name match"
+              IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -E "^${REPO_NAME}" | grep -v "<none>" | head -1)
+            fi
+
+            if [ -z "$IMAGE" ]; then
+              echo "⚠️ No image found matching ${REPO_NAME}, using most recent non-runner image"
+              IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -v "^<none>" | grep -v "^ghcr.io/github/" | grep -v "^ghcr.io/dependabot/" | head -1)
             fi
           # Strategy 3: Fallback to standard docker build
           else
@@ -118,10 +129,143 @@ jobs:
           echo "Image to scan: $IMAGE"
           echo "IMAGE=$IMAGE" >> "$GITHUB_OUTPUT"
 
+      - name: Fetch Wiz credentials from AKeyless
+        id: fetch-secrets
+        uses: LanceMcCarthy/akeyless-action@ca2424bb132118c0b907f38e6dae0475acc0fac4 # v5.2.1
+        with:
+          access-id: "p-5g555fgryzj2om"
+          static-secrets: '{"/ProductSecurity/Tools/WIZ_CLIENT_ID":"WIZ_CLIENT_ID","/ProductSecurity/Tools/WIZ_CLIENT_SECRET":"WIZ_CLIENT_SECRET"}'
+
+      - name: Download Wiz CLI
+        run: |
+          curl -fsSL -o wizcli https://downloads.wiz.io/v1/wizcli/latest/wizcli-linux-amd64
+          chmod +x wizcli
+
       - name: Wiz CLI container image scan
         id: wiz-scan
-        uses: prgs-community/githubactions-reusableworkflows/actions/wizcli@latest
+        continue-on-error: true
+        env:
+          WIZ_CLIENT_ID: ${{ steps.fetch-secrets.outputs.WIZ_CLIENT_ID }}
+          WIZ_CLIENT_SECRET: ${{ steps.fetch-secrets.outputs.WIZ_CLIENT_SECRET }}
+        run: |
+          set -o pipefail
+
+          SCAN_TYPE='container-image'
+          SCAN_TARGET='${{ steps.build-image.outputs.IMAGE }}'
+
+          args=("$SCAN_TYPE")
+          if [ -n "$SCAN_TARGET" ]; then
+            args+=("$SCAN_TARGET")
+          fi
+
+          # Always output JSON for severity analysis
+          args+=("--json-output-file" "/tmp/wiz-scan.json")
+
+          ./wizcli scan "${args[@]}" 2>&1 | tee /tmp/wiz-scan-results.txt
+          EXIT_CODE=${PIPESTATUS[0]}
+
+          echo ""
+          echo "============================================"
+          echo "Wiz CLI Scan Output"
+          echo "============================================"
+          cat /tmp/wiz-scan-results.txt
+          echo "============================================"
+          echo ""
+
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "scan-result=passed" >> $GITHUB_OUTPUT
+          else
+            echo "scan-result=failed" >> $GITHUB_OUTPUT
+          fi
+          exit $EXIT_CODE
+
+      - name: Check Wiz results for severity violations
+        id: severity-check
+        if: always()
+        run: |
+          JSON_FILE="/tmp/wiz-scan.json"
+
+          if [ ! -f "$JSON_FILE" ]; then
+            echo "⚠️  Wiz JSON output not found, skipping severity check"
+            echo "severity-result=skipped" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Count vulnerabilities by severity from Wiz JSON analytics summary
+          CRITICAL_COUNT=$(jq '.result.analytics.vulnerabilities.criticalCount // 0' "$JSON_FILE" 2>/dev/null || echo "0")
+          HIGH_COUNT=$(jq '.result.analytics.vulnerabilities.highCount // 0' "$JSON_FILE" 2>/dev/null || echo "0")
+
+          echo ""
+          echo "============================================"
+          echo "Wiz Security Scan - Vulnerability Summary"
+          echo "============================================"
+          echo "CRITICAL vulnerabilities: $CRITICAL_COUNT"
+          echo "HIGH vulnerabilities:     $HIGH_COUNT"
+          echo "============================================"
+
+          # Save counts for job summary
+          echo "critical-count=$CRITICAL_COUNT" >> $GITHUB_OUTPUT
+          echo "high-count=$HIGH_COUNT" >> $GITHUB_OUTPUT
+
+          VIOLATIONS=""
+          [ "${{ inputs.fail-on-critical }}" == "true" ] && [ "$CRITICAL_COUNT" -gt 0 ] && VIOLATIONS="${VIOLATIONS}${CRITICAL_COUNT} CRITICAL, "
+          [ "${{ inputs.fail-on-high }}" == "true" ] && [ "$HIGH_COUNT" -gt 0 ] && VIOLATIONS="${VIOLATIONS}${HIGH_COUNT} HIGH, "
+
+          if [ -n "$VIOLATIONS" ]; then
+            echo ""
+            echo "❌ BUILD FAILED: Found ${VIOLATIONS%, } vulnerabilities"
+            echo "severity-result=failed" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo ""
+            echo "✅ No severity-violating vulnerabilities found"
+            echo "severity-result=passed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Write Job Summary
+        if: always()
+        run: |
+          SCAN_RESULT="${{ steps.wiz-scan.outputs.scan-result }}"
+          SEVERITY_RESULT="${{ steps.severity-check.outputs.severity-result }}"
+
+          # Overall result: fail if either policy or severity check failed
+          if [ "$SCAN_RESULT" = "passed" ] && [ "$SEVERITY_RESULT" != "failed" ]; then
+            ICON="✅"
+            OVERALL="passed"
+          else
+            ICON="❌"
+            OVERALL="failed"
+          fi
+
+          {
+            echo "## ${ICON} Wiz CLI Scan Results"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| **Scan type** | \`container-image\` |"
+            echo "| **Target** | \`${{ steps.build-image.outputs.IMAGE }}\` |"
+            echo "| **Policy result** | **${SCAN_RESULT}** |"
+            echo "| **Severity result** | **${SEVERITY_RESULT}** |"
+            echo "| **Overall** | **${OVERALL}** |"
+            echo ""
+            echo "### Vulnerability Counts"
+            echo ""
+            echo "| Severity | Count | Fail on? |"
+            echo "|----------|-------|----------|"
+            echo "| CRITICAL | ${{ steps.severity-check.outputs.critical-count || '0' }} | ${{ inputs.fail-on-critical }} |"
+            echo "| HIGH | ${{ steps.severity-check.outputs.high-count || '0' }} | ${{ inputs.fail-on-high }} |"
+            echo ""
+            echo "### Scan Output"
+            echo '```'
+            cat /tmp/wiz-scan-results.txt 2>/dev/null || echo "(no output captured)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Wiz scan results
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          scan-type: 'container-image'
-          scan-target: ${{ steps.build-image.outputs.IMAGE }}
-          fail-build: ${{ inputs.fail-build }}
+          name: wiz-scan-${{ github.event.repository.name }}
+          path: |
+            /tmp/wiz-scan.json
+            /tmp/wiz-scan-results.txt

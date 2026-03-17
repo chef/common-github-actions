@@ -541,6 +541,26 @@ on:
       #   required: false
       #   default: 'https://polaris.blackduck.com'
       #   type: string
+      perform-wiz-scan:
+        description: 'Perform Wiz CLI security scan on Docker image'
+        required: false
+        type: boolean
+        default: false
+      wiz-fail-build:
+        description: 'Fail the build on Wiz policy violations'
+        required: false
+        type: boolean
+        default: true
+      wiz-fail-on-critical:
+        description: 'Fail the pipeline if Wiz finds CRITICAL vulnerabilities'
+        required: false
+        type: boolean
+        default: false
+      wiz-fail-on-high:
+        description: 'Fail the pipeline if Wiz finds HIGH vulnerabilities'
+        required: false
+        type: boolean
+        default: false
         
 env:
   PRIMARY_APPLICATION: ${{ inputs.application }} # was 'default'   # Custom repo property [primaryApplication]: chef360, automate, infra-server, habitat, supermarket, licensing, downloads, chef-client, inspec, chef-workstation (or derivatives like habitat-builder)
@@ -987,6 +1007,17 @@ jobs:
       fail-grype-on-critical: ${{ inputs.grype-image-fail-on-critical }}
       grype-image-skip-aws: ${{ inputs.grype-image-skip-aws }}
 
+  run-wiz-scan:
+    name: 'Wiz CLI security scan'
+    if: ${{ inputs.perform-wiz-scan == true }}
+    uses: chef/common-github-actions/.github/workflows/wiz.yml@grype-wiz
+    needs: checkout
+    with:
+      fail-build: ${{ inputs.wiz-fail-build }}
+      fail-on-critical: ${{ inputs.wiz-fail-on-critical }}
+      fail-on-high: ${{ inputs.wiz-fail-on-high }}
+    secrets: inherit
+
   run-grype-hab-package-scan:
     name: 'Grype scan Habitat packages from bldr.habitat.sh'
     if: ${{ inputs.perform-grype-hab-scan == true }}
@@ -1128,7 +1159,7 @@ jobs:
     #         VER=$(cat VERSION)
     #         echo "VERSION=$VER" >> $GITHUB_ENV
     #   then ${{ env.VERSION }}
-  
+
   set-application-version:
     runs-on: ubuntu-latest
     name: 'Detect SBOM version for application'
