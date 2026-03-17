@@ -403,9 +403,10 @@ jobs:
             [ "${OTHER_COUNT:-0}" -gt 0 ] && CRITICAL_COUNT=$((CRITICAL_COUNT + OTHER_COUNT))
           elif grep -q "Policy Severity counts:" "$BRIDGE_LOG"; then
             # Full scan
-            BLOCKER_COUNT=$(grep "severity level of BLOCKER" "$BRIDGE_LOG" | grep -oE '^[0-9]+' || echo 0)
-            CRITICAL_COUNT=$(grep "severity level of CRITICAL" "$BRIDGE_LOG" | grep -oE '^[0-9]+' || echo 0)
-            MAJOR_COUNT=$(grep "severity level of MAJOR" "$BRIDGE_LOG" | grep -oE '^[0-9]+' || echo 0)
+            # Example log line: "--- Black Duck found: 1 component in violation (Policy Severity counts: 1 match has a severity level of UNSPECIFIED, 0 matches have a severity level of BLOCKER"
+            BLOCKER_COUNT=$(grep "severity level of BLOCKER" "$BRIDGE_LOG" | grep -oE '[0-9]+ matches have a severity level of BLOCKER' | grep -oE '^[0-9]+' || echo 0)
+            CRITICAL_COUNT=$(grep "severity level of CRITICAL" "$BRIDGE_LOG" | grep -oE '[0-9]+ matches have a severity level of CRITICAL' | grep -oE '^[0-9]+' || echo 0)
+            MAJOR_COUNT=$(grep "severity level of MAJOR" "$BRIDGE_LOG" | grep -oE '[0-9]+ matches have a severity level of MAJOR' | grep -oE '^[0-9]+' || echo 0)
           else
             echo "⚠️  No policy violation summary found in bridge.log"
             exit 0
