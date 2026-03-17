@@ -98,28 +98,15 @@ jobs:
           elif [ -f "Makefile" ] && grep -q "^compose-build:" Makefile; then
             echo "Using Makefile compose-build target with GITHUB_TOKEN"
             export GITHUB_TOKEN="${{ secrets.GH_TOKEN }}"
-            
-            # Record image IDs before build to detect newly built images
-            BEFORE_IDS=$(docker images -q --no-trunc | sort)
-            
             make compose-build
             
             echo "Detecting built images..."
-            # Find newly created images by comparing before/after image IDs
-            AFTER_IDS=$(docker images -q --no-trunc | sort)
-            NEW_IDS=$(comm -13 <(echo "$BEFORE_IDS") <(echo "$AFTER_IDS"))
+            docker compose images
             
-            if [ -n "$NEW_IDS" ]; then
-              IMAGES=""
-              for id in $NEW_IDS; do
-                img=$(docker images --format "{{.Repository}}:{{.Tag}}" --filter "id=${id}" | grep -v "<none>" | head -1)
-                [ -n "$img" ] && IMAGES="${IMAGES}${img}"$'\n'
-              done
-              IMAGES=$(echo "$IMAGES" | grep -v '^$' | sort -u)
-            fi
-
+            IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "^${REPO_NAME}" | grep -v "^<none>")
+            
             if [ -z "$IMAGES" ]; then
-              echo "No new images detected, scanning all recent images"
+              echo "No images found with prefix ${REPO_NAME}, scanning all recent images"
               IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -v "^<none>" | head -5)
             fi
           # Strategy 3: Fallback to standard docker build
