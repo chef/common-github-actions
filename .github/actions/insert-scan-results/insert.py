@@ -303,57 +303,58 @@ def insert_native(cursor, run_id: str, workflow: str, env: dict[str, str]) -> No
     scanned_at       = parse_ts(snapshot.get("timestamp_utc")) or datetime.now(timezone.utc)
     resolved_version = target.get("resolved_version")
 
-    cursor.execute(
-        """
-        INSERT INTO native_scan_results (
-            run_id, scanned_at, scan_mode,
-            product, channel, download_site, os, os_version, arch, package_manager,
-            resolved_version, skipped,
-            matches_total,
-            critical_count, high_count, medium_count, low_count, negligible_count, unknown_count,
-            package_bytes, installed_bytes
-        ) VALUES (
-            %s, %s, %s,
-            %s, %s, %s, %s, %s, %s, %s,
-            %s, %s,
-            %s,
-            %s, %s, %s, %s, %s, %s,
-            %s, %s
+    if not env["SKIP_TREND_INSERT"]:
+        upsert_scan_run(cursor, run_id, workflow, meta)
+        cursor.execute(
+            """
+            INSERT INTO native_scan_results (
+                run_id, scanned_at, scan_mode,
+                product, channel, download_site, os, os_version, arch, package_manager,
+                resolved_version, skipped,
+                matches_total,
+                critical_count, high_count, medium_count, low_count, negligible_count, unknown_count,
+                package_bytes, installed_bytes
+            ) VALUES (
+                %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s,
+                %s, %s,
+                %s,
+                %s, %s, %s, %s, %s, %s,
+                %s, %s
+            )
+            ON CONFLICT ON CONSTRAINT native_scan_results_unique DO NOTHING
+            """,
+            (
+                run_id,
+                scanned_at,
+                env["SCAN_MODE"],
+                env["PRODUCT"],
+                env["CHANNEL"],
+                env["DOWNLOAD_SITE"],
+                env["OS_NAME"],
+                env["OS_VERSION"],
+                env["ARCH"],
+                env["PACKAGE_MANAGER"],
+                resolved_version,
+                False,  # not skipped — we only call this step when the scan ran
+                int(summary.get("matches_total", 0) or 0),
+                sev(sev_c, "Critical"),
+                sev(sev_c, "High"),
+                sev(sev_c, "Medium"),
+                sev(sev_c, "Low"),
+                sev(sev_c, "Negligible"),
+                sev(sev_c, "Unknown"),
+                size.get("package_bytes"),
+                size.get("installed_bytes"),
+            ),
         )
-        ON CONFLICT ON CONSTRAINT native_scan_results_unique DO NOTHING
-        """,
-        (
-            run_id,
-            scanned_at,
-            env["SCAN_MODE"],
-            env["PRODUCT"],
-            env["CHANNEL"],
-            env["DOWNLOAD_SITE"],
-            env["OS_NAME"],
-            env["OS_VERSION"],
-            env["ARCH"],
-            env["PACKAGE_MANAGER"],
-            resolved_version,
-            False,  # not skipped — we only call this step when the scan ran
-            int(summary.get("matches_total", 0) or 0),
-            sev(sev_c, "Critical"),
-            sev(sev_c, "High"),
-            sev(sev_c, "Medium"),
-            sev(sev_c, "Low"),
-            sev(sev_c, "Negligible"),
-            sev(sev_c, "Unknown"),
-            size.get("package_bytes"),
-            size.get("installed_bytes"),
-        ),
-    )
-
-    gha_notice(
-        f"insert-scan-results [native/modern]: inserted row for "
-        f"{env['PRODUCT']}/{env['CHANNEL']}/{env['DOWNLOAD_SITE']} "
-        f"({env['OS_NAME']} {env['OS_VERSION']} {env['ARCH']}) "
-        f"version={resolved_version} "
-        f"total={summary.get('matches_total', 0)}"
-    )
+        gha_notice(
+            f"insert-scan-results [native/modern]: inserted row for "
+            f"{env['PRODUCT']}/{env['CHANNEL']}/{env['DOWNLOAD_SITE']} "
+            f"({env['OS_NAME']} {env['OS_VERSION']} {env['ARCH']}) "
+            f"version={resolved_version} "
+            f"total={summary.get('matches_total', 0)}"
+        )
 
     # Upsert individual CVE detail rows (snapshot, not append)
     insert_native_cve_details(cursor, scanned_at, env)
@@ -375,17 +376,16 @@ def insert_habitat(cursor, run_id: str, workflow: str, env: dict[str, str]) -> N
         return
 
     # Use the first (and typically only) index.json to populate scan_runs
-    first_meta = load_json(index_files[0])
-    if first_meta:
-        # Habitat index.json has a different shape — build a minimal meta dict
-        # that upsert_scan_run can consume
-        snap_ts = first_meta.get("snapshot", {}).get("timestamp_utc") or \
-                  first_meta.get("scanned_at")
-        scan_meta = {
-            "snapshot": {"timestamp_utc": snap_ts},
-            "scan": first_meta.get("scan", {}),
-        }
-        upsert_scan_run(cursor, run_id, workflow, scan_meta)
+    if not env["SKIP_TREND_INSERT"]:
+        first_meta = load_json(index_files[0])
+        if first_meta:
+            snap_ts = first_meta.get("snapshot", {}).get("timestamp_utc") or \
+                      first_meta.get("scanned_at")
+            scan_meta = {
+                "snapshot": {"timestamp_utc": snap_ts},
+                "scan": first_meta.get("scan", {}),
+            }
+            upsert_scan_run(cursor, run_id, workflow, scan_meta)
 
     for index_path in index_files:
         data = load_json(index_path)
@@ -417,48 +417,52 @@ def insert_habitat(cursor, run_id: str, workflow: str, env: dict[str, str]) -> N
         matches_total       = int(summary.get("total_matches", 0) or 0)
         deps_scanned        = int(summary.get("dependencies_scanned", 0) or 0)
 
-        cursor.execute(
-            """
-            INSERT INTO habitat_scan_results (
-                run_id, scanned_at,
-                product, channel, hab_ident, resolved_version, resolved_release,
-                dependencies_scanned, matches_total,
-                main_critical, main_high, main_medium, main_low, main_negligible, main_unknown,
-                direct_critical, direct_high, direct_medium, direct_low, direct_negligible, direct_unknown,
-                trans_critical, trans_high, trans_medium, trans_low, trans_negligible, trans_unknown,
-                agg_critical, agg_high, agg_medium, agg_low, agg_negligible, agg_unknown
-            ) VALUES (
-                %s, %s,
-                %s, %s, %s, %s, %s,
-                %s, %s,
-                %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s
+        if not env["SKIP_TREND_INSERT"]:
+            upsert_scan_run(cursor, run_id, workflow, {
+                "snapshot": snapshot,
+                "scan": data.get("scan", {}),
+            })
+            cursor.execute(
+                """
+                INSERT INTO habitat_scan_results (
+                    run_id, scanned_at,
+                    product, channel, hab_ident, resolved_version, resolved_release,
+                    dependencies_scanned, matches_total,
+                    main_critical, main_high, main_medium, main_low, main_negligible, main_unknown,
+                    direct_critical, direct_high, direct_medium, direct_low, direct_negligible, direct_unknown,
+                    trans_critical, trans_high, trans_medium, trans_low, trans_negligible, trans_unknown,
+                    agg_critical, agg_high, agg_medium, agg_low, agg_negligible, agg_unknown
+                ) VALUES (
+                    %s, %s,
+                    %s, %s, %s, %s, %s,
+                    %s, %s,
+                    %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s
+                )
+                ON CONFLICT ON CONSTRAINT habitat_scan_results_unique DO NOTHING
+                """,
+                (
+                    run_id, scanned_at,
+                    env["PRODUCT"], env["CHANNEL"], hab_ident, resolved_version, resolved_release,
+                    deps_scanned, matches_total,
+                    sev(main_sev, "Critical"), sev(main_sev, "High"), sev(main_sev, "Medium"),
+                    sev(main_sev, "Low"), sev(main_sev, "Negligible"), sev(main_sev, "Unknown"),
+                    sev(direct_sev, "Critical"), sev(direct_sev, "High"), sev(direct_sev, "Medium"),
+                    sev(direct_sev, "Low"), sev(direct_sev, "Negligible"), sev(direct_sev, "Unknown"),
+                    sev(trans_sev, "Critical"), sev(trans_sev, "High"), sev(trans_sev, "Medium"),
+                    sev(trans_sev, "Low"), sev(trans_sev, "Negligible"), sev(trans_sev, "Unknown"),
+                    sev(agg_sev, "Critical"), sev(agg_sev, "High"), sev(agg_sev, "Medium"),
+                    sev(agg_sev, "Low"), sev(agg_sev, "Negligible"), sev(agg_sev, "Unknown"),
+                ),
             )
-            ON CONFLICT ON CONSTRAINT habitat_scan_results_unique DO NOTHING
-            """,
-            (
-                run_id, scanned_at,
-                env["PRODUCT"], env["CHANNEL"], hab_ident, resolved_version, resolved_release,
-                deps_scanned, matches_total,
-                sev(main_sev, "Critical"), sev(main_sev, "High"), sev(main_sev, "Medium"),
-                sev(main_sev, "Low"), sev(main_sev, "Negligible"), sev(main_sev, "Unknown"),
-                sev(direct_sev, "Critical"), sev(direct_sev, "High"), sev(direct_sev, "Medium"),
-                sev(direct_sev, "Low"), sev(direct_sev, "Negligible"), sev(direct_sev, "Unknown"),
-                sev(trans_sev, "Critical"), sev(trans_sev, "High"), sev(trans_sev, "Medium"),
-                sev(trans_sev, "Low"), sev(trans_sev, "Negligible"), sev(trans_sev, "Unknown"),
-                sev(agg_sev, "Critical"), sev(agg_sev, "High"), sev(agg_sev, "Medium"),
-                sev(agg_sev, "Low"), sev(agg_sev, "Negligible"), sev(agg_sev, "Unknown"),
-            ),
-        )
-
-        gha_notice(
-            f"insert-scan-results [habitat]: inserted row for "
-            f"{hab_ident}/{env['CHANNEL']} "
-            f"version={resolved_version}/{resolved_release} "
-            f"total={matches_total} deps={deps_scanned}"
-        )
+            gha_notice(
+                f"insert-scan-results [habitat]: inserted row for "
+                f"{hab_ident}/{env['CHANNEL']} "
+                f"version={resolved_version}/{resolved_release} "
+                f"total={matches_total} deps={deps_scanned}"
+            )
 
         # Upsert individual CVE detail rows for this package (snapshot, not append)
         pkg_dir = Path(index_path).parent
@@ -558,17 +562,20 @@ def main() -> None:
     run_id    = os.environ.get("RUN_ID", "")
     workflow  = os.environ.get("WORKFLOW", "unknown")
 
+    skip_trend = os.environ.get("SKIP_TREND_INSERT", "false").lower() == "true"
+
     env = {
-        "SCAN_MODE":       scan_mode,
-        "PRODUCT":         os.environ.get("PRODUCT", ""),
-        "CHANNEL":         os.environ.get("CHANNEL", ""),
-        "DOWNLOAD_SITE":   os.environ.get("DOWNLOAD_SITE", ""),
-        "OS_NAME":         os.environ.get("OS_NAME", ""),
-        "OS_VERSION":      os.environ.get("OS_VERSION", ""),
-        "ARCH":            os.environ.get("ARCH", "x86_64"),
-        "PACKAGE_MANAGER": os.environ.get("PACKAGE_MANAGER", ""),
-        "HAB_IDENT":       os.environ.get("HAB_IDENT", ""),
-        "OUT_DIR":         os.environ.get("OUT_DIR", "out"),
+        "SCAN_MODE":          scan_mode,
+        "PRODUCT":            os.environ.get("PRODUCT", ""),
+        "CHANNEL":            os.environ.get("CHANNEL", ""),
+        "DOWNLOAD_SITE":      os.environ.get("DOWNLOAD_SITE", ""),
+        "OS_NAME":            os.environ.get("OS_NAME", ""),
+        "OS_VERSION":         os.environ.get("OS_VERSION", ""),
+        "ARCH":               os.environ.get("ARCH", "x86_64"),
+        "PACKAGE_MANAGER":    os.environ.get("PACKAGE_MANAGER", ""),
+        "HAB_IDENT":          os.environ.get("HAB_IDENT", ""),
+        "OUT_DIR":            os.environ.get("OUT_DIR", "out"),
+        "SKIP_TREND_INSERT":  skip_trend,
     }
 
     if not db_url:
@@ -596,13 +603,24 @@ def main() -> None:
     try:
         conn = psycopg2.connect(db_url)
         conn.autocommit = False
+        if skip_trend:
+            gha_notice(
+                "insert-scan-results: skip_trend_insert=true — trend tables will not be updated."
+            )
+
         with conn.cursor() as cur:
             if scan_mode in ("native", "modern"):
                 insert_native(cur, run_id, workflow, env)
             elif scan_mode == "habitat":
                 insert_habitat(cur, run_id, workflow, env)
             elif scan_mode == "container":
-                insert_container(cur, run_id, workflow, env)
+                if skip_trend:
+                    gha_notice(
+                        "insert-scan-results: skipping container trend insert (no CVE detail "
+                        "tables for container scans)."
+                    )
+                else:
+                    insert_container(cur, run_id, workflow, env)
         conn.commit()
         gha_notice("insert-scan-results: DB insert committed successfully.")
 

@@ -81,6 +81,14 @@ inputs:
       Format: postgresql://scanwriter:PASSWORD@HOST:5432/vuln_trends?sslmode=require
       Pass the SCAN_DB_URL secret from the calling workflow.
     required: true
+  skip_trend_insert:
+    description: >
+      When 'true', skips writing to the aggregate trend tables
+      (native_scan_results, habitat_scan_results, container_scan_results)
+      but still upserts CVE detail rows. Use for test/on-demand scans to
+      avoid polluting day-over-day trend charts.
+    required: false
+    default: "false"
 
 runs:
   using: "composite"
@@ -103,10 +111,11 @@ runs:
         PACKAGE_MANAGER: ${{ inputs.package_manager }}
         HAB_IDENT:       ${{ inputs.hab_ident }}
         OUT_DIR:         ${{ inputs.out_dir }}
-        RUN_ID:          ${{ inputs.run_id }}
-        WORKFLOW:        ${{ inputs.workflow }}
-        DATABASE_URL:    ${{ inputs.db_url }}
-        ACTION_PATH:     ${{ github.action_path }}
+        RUN_ID:             ${{ inputs.run_id }}
+        WORKFLOW:           ${{ inputs.workflow }}
+        DATABASE_URL:       ${{ inputs.db_url }}
+        SKIP_TREND_INSERT:  ${{ inputs.skip_trend_insert }}
+        ACTION_PATH:        ${{ github.action_path }}
       run: |
         import os, sys
         sys.path.insert(0, os.environ["ACTION_PATH"])
