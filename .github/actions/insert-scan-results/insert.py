@@ -1,12 +1,16 @@
 """
 insert.py — Chef Vulnerability Analytics DB insertion script.
 
-Called by the insert-scan-results composite action. Reads the metadata JSON
-produced by chef-download-grype-snapshot or automate-container-scan and inserts
-summary count rows into the analytics Postgres database.
+Called by the insert-scan-results composite action. Reads the metadata JSON and
+Grype scan JSON produced by chef-download-grype-snapshot or automate-container-scan
+and inserts rows into the analytics Postgres database.
 
-Only count-level data is stored (no individual CVE IDs). All inserts use
-ON CONFLICT DO NOTHING for idempotency — safe to re-run on workflow retries.
+Two categories of data are written:
+  - Trend tables (native_scan_results, habitat_scan_results, container_scan_results):
+    aggregate count rows; inserted once per run with ON CONFLICT DO NOTHING.
+  - CVE detail tables (native_cve_details, habitat_cve_details): one row per unique
+    CVE × affected package × product × channel; upserted with ON CONFLICT DO UPDATE
+    so that first_observed_at is preserved and last_seen_at advances each scan.
 
 DB errors are surfaced as GitHub Actions warnings and do NOT propagate as
 exceptions, so a DB outage never blocks the main scan workflow.
@@ -93,6 +97,182 @@ def upsert_scan_run(cursor, run_id: str, workflow: str, meta: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
+# CVE detail extraction helpers
+# ---------------------------------------------------------------------------
+
+def _extract_cve_row(match: dict) -> tuple | None:
+    """
+    Extract the minimal CVE fields from a single Grype match dict.
+    Returns (cve_id, severity, pkg_name, pkg_version, fix_available, fix_version)
+    or None if the match lacks a CVE/GHSA id.
+    """
+    vuln     = match.get("vulnerability", {})
+    artifact = match.get("artifact", {})
+    fix      = vuln.get("fix", {})
+
+    cve_id = vuln.get("id", "")
+    if not cve_id:
+        return None
+
+    severity     = vuln.get("severity", "Unknown")
+    pkg_name     = artifact.get("name", "")
+    pkg_version  = artifact.get("version", "")
+    fix_state    = fix.get("state", "unknown")
+    fix_available = fix_state == "fixed"
+    fix_versions = fix.get("versions", [])
+    fix_version  = fix_versions[0] if fix_versions else None
+
+    return (cve_id, severity, pkg_name, pkg_version, fix_available, fix_version)
+
+
+def insert_native_cve_details(
+    cursor, scanned_at, env: dict[str, str]
+) -> None:
+    """
+    Upsert per-CVE detail rows for a native/modern scan.
+
+    Reads grype.latest.json from the scan output directory and inserts one row
+    per unique (scan_mode, product, channel, cve_id, package_name, package_version).
+    Multiple OS/arch matrix runs for the same product+channel collapse to the
+    same rows via ON CONFLICT — first_observed_at is preserved; last_seen_at
+    advances with each run.
+    """
+    out_dir    = env["OUT_DIR"]
+    grype_path = Path(out_dir) / "scanners" / "grype.latest.json"
+    if not grype_path.exists():
+        gha_warning(
+            f"insert-scan-results: grype.latest.json not found at {grype_path} "
+            "— skipping native CVE detail insert."
+        )
+        return
+
+    data = load_json(grype_path)
+    if data is None:
+        return
+
+    count = 0
+    for match in data.get("matches", []):
+        row = _extract_cve_row(match)
+        if row is None:
+            continue
+        cve_id, severity, pkg_name, pkg_version, fix_available, fix_version = row
+
+        cursor.execute(
+            """
+            INSERT INTO native_cve_details (
+                scan_mode, product, channel,
+                cve_id, severity,
+                package_name, package_version,
+                fix_available, fix_version,
+                first_observed_at, last_seen_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT ON CONSTRAINT native_cve_details_unique
+            DO UPDATE SET
+                last_seen_at  = EXCLUDED.last_seen_at,
+                severity      = EXCLUDED.severity,
+                fix_available = EXCLUDED.fix_available,
+                fix_version   = EXCLUDED.fix_version
+            """,
+            (
+                env["SCAN_MODE"],
+                env["PRODUCT"],
+                env["CHANNEL"],
+                cve_id,
+                severity,
+                pkg_name,
+                pkg_version,
+                fix_available,
+                fix_version,
+                scanned_at,  # first_observed_at — preserved by DO UPDATE
+                scanned_at,  # last_seen_at — always updated
+            ),
+        )
+        count += 1
+
+    gha_notice(
+        f"insert-scan-results [native/modern CVE details]: upserted {count} CVE rows for "
+        f"{env['PRODUCT']}/{env['CHANNEL']}"
+    )
+
+
+def insert_habitat_cve_details(
+    cursor, scanned_at, env: dict[str, str], hab_ident: str, pkg_dir: Path
+) -> None:
+    """
+    Upsert per-CVE detail rows for a Habitat package scan.
+
+    Globs all Grype scan JSON files under pkg_dir (main package, direct-deps,
+    and transitive-deps sub-directories) and inserts one row per unique
+    (hab_ident, channel, cve_id, package_name, package_version).
+    dep_layer is derived from the file path.
+    """
+    all_json = sorted(
+        p for p in pkg_dir.rglob("*.json")
+        if not p.name.endswith(".metadata.json") and p.name != "index.json"
+    )
+
+    count = 0
+    for json_path in all_json:
+        data = load_json(json_path)
+        if data is None or "matches" not in data:
+            continue
+
+        # Determine dep_layer from path relative to pkg_dir
+        rel_parts = json_path.relative_to(pkg_dir).parts
+        if rel_parts and rel_parts[0] == "direct-deps":
+            dep_layer = "direct"
+        elif rel_parts and rel_parts[0] == "transitive-deps":
+            dep_layer = "transitive"
+        else:
+            dep_layer = "main"
+
+        for match in data.get("matches", []):
+            row = _extract_cve_row(match)
+            if row is None:
+                continue
+            cve_id, severity, pkg_name, pkg_version, fix_available, fix_version = row
+
+            cursor.execute(
+                """
+                INSERT INTO habitat_cve_details (
+                    product, channel, hab_ident,
+                    cve_id, severity, dep_layer,
+                    package_name, package_version,
+                    fix_available, fix_version,
+                    first_observed_at, last_seen_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT ON CONSTRAINT habitat_cve_details_unique
+                DO UPDATE SET
+                    last_seen_at  = EXCLUDED.last_seen_at,
+                    severity      = EXCLUDED.severity,
+                    dep_layer     = EXCLUDED.dep_layer,
+                    fix_available = EXCLUDED.fix_available,
+                    fix_version   = EXCLUDED.fix_version
+                """,
+                (
+                    env["PRODUCT"],
+                    env["CHANNEL"],
+                    hab_ident,
+                    cve_id,
+                    severity,
+                    dep_layer,
+                    pkg_name,
+                    pkg_version,
+                    fix_available,
+                    fix_version,
+                    scanned_at,  # first_observed_at — preserved by DO UPDATE
+                    scanned_at,  # last_seen_at — always updated
+                ),
+            )
+            count += 1
+
+    gha_notice(
+        f"insert-scan-results [habitat CVE details]: upserted {count} CVE rows for "
+        f"{hab_ident}/{env['CHANNEL']}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Insertion logic per scan mode
 # ---------------------------------------------------------------------------
 
@@ -174,6 +354,9 @@ def insert_native(cursor, run_id: str, workflow: str, env: dict[str, str]) -> No
         f"version={resolved_version} "
         f"total={summary.get('matches_total', 0)}"
     )
+
+    # Upsert individual CVE detail rows (snapshot, not append)
+    insert_native_cve_details(cursor, scanned_at, env)
 
 
 def insert_habitat(cursor, run_id: str, workflow: str, env: dict[str, str]) -> None:
@@ -276,6 +459,10 @@ def insert_habitat(cursor, run_id: str, workflow: str, env: dict[str, str]) -> N
             f"version={resolved_version}/{resolved_release} "
             f"total={matches_total} deps={deps_scanned}"
         )
+
+        # Upsert individual CVE detail rows for this package (snapshot, not append)
+        pkg_dir = Path(index_path).parent
+        insert_habitat_cve_details(cursor, scanned_at, env, hab_ident, pkg_dir)
 
 
 def insert_container(cursor, run_id: str, workflow: str, env: dict[str, str]) -> None:
