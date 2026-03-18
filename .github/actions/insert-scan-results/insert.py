@@ -132,10 +132,10 @@ def insert_native_cve_details(
     Upsert per-CVE detail rows for a native/modern scan.
 
     Reads grype.latest.json from the scan output directory and inserts one row
-    per unique (scan_mode, product, channel, cve_id, package_name, package_version).
-    Multiple OS/arch matrix runs for the same product+channel collapse to the
-    same rows via ON CONFLICT — first_observed_at is preserved; last_seen_at
-    advances with each run.
+    per unique (scan_mode, product, channel, download_site, cve_id, package_name,
+    package_version). Multiple OS/arch matrix runs for the same product+channel
+    collapse to the same rows via ON CONFLICT — first_observed_at is preserved;
+    last_seen_at advances with each run.
     """
     out_dir    = env["OUT_DIR"]
     grype_path = Path(out_dir) / "scanners" / "grype.latest.json"
@@ -160,12 +160,12 @@ def insert_native_cve_details(
         cursor.execute(
             """
             INSERT INTO native_cve_details (
-                scan_mode, product, channel,
+                scan_mode, product, channel, download_site,
                 cve_id, severity,
                 package_name, package_version,
                 fix_available, fix_version,
                 first_observed_at, last_seen_at
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT ON CONSTRAINT native_cve_details_unique
             DO UPDATE SET
                 last_seen_at  = EXCLUDED.last_seen_at,
@@ -177,6 +177,7 @@ def insert_native_cve_details(
                 env["SCAN_MODE"],
                 env["PRODUCT"],
                 env["CHANNEL"],
+                env["DOWNLOAD_SITE"],
                 cve_id,
                 severity,
                 pkg_name,
