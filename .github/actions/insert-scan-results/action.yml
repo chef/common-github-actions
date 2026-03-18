@@ -1,11 +1,18 @@
 name: "Insert Scan Results into Analytics DB"
 description: >
-  Reads summary-level metadata JSON produced by chef-download-grype-snapshot or
-  automate-container-scan and inserts one or more rows into the vulnerability
-  trend analytics Postgres database.
+  Reads metadata and Grype scan JSON produced by chef-download-grype-snapshot or
+  automate-container-scan and inserts rows into the vulnerability analytics Postgres
+  database.
 
-  Only count-level data is stored (no individual CVE IDs). All inserts use
-  ON CONFLICT DO NOTHING, so the step is safe to re-run.
+  Two categories of data are written:
+    - Trend tables (native_scan_results, habitat_scan_results, container_scan_results):
+      one aggregate-count row per scan run; never updated after insert.
+    - CVE detail tables (native_cve_details, habitat_cve_details): one row per unique
+      CVE × affected package × product × channel. first_observed_at is immutable;
+      last_seen_at advances with each run. Stale rows (CVEs no longer detected) are
+      identifiable by last_seen_at falling behind the latest run date.
+
+  All inserts use ON CONFLICT for idempotency — safe to re-run on workflow retries.
 
   DB failures are reported as workflow warnings and do NOT fail the scan workflow.
 
