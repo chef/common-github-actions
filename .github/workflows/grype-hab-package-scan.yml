@@ -1,0 +1,652 @@
+# Reusable workflow to scan Habitat packages with Grype
+# This workflow can either:
+#   1. Build packages from source code (requires checkout and origin keys)
+#   2. Download packages from bldr.habitat.sh and scan them
+
+# Example usage - Download and scan:
+# jobs:
+#   scan-packages:
+#     uses: chef/common-github-actions/.github/workflows/grype-hab-package-scan.yml@main
+#     secrets: inherit
+#     with:
+#       hab_origin: 'chef-platform'
+#       hab_package: 'node-management-agent'
+#       hab_channel: 'stable'
+#       scan-linux: true
+#       scan-windows: true
+#       scan-macos: false
+#
+# Example usage - Build and scan:
+# jobs:
+#   scan-packages:
+#     uses: chef/common-github-actions/.github/workflows/grype-hab-package-scan.yml@main
+#     secrets: inherit
+#     with:
+#       build_package: true
+#       hab_origin: 'chef-platform'
+#       hab_package: 'node-management-agent'
+#       hab_version: '1.0.0'
+#       scan-linux: true
+
+name: Grype Scan for Habitat Packages
+
+on:
+  workflow_call:
+    inputs:
+      build_package:
+        description: "Build package from source code before scanning (requires checkout)"
+        required: false
+        type: boolean
+        default: false
+      hab_origin:
+        description: "Chef Habitat origin (e.g., chef-platform)"
+        required: true
+        type: string
+      hab_package:
+        description: "Chef Habitat package name (e.g., node-management-agent)"
+        required: true
+        type: string
+      hab_version:
+        description: "Chef Habitat package version (optional - scans latest from channel if not specified)"
+        required: false
+        type: string
+      hab_release:
+        description: "Chef Habitat package release (optional - scans latest from channel if not specified)"
+        required: false
+        type: string
+      hab_channel:
+        description: "Chef Habitat package channel (e.g., stable, base, unstable, base-2025, lts-2024)"
+        required: false
+        type: string
+        default: "stable"
+      hab_auth_token:
+        description: "Chef Habitat authentication token (optional, uses secret if not provided)"
+        required: false
+        type: string
+      scan-linux:
+        description: "Scan Linux (x86_64-linux) package"
+        required: false
+        type: boolean
+        default: true
+      scan-windows:
+        description: "Scan Windows (x86_64-windows) package"
+        required: false
+        type: boolean
+        default: false
+      scan-macos:
+        description: "Scan MacOS (x86_64-darwin) package"
+        required: false
+        type: boolean
+        default: false
+      fail-grype-on-high:
+        description: 'Fail the pipeline if Grype finds HIGH vulnerabilities'
+        required: false
+        type: boolean
+        default: false
+      fail-grype-on-critical:
+        description: 'Fail the pipeline if Grype finds CRITICAL vulnerabilities'
+        required: false
+        type: boolean
+        default: false
+    
+jobs:
+  habitat-grype-scan-linux:
+    name: 'Grype scan (Linux)'
+    runs-on: ubuntu-latest
+    if: ${{ inputs.scan-linux == true }}
+    steps:
+      - name: Install Chef Habitat
+        run: |
+            if [ -n "${{ inputs.hab_auth_token }}" ]; then
+                export HAB_AUTH_TOKEN="${{ inputs.hab_auth_token }}"
+            elif [ -n "${{ secrets.HAB_AUTH_TOKEN }}" ]; then
+                export HAB_AUTH_TOKEN="${{ secrets.HAB_AUTH_TOKEN }}"
+            fi
+            HABITAT_VERSION="1.6.1245"
+            curl https://raw.githubusercontent.com/habitat-sh/habitat/master/components/hab/install.sh | sudo bash -s -- -v "$HABITAT_VERSION"
+
+      - name: Configure Habitat
+        run: |
+            echo "/hab/bin" >> $GITHUB_PATH
+            echo "HAB_LICENSE=accept-no-persist" >> $GITHUB_ENV
+            sudo mkdir -p /hab/accepted-licenses/
+            sudo touch /hab/accepted-licenses/habitat
+
+      - name: Checkout code
+        if: ${{ inputs.build_package == true }}
+        uses: actions/checkout@v6
+
+      - name: Update pkg_version in plan.sh
+        if: ${{ inputs.build_package == true && inputs.hab_version != '' }}
+        run: |
+            if [ -f "habitat/plan.sh" ]; then
+                perl -i.bak -pe 'BEGIN{undef $/;} s/pkg_version\(\) \{[^}]*\}/pkg_version() {\n  echo "${{ inputs.hab_version }}"\n}/sm' habitat/plan.sh
+                echo "Updated pkg_version function in habitat/plan.sh"
+            fi
+
+      - name: Build Habitat package
+        if: ${{ inputs.build_package == true }}
+        run: |
+            if [ -n "${{ inputs.hab_auth_token }}" ]; then
+                export HAB_AUTH_TOKEN="${{ inputs.hab_auth_token }}"
+            elif [ -n "${{ secrets.HAB_AUTH_TOKEN }}" ]; then
+                export HAB_AUTH_TOKEN="${{ secrets.HAB_AUTH_TOKEN }}"
+            fi
+            export HAB_STUDIO_SECRET_GITHUB_TOKEN=${{ secrets.GH_TOKEN }}
+            export HAB_ORIGIN=${{ inputs.hab_origin }}
+            hab license accept
+            hab origin key download $HAB_ORIGIN
+            hab origin key download --auth $HAB_AUTH_TOKEN --secret $HAB_ORIGIN
+            echo "--- running linux hab build"
+            export BUILD_ARGS="-X 'main.version=${{ inputs.hab_version }}' -X 'main.build_date_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
+            hab pkg build .
+            hartifacts=$(ls results/*.hart)
+            if [ -f "$hartifacts" ]; then
+                echo "Built package artifact: $hartifacts"
+                sudo hab pkg install $hartifacts
+            else
+                echo "Error: No .hart file found in results/"
+                exit 1
+            fi
+
+      - name: Extract built package info
+        if: ${{ inputs.build_package == true }}
+        run: |
+            source results/last_build.env
+            echo "BUILT_PACKAGE=${pkg_ident}" >> $GITHUB_ENV
+            echo "BUILT_PKG_PATH=/hab/pkgs/${pkg_ident}" >> $GITHUB_ENV
+            echo "Built package: ${pkg_ident}"
+            echo "Installed Path: /hab/pkgs/${pkg_ident}"
+
+      - name: Install Grype
+        continue-on-error: true
+        run: |
+            curl -sSfL https://get.anchore.io/grype | sh -s -- -b /usr/local/bin
+
+      - name: Generate Artifact Name
+        run: |
+            TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+            ARTIFACT_NAME=$(echo "grype-scan-linux-${{ inputs.hab_package }}-${TIMESTAMP}" | sed 's|/|-|g')
+            echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >> $GITHUB_ENV
+
+      - name: Install Habitat Package (Linux)
+        if: ${{ inputs.build_package == false }}
+        run: |
+            PACKAGE="${{ inputs.hab_origin }}/${{ inputs.hab_package }}"
+            if [ -n "${{ inputs.hab_version }}" ]; then
+                PACKAGE="${PACKAGE}/${{ inputs.hab_version }}"
+            fi
+            if [ -n "${{ inputs.hab_release }}" ]; then
+                PACKAGE="${PACKAGE}/${{ inputs.hab_release }}"
+            fi
+            
+            INSTALL_CMD="sudo hab pkg install ${PACKAGE}"
+            
+            if [ -n "${{ inputs.hab_channel }}" ]; then
+                INSTALL_CMD="${INSTALL_CMD} --channel ${{ inputs.hab_channel }}"
+            fi
+            
+            if [ -n "${{ inputs.hab_auth_token }}" ]; then
+                export HAB_AUTH_TOKEN="${{ inputs.hab_auth_token }}"
+                echo "Using token from workflow input"
+            elif [ -n "${{ secrets.HAB_AUTH_TOKEN }}" ]; then
+                export HAB_AUTH_TOKEN="${{ secrets.HAB_AUTH_TOKEN }}"
+                echo "Using token from repository secret"
+            fi
+            
+            echo "Installing: ${INSTALL_CMD}"
+            eval ${INSTALL_CMD}
+
+      - name: Run Grype Scan on Habitat Package
+        timeout-minutes: 15
+        run: |
+            # Use built package if available, otherwise use input package name
+            if [ -n "${BUILT_PACKAGE}" ]; then
+                SCAN_PACKAGE="${BUILT_PACKAGE}"
+                # PKG_PATH="/hab/pkgs/${SCAN_PACKAGE}"
+                PKG_PATH="${BUILT_PKG_PATH}"
+            else
+                SCAN_PACKAGE="${{ inputs.hab_origin }}/${{ inputs.hab_package }}"
+                PKG_PATH=$(hab pkg path ${SCAN_PACKAGE})
+            fi
+            
+            echo "Scanning package at: ${PKG_PATH}"
+            
+            # Save results to files
+            OUTPUT_FILE="grype-results-linux-${SCAN_PACKAGE}.txt"
+            OUTPUT_FILE="${OUTPUT_FILE//\//-}"
+            grype dir:$PKG_PATH --name ${SCAN_PACKAGE} --only-fixed --output table > $OUTPUT_FILE
+            
+            JSON_FILE="grype-results-linux-${SCAN_PACKAGE}.json"
+            JSON_FILE="${JSON_FILE//\//-}"
+            grype dir:$PKG_PATH --name ${SCAN_PACKAGE} --only-fixed --output json > $JSON_FILE
+            
+            echo "OUTPUT_FILE=$OUTPUT_FILE" >> $GITHUB_ENV
+            echo "JSON_FILE=$JSON_FILE" >> $GITHUB_ENV
+
+      - name: Check Grype results and fail if vulnerabilities found (Linux)
+        if: ${{ always() && (inputs.fail-grype-on-high == true || inputs.fail-grype-on-critical == true) }}
+        run: |
+            JSON_FILE="${{ env.JSON_FILE }}"
+            
+            if [ ! -f "$JSON_FILE" ]; then
+              echo "⚠️  Grype JSON output not found"
+              exit 0
+            fi
+            
+            # Extract vulnerability counts by severity
+            CRITICAL_COUNT=$(jq '[.matches[]? | select(.vulnerability.severity == "Critical")] | unique_by(.vulnerability.id + .artifact.name + .artifact.version) | length' "$JSON_FILE" 2>/dev/null || echo "0")
+            HIGH_COUNT=$(jq '[.matches[]? | select(.vulnerability.severity == "High")] | unique_by(.vulnerability.id + .artifact.name + .artifact.version) | length' "$JSON_FILE" 2>/dev/null || echo "0")
+            
+            echo ""
+            echo "============================================"
+            echo "Grype Security Scan Summary (Linux)"
+            echo "============================================"
+            echo "CRITICAL vulnerabilities: $CRITICAL_COUNT"
+            echo "HIGH vulnerabilities: $HIGH_COUNT"
+            echo "============================================"
+            
+            VIOLATIONS=""
+            [ "${{ inputs.fail-grype-on-critical }}" == "true" ] && [ "$CRITICAL_COUNT" -gt 0 ] && VIOLATIONS="${VIOLATIONS}$CRITICAL_COUNT CRITICAL, "
+            [ "${{ inputs.fail-grype-on-high }}" == "true" ] && [ "$HIGH_COUNT" -gt 0 ] && VIOLATIONS="${VIOLATIONS}$HIGH_COUNT HIGH, "
+            
+            if [ -n "$VIOLATIONS" ]; then
+              echo ""
+              echo "❌ BUILD FAILED: Found ${VIOLATIONS%, }"
+              exit 1
+            else
+              echo ""
+              echo "✅ No policy-violating vulnerabilities found"
+            fi
+            
+      - name: Upload Grype Scan Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+            name: ${{ env.ARTIFACT_NAME }}
+            path: |
+              ${{ env.OUTPUT_FILE }}
+              ${{ env.JSON_FILE }}
+
+  habitat-grype-scan-windows:
+    name: 'Grype scan (Windows)'
+    runs-on: windows-latest
+    if: ${{ inputs.scan-windows == true }}
+    steps:
+      - name: Install Chef Habitat (Windows)
+        run: |
+            if (-not [string]::IsNullOrEmpty("${{ inputs.hab_auth_token }}")) {
+                $env:HAB_AUTH_TOKEN = "${{ inputs.hab_auth_token }}"
+            } elseif (-not [string]::IsNullOrEmpty("${{ secrets.HAB_AUTH_TOKEN }}")) {
+                $env:HAB_AUTH_TOKEN = "${{ secrets.HAB_AUTH_TOKEN }}"
+            }
+            $env:HAB_LICENSE = "accept-no-persist"
+            Invoke-Expression "& { $(Invoke-RestMethod https://raw.githubusercontent.com/habitat-sh/habitat/main/components/hab/install.ps1) } -Version '1.6.1245'"
+            hab --version
+
+      - name: Configure Habitat (Windows)
+        run: |
+            echo "HAB_LICENSE=accept-no-persist" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            New-Item -ItemType Directory -Force -Path "C:\hab\accepted-licenses"
+            New-Item -ItemType File -Force -Path "C:\hab\accepted-licenses\habitat"
+
+      - name: Checkout code
+        if: ${{ inputs.build_package == true }}
+        uses: actions/checkout@v6
+
+      - name: Update pkg_version in plan.ps1
+        if: ${{ inputs.build_package == true && inputs.hab_version != '' }}
+        run: |
+            if (Test-Path "habitat/plan.ps1") {
+                $content = Get-Content "habitat/plan.ps1" -Raw
+                $pattern = '(?s)function pkg_version \{[^}]+\}'
+                $replacement = "function pkg_version {`n    `"${{ inputs.hab_version }}`"`n}"
+                $content = $content -replace $pattern, $replacement
+                $content | Set-Content "habitat/plan.ps1"
+                Write-Output "Updated pkg_version function in habitat/plan.ps1"
+            }
+
+      - name: Build Habitat package
+        if: ${{ inputs.build_package == true }}
+        run: |
+            if (-not [string]::IsNullOrEmpty("${{ inputs.hab_auth_token }}")) {
+                $env:HAB_AUTH_TOKEN = "${{ inputs.hab_auth_token }}"
+            } elseif (-not [string]::IsNullOrEmpty("${{ secrets.HAB_AUTH_TOKEN }}")) {
+                $env:HAB_AUTH_TOKEN = "${{ secrets.HAB_AUTH_TOKEN }}"
+            }
+            $env:BUILD_ARGS = "-X 'main.version=${{ inputs.hab_version }}' -X 'main.build_date_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
+            $env:Path += ";C:\ProgramData\Habitat"
+            $env:GITHUB_TOKEN="${{ secrets.GH_TOKEN }}"
+            $env:HAB_ORIGIN="${{ inputs.hab_origin }}"
+            hab license accept
+            hab origin key download $env:HAB_ORIGIN
+            hab origin key download --auth $env:HAB_AUTH_TOKEN --secret $env:HAB_ORIGIN
+            write-output "--- running windows hab build"
+            hab pkg build .
+
+      - name: Extract built package info
+        if: ${{ inputs.build_package == true }}
+        run: |
+            . ./results/last_build.ps1
+            $PkgIdentPath = $pkg_ident -replace '/', '\'
+            $RepoName = "${{ github.event.repository.name }}"
+            $InstalledPath = "D:\hab\studios\a--${RepoName}--${RepoName}\hab\pkgs\$PkgIdentPath"
+            echo "BUILT_PACKAGE=$pkg_ident" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            echo "BUILT_PKG_PATH=$InstalledPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            Write-Host "Built package: $pkg_ident"
+            Write-Host "Installed Path: $InstalledPath"
+            
+      - name: Install Grype (Windows)
+        continue-on-error: true
+        run: |
+            $ErrorActionPreference = 'Stop'
+            $grypeVersion = (Invoke-RestMethod -Uri "https://api.github.com/repos/anchore/grype/releases/latest").tag_name
+            $grypeUrl = "https://github.com/anchore/grype/releases/download/$grypeVersion/grype_$($grypeVersion.TrimStart('v'))_windows_amd64.zip"
+            $grypeZip = "$env:TEMP\grype.zip"
+            $grypeDir = "$env:TEMP\grype"
+            
+            Invoke-WebRequest -Uri $grypeUrl -OutFile $grypeZip
+            Expand-Archive -Path $grypeZip -DestinationPath $grypeDir -Force
+            echo "$grypeDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            
+            & "$grypeDir\grype.exe" version
+            
+            # Create grype config to ignore unfixable vulnerabilities
+            @"
+            match:
+              exclude:
+                - fix-state: wont-fix
+                - fix-state: not-fixed
+                - fix-state: unknown
+            "@ | Out-File -FilePath ".grype.yaml" -Encoding utf8
+
+      - name: Generate Artifact Name
+        run: |
+            $Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+            $ArtifactName = "grype-scan-windows-${{ inputs.hab_package }}-$Timestamp"
+            $ArtifactName = $ArtifactName -replace '/', '-'
+            echo "ARTIFACT_NAME=$ArtifactName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Install Habitat Package (Windows)
+        if: ${{ inputs.build_package == false }}
+        run: |
+            $Package = "${{ inputs.hab_origin }}/${{ inputs.hab_package }}"
+            if ("${{ inputs.hab_version }}" -ne "") {
+                $Package = "${Package}/${{ inputs.hab_version }}"
+            }
+            if ("${{ inputs.hab_release }}" -ne "") {
+                $Package = "${Package}/${{ inputs.hab_release }}"
+            }
+            
+            $InstallCmd = "hab pkg install ${Package}"
+            
+            if ("${{ inputs.hab_channel }}" -ne "") {
+                $InstallCmd = "${InstallCmd} --channel ${{ inputs.hab_channel }}"
+            }
+            
+            if (-not [string]::IsNullOrEmpty("${{ inputs.hab_auth_token }}")) {
+                $env:HAB_AUTH_TOKEN = "${{ inputs.hab_auth_token }}"
+                Write-Host "Using token from workflow input"
+            } elseif (-not [string]::IsNullOrEmpty("${{ secrets.HAB_AUTH_TOKEN }}")) {
+                $env:HAB_AUTH_TOKEN = "${{ secrets.HAB_AUTH_TOKEN }}"
+                Write-Host "Using token from repository secret"
+            }
+            
+            Write-Host "Installing: ${InstallCmd}"
+            Invoke-Expression $InstallCmd
+
+      - name: Run Grype Scan on Habitat Package (Windows)
+        timeout-minutes: 15
+        run: |
+            # Use built package if available, otherwise use input package name
+            if ($env:BUILT_PACKAGE) {
+                $ScanPackage = $env:BUILT_PACKAGE
+                # $PkgPath = "D:\\hab\\studios\\a--${{ inputs.hab_package }}--${{ inputs.hab_package }}\/hab/pkgs/${ScanPackage}"
+                $PkgPath = $env:BUILT_PKG_PATH
+            } else {
+                $ScanPackage = "${{ inputs.hab_origin }}/${{ inputs.hab_package }}"
+                $PkgPath = hab pkg path $ScanPackage
+            }
+            
+            Write-Host "Scanning package at: $PkgPath"
+            
+            # Save results to files
+            $OutputFile = "grype-results-windows-$ScanPackage.txt"
+            $OutputFile = $OutputFile -replace '/', '-'
+            grype dir:$PkgPath --name $ScanPackage --only-fixed --output table | Out-File -FilePath $OutputFile -Encoding utf8
+            
+            $JsonFile = "grype-results-windows-$ScanPackage.json"
+            $JsonFile = $JsonFile -replace '/', '-'
+            grype dir:$PkgPath --name $ScanPackage --only-fixed --output json | Out-File -FilePath $JsonFile -Encoding utf8
+            
+            echo "OUTPUT_FILE=$OutputFile" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            echo "JSON_FILE=$JsonFile" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Check Grype results and fail if vulnerabilities found (Windows)
+        if: ${{ always() && (inputs.fail-grype-on-high == true || inputs.fail-grype-on-critical == true) }}
+        run: |
+            $JsonFile = "$env:JSON_FILE"
+            
+            if (-not (Test-Path $JsonFile)) {
+              Write-Host "⚠️  Grype JSON output not found"
+              exit 0
+            }
+            
+            # Parse JSON and count vulnerabilities
+            $JsonContent = Get-Content $JsonFile -Raw | ConvertFrom-Json
+            $CriticalCount = ($JsonContent.matches | Where-Object { $_.vulnerability.severity -eq "Critical" } | Select-Object -Property @{Name='Key';Expression={"$($_.vulnerability.id)-$($_.artifact.name)-$($_.artifact.version)"}} | Sort-Object -Property Key -Unique).Count
+            $HighCount = ($JsonContent.matches | Where-Object { $_.vulnerability.severity -eq "High" } | Select-Object -Property @{Name='Key';Expression={"$($_.vulnerability.id)-$($_.artifact.name)-$($_.artifact.version)"}} | Sort-Object -Property Key -Unique).Count
+            
+            if ($null -eq $CriticalCount) { $CriticalCount = 0 }
+            if ($null -eq $HighCount) { $HighCount = 0 }
+            
+            Write-Host ""
+            Write-Host "============================================"
+            Write-Host "Grype Security Scan Summary (Windows)"
+            Write-Host "============================================"
+            Write-Host "CRITICAL vulnerabilities: $CriticalCount"
+            Write-Host "HIGH vulnerabilities: $HighCount"
+            Write-Host "============================================"
+            
+            $Violations = @()
+            if ("${{ inputs.fail-grype-on-critical }}" -eq "true" -and $CriticalCount -gt 0) { $Violations += "$CriticalCount CRITICAL" }
+            if ("${{ inputs.fail-grype-on-high }}" -eq "true" -and $HighCount -gt 0) { $Violations += "$HighCount HIGH" }
+            
+            if ($Violations.Count -gt 0) {
+              Write-Host ""
+              Write-Host "❌ BUILD FAILED: Found $($Violations -join ', ')"
+              exit 1
+            } else {
+              Write-Host ""
+              Write-Host "✅ No policy-violating vulnerabilities found"
+            }
+                    
+      - name: Upload Grype Scan Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: |
+            ${{ env.OUTPUT_FILE }}
+            ${{ env.JSON_FILE }}
+
+  habitat-grype-scan-macos:
+    name: 'Grype scan (MacOS)'
+    runs-on: macos-15-intel
+    if: ${{ inputs.scan-macos == true }}
+    steps:
+      - name: Install Chef Habitat
+        run: |
+            if [ -n "${{ inputs.hab_auth_token }}" ]; then
+                export HAB_AUTH_TOKEN="${{ inputs.hab_auth_token }}"
+            elif [ -n "${{ secrets.HAB_AUTH_TOKEN }}" ]; then
+                export HAB_AUTH_TOKEN="${{ secrets.HAB_AUTH_TOKEN }}"
+            fi
+            curl https://raw.githubusercontent.com/habitat-sh/habitat/main/components/hab/install.sh | sudo -E bash
+            hab license accept
+            hab version
+
+      - name: Configure Habitat
+        run: |
+            echo "HAB_LICENSE=accept-no-persist" >> $GITHUB_ENV
+
+      - name: Checkout code
+        if: ${{ inputs.build_package == true }}
+        uses: actions/checkout@v6
+
+      - name: Update pkg_version in plan.sh
+        if: ${{ inputs.build_package == true && inputs.hab_version != '' }}
+        run: |
+            if [ -f "habitat/plan.sh" ]; then
+                perl -i.bak -pe 'BEGIN{undef $/;} s/pkg_version\(\) \{[^}]*\}/pkg_version() {\n  echo "${{ inputs.hab_version }}"\n}/sm' habitat/plan.sh
+                echo "Updated pkg_version function in habitat/plan.sh"
+            fi
+
+      - name: Download Habitat origin keys
+        if: ${{ inputs.build_package == true }}
+        run: |
+            if [ -n "${{ inputs.hab_auth_token }}" ]; then
+                export HAB_AUTH_TOKEN="${{ inputs.hab_auth_token }}"
+            elif [ -n "${{ secrets.HAB_AUTH_TOKEN }}" ]; then
+                export HAB_AUTH_TOKEN="${{ secrets.HAB_AUTH_TOKEN }}"
+            fi
+            hab origin key download ${{ inputs.hab_origin }}
+            hab origin key download --auth $HAB_AUTH_TOKEN --secret ${{ inputs.hab_origin }}
+
+      - name: Build Habitat package
+        if: ${{ inputs.build_package == true }}
+        run: |
+            if [ -n "${{ inputs.hab_auth_token }}" ]; then
+                export HAB_AUTH_TOKEN="${{ inputs.hab_auth_token }}"
+            elif [ -n "${{ secrets.HAB_AUTH_TOKEN }}" ]; then
+                export HAB_AUTH_TOKEN="${{ secrets.HAB_AUTH_TOKEN }}"
+            fi
+            hab pkg build .
+
+      - name: Extract built package info
+        if: ${{ inputs.build_package == true }}
+        run: |
+            source results/last_build.env
+            echo "BUILT_PACKAGE=${pkg_ident}" >> $GITHUB_ENV
+            echo "BUILT_PKG_PATH=/hab/pkgs/${pkg_ident}" >> $GITHUB_ENV
+            echo "Built package: ${pkg_ident}"
+            echo "Installed Path: /hab/pkgs/${pkg_ident}"
+
+      - name: Install Grype
+        continue-on-error: true
+        run: |
+            curl -sSfL https://get.anchore.io/grype | sh -s -- -b /usr/local/bin
+            
+            # Create grype config to ignore unfixable vulnerabilities
+            cat > .grype.yaml << 'EOF'
+            match:
+              exclude:
+                - fix-state: wont-fix
+                - fix-state: not-fixed
+                - fix-state: unknown
+            EOF
+
+      - name: Generate Artifact Name
+        run: |
+            TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+            ARTIFACT_NAME=$(echo "grype-scan-macos-${{ inputs.hab_package }}-${TIMESTAMP}" | sed 's|/|-|g')
+            echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >> $GITHUB_ENV
+
+      - name: Install Habitat Package (MacOS)
+        if: ${{ inputs.build_package == false }}
+        run: |
+            PACKAGE="${{ inputs.hab_origin }}/${{ inputs.hab_package }}"
+            if [ -n "${{ inputs.hab_version }}" ]; then
+                PACKAGE="${PACKAGE}/${{ inputs.hab_version }}"
+            fi
+            if [ -n "${{ inputs.hab_release }}" ]; then
+                PACKAGE="${PACKAGE}/${{ inputs.hab_release }}"
+            fi
+            
+            INSTALL_CMD="sudo hab pkg install ${PACKAGE}"
+            
+            if [ -n "${{ inputs.hab_channel }}" ]; then
+                INSTALL_CMD="${INSTALL_CMD} --channel ${{ inputs.hab_channel }}"
+            fi
+            
+            if [ -n "${{ inputs.hab_auth_token }}" ]; then
+                export HAB_AUTH_TOKEN="${{ inputs.hab_auth_token }}"
+                echo "Using token from workflow input"
+            elif [ -n "${{ secrets.HAB_AUTH_TOKEN }}" ]; then
+                export HAB_AUTH_TOKEN="${{ secrets.HAB_AUTH_TOKEN }}"
+                echo "Using token from repository secret"
+            fi
+            
+            echo "Installing: ${INSTALL_CMD}"
+            eval ${INSTALL_CMD}
+
+      - name: Run Grype Scan on Habitat Package
+        timeout-minutes: 15
+        run: |
+            # Use built package if available, otherwise use input package name
+            if [ -n "${BUILT_PACKAGE}" ]; then
+                SCAN_PACKAGE="${BUILT_PACKAGE}"
+                PKG_PATH="${BUILT_PKG_PATH}"
+            else
+                SCAN_PACKAGE="${{ inputs.hab_origin }}/${{ inputs.hab_package }}"
+                PKG_PATH=$(hab pkg path ${SCAN_PACKAGE})
+            fi
+            
+            echo "Scanning package at: ${PKG_PATH}"
+            
+            
+            # Save results to files
+            OUTPUT_FILE="grype-results-macos-${SCAN_PACKAGE}.txt"
+            OUTPUT_FILE="${OUTPUT_FILE//\//-}"
+            grype dir:$PKG_PATH --name ${SCAN_PACKAGE} --only-fixed --output table > $OUTPUT_FILE
+            
+            JSON_FILE="grype-results-macos-${SCAN_PACKAGE}.json"
+            JSON_FILE="${JSON_FILE//\//-}"
+            grype dir:$PKG_PATH --name ${SCAN_PACKAGE} --only-fixed --output json > $JSON_FILE
+            
+            echo "OUTPUT_FILE=$OUTPUT_FILE" >> $GITHUB_ENV
+            echo "JSON_FILE=$JSON_FILE" >> $GITHUB_ENV
+
+      - name: Check Grype results and fail if vulnerabilities found (MacOS)
+        if: ${{ always() && (inputs.fail-grype-on-high == true || inputs.fail-grype-on-critical == true) }}
+        run: |
+            JSON_FILE="${{ env.JSON_FILE }}"
+            
+            if [ ! -f "$JSON_FILE" ]; then
+              echo "⚠️  Grype JSON output not found"
+              exit 0
+            fi
+            
+            # Extract vulnerability counts by severity
+            CRITICAL_COUNT=$(jq '[.matches[]? | select(.vulnerability.severity == "Critical")] | unique_by(.vulnerability.id + .artifact.name + .artifact.version) | length' "$JSON_FILE" 2>/dev/null || echo "0")
+            HIGH_COUNT=$(jq '[.matches[]? | select(.vulnerability.severity == "High")] | unique_by(.vulnerability.id + .artifact.name + .artifact.version) | length' "$JSON_FILE" 2>/dev/null || echo "0")
+            
+            echo ""
+            echo "============================================"
+            echo "Grype Security Scan Summary (MacOS)"
+            echo "============================================"
+            echo "CRITICAL vulnerabilities: $CRITICAL_COUNT"
+            echo "HIGH vulnerabilities: $HIGH_COUNT"
+            echo "============================================"
+            
+            VIOLATIONS=""
+            [ "${{ inputs.fail-grype-on-critical }}" == "true" ] && [ "$CRITICAL_COUNT" -gt 0 ] && VIOLATIONS="${VIOLATIONS}$CRITICAL_COUNT CRITICAL, "
+            [ "${{ inputs.fail-grype-on-high }}" == "true" ] && [ "$HIGH_COUNT" -gt 0 ] && VIOLATIONS="${VIOLATIONS}$HIGH_COUNT HIGH, "
+            
+            if [ -n "$VIOLATIONS" ]; then
+              echo ""
+              echo "❌ BUILD FAILED: Found ${VIOLATIONS%, }"
+              exit 1
+            else
+              echo ""
+              echo "✅ No policy-violating vulnerabilities found"
+            fi
+ 
+      - name: Upload Grype Scan Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+            name: ${{ env.ARTIFACT_NAME }}
+            path: |
+              ${{ env.OUTPUT_FILE }}
+              ${{ env.JSON_FILE }}

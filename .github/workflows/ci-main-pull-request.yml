@@ -161,6 +161,56 @@ on:
         required: false
         type: boolean
         default: false
+      perform-grype-hab-scan:
+        description: 'Perform Grype scan on published Habitat packages from bldr.habitat.sh'
+        required: false
+        type: boolean
+        default: false
+      grype-hab-build-package:
+        description: 'Build Habitat package from source before scanning (requires checkout)'
+        required: false
+        type: boolean
+        default: false
+      grype-hab-origin:
+        description: 'Habitat origin (e.g., chef-platform)'
+        required: false
+        type: string
+        default: ''
+      grype-hab-package:
+        description: 'Habitat package name (e.g., node-management-agent)'
+        required: false
+        type: string
+        default: ''
+      grype-hab-version:
+        description: 'Habitat package version (optional - scans latest from channel if not specified)'
+        required: false
+        type: string
+        default: ''
+      grype-hab-release:
+        description: 'Habitat package release (optional - scans latest from channel if not specified)'
+        required: false
+        type: string
+        default: ''
+      grype-hab-channel:
+        description: 'Habitat package channel (e.g., stable, base, unstable, base-2025, lts-2024)'
+        required: false
+        type: string
+        default: 'stable'
+      grype-hab-scan-linux:
+        description: 'Scan Linux (x86_64-linux) Habitat package'
+        required: false
+        type: boolean
+        default: true
+      grype-hab-scan-windows:
+        description: 'Scan Windows (x86_64-windows) Habitat package'
+        required: false
+        type: boolean
+        default: false
+      grype-hab-scan-macos:
+        description: 'Scan MacOS (x86_64-darwin) Habitat package'
+        required: false
+        type: boolean
+        default: false
       build:
         description: 'CI Build (language-specific)'
         required: false
@@ -566,6 +616,17 @@ jobs:
             echo "   trivy"
           fi
 
+          if [ ${{ inputs.perform-grype-hab-scan }} ]; then
+            echo   "** GRYPE HABITAT PACKAGE SCAN **********************************************************"
+            echo   "   Mode: ${{ inputs.grype-hab-build-package == true && 'Build from source' || 'Download from Builder' }}"
+            if [ ${{ inputs.grype-hab-build-package }} ]; then
+              echo   "   Origin: ${{ inputs.grype-hab-origin }}"
+            fi
+            echo   "   Scanning Habitat package: ${{ inputs.grype-hab-origin }}/${{ inputs.grype-hab-package }}"
+            echo   "   Version: ${{ inputs.grype-hab-version }} Release: ${{ inputs.grype-hab-release }} Channel: ${{ inputs.grype-hab-channel }}"
+            echo   "   Platforms: Linux=${{ inputs.grype-hab-scan-linux }} Windows=${{ inputs.grype-hab-scan-windows }} MacOS=${{ inputs.grype-hab-scan-macos }}"
+          fi
+
           if [ ${{ inputs.build }} ]; then
             echo   "** BUILD AND UNIT TEST *************************************************************"
             echo   "   Repository build profile $GA_BUILD_PROFILE [${{ inputs.build-profile }}]"
@@ -909,6 +970,25 @@ jobs:
       fail-grype-on-high: ${{ inputs.grype-image-fail-on-high }}
       fail-grype-on-critical: ${{ inputs.grype-image-fail-on-critical }}
       grype-image-skip-aws: ${{ inputs.grype-image-skip-aws }}
+
+  run-grype-hab-package-scan:
+    name: 'Grype scan Habitat packages from bldr.habitat.sh'
+    if: ${{ inputs.perform-grype-hab-scan == true }}
+    uses: chef/common-github-actions/.github/workflows/grype-hab-package-scan.yml@main
+    needs: checkout
+    secrets: inherit
+    with:
+      build_package: ${{ inputs.grype-hab-build-package }}
+      hab_origin: ${{ inputs.grype-hab-origin }}
+      hab_package: ${{ inputs.grype-hab-package }}
+      hab_version: ${{ inputs.grype-hab-version }}
+      hab_release: ${{ inputs.grype-hab-release }}
+      hab_channel: ${{ inputs.grype-hab-channel }}
+      scan-linux: ${{ inputs.grype-hab-scan-linux }}
+      scan-windows: ${{ inputs.grype-hab-scan-windows }}
+      scan-macos: ${{ inputs.grype-hab-scan-macos }}
+      fail-grype-on-high: ${{ inputs.grype-fail-on-high }}
+      fail-grype-on-critical: ${{ inputs.grype-fail-on-critical }}
   
     # run-srcclr:
     #   if: ${{ inputs.perform-srcclr-scan == true }}
