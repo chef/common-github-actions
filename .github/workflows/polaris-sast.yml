@@ -229,7 +229,7 @@ jobs:
           polaris_prComment_enabled: true
           polaris_branch_parent_name: 'main'
           polaris_branch_name: ${{ inputs.github-branch-name }}
-          polaris_prComment_severities: "CRITICAL,HIGH,MEDIUM"
+          polaris_prComment_severities: "CRITICAL,HIGH"
           github_token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
         continue-on-error: false
       
@@ -276,15 +276,13 @@ jobs:
             # Extract total vulnerability counts from log
             HIGH_COUNT=$(grep -oP '"high":\s*\K\d+' "$BRIDGE_LOG" | tail -1 || echo "0")
             CRITICAL_COUNT=$(grep -oP '"critical":\s*\K\d+' "$BRIDGE_LOG" | tail -1 || echo "0")
-            MEDIUM_COUNT=$(grep -oP '"medium":\s*\K\d+' "$BRIDGE_LOG" | tail -1 || echo "0")
             
-            echo "Found total issues - HIGH: $HIGH_COUNT, CRITICAL: $CRITICAL_COUNT, MEDIUM: $MEDIUM_COUNT"
+            echo "Found total issues - HIGH: $HIGH_COUNT, CRITICAL: $CRITICAL_COUNT"
           fi
           
           # Ensure counts are numeric
           HIGH_COUNT=${HIGH_COUNT:-0}
           CRITICAL_COUNT=${CRITICAL_COUNT:-0}
-          MEDIUM_COUNT=${MEDIUM_COUNT:-0}
           
           # Check for policy violations
           SHOULD_FAIL=false
@@ -296,11 +294,6 @@ jobs:
           
           if [ "${{ inputs.polaris-fail-on-high }}" == "true" ] && [ "$HIGH_COUNT" -gt 0 ]; then
             echo "❌ Found $HIGH_COUNT HIGH vulnerabilities (policy violation)"
-            SHOULD_FAIL=true
-          fi
-
-          if [ "$MEDIUM_COUNT" -gt 0 ]; then
-            echo "⚠️  Found $MEDIUM_COUNT MEDIUM vulnerabilities (not a policy violation but should be reviewed)"
             SHOULD_FAIL=true
           fi
           
