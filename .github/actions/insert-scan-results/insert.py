@@ -592,7 +592,7 @@ def main() -> None:
         return
 
     try:
-        import psycopg2
+        import psycopg2  # type: ignore[import-untyped]
     except ImportError:
         gha_warning(
             "insert-scan-results: psycopg2 not available — skipping DB insert."
