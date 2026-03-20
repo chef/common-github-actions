@@ -88,6 +88,10 @@ on:
         required: false
         type: boolean
         default: false
+      hab_path:
+        description: "Path to built Habitat package (used if build_package is true, overrides hab_origin/hab_package inputs)"
+        required: false
+        type: string
     
 jobs:
   habitat-grype-scan-linux:
@@ -139,7 +143,12 @@ jobs:
             hab origin key download --auth $HAB_AUTH_TOKEN --secret $HAB_ORIGIN
             echo "--- running linux hab build"
             export BUILD_ARGS="-X 'main.version=${{ inputs.hab_version }}' -X 'main.build_date_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
-            hab pkg build .
+            if [ -z "${{ inputs.hab_path }}" ]; then
+                hab pkg build .
+            else
+                hab pkg build ${{ inputs.hab_path }}
+            fi
+            
             hartifacts=$(ls results/*.hart)
             if [ -f "$hartifacts" ]; then
                 echo "Built package artifact: $hartifacts"
@@ -322,7 +331,12 @@ jobs:
             hab origin key download $env:HAB_ORIGIN
             hab origin key download --auth $env:HAB_AUTH_TOKEN --secret $env:HAB_ORIGIN
             write-output "--- running windows hab build"
-            hab pkg build .
+            if ([string]::IsNullOrEmpty("${{ inputs.hab_path }}")) {
+                hab pkg build .
+            } else {
+                hab pkg build ${{ inputs.hab_path }}
+            }
+            # hab pkg build .
 
       - name: Extract built package info
         if: ${{ inputs.build_package == true }}
@@ -521,7 +535,12 @@ jobs:
             elif [ -n "${{ secrets.HAB_AUTH_TOKEN }}" ]; then
                 export HAB_AUTH_TOKEN="${{ secrets.HAB_AUTH_TOKEN }}"
             fi
-            hab pkg build .
+            if [ -z "${{ inputs.hab_path }}" ]; then
+                hab pkg build .
+            else
+                hab pkg build ${{ inputs.hab_path }}
+            fi
+            # hab pkg build .
 
       - name: Extract built package info
         if: ${{ inputs.build_package == true }}
