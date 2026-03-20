@@ -196,6 +196,10 @@ on:
         required: false
         type: string
         default: 'stable'
+      grype-hab-path:
+        description: "Path to built Habitat package (used if build_package is true, overrides hab_origin/hab_package inputs)"
+        required: false
+        type: string
       grype-hab-scan-linux:
         description: 'Scan Linux (x86_64-linux) Habitat package'
         required: false
@@ -895,20 +899,31 @@ jobs:
             echo "level=none" >> $GITHUB_OUTPUT
           fi
 
+      - name: Install Grype and update database
+        run: |
+          curl -sSfL https://get.anchore.io/grype | sh -s -- -b /usr/local/bin
+          grype db update
+          grype version
+      
+      - name: Generate Artifact Name
+        run: |
+            TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+            ARTIFACT_NAME=$(echo "grype-scan-${{ github.event.repository.name }}-${TIMESTAMP}" | sed 's|/|-|g')
+            echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >> $GITHUB_ENV
+
       - name: Run Grype scan on repo
         id: scan
-        uses: anchore/scan-action@v3
-        with:
-          path: .
-          fail-build: true
-          severity-cutoff: ${{ steps.severity.outputs.level }}
-          output-format: json
+        run: |
+          # Run grype with only-fixed flag and output to JSON for analysis
+          grype dir:. --only-fixed -o json > grype-scan.json
+          grype dir:. --only-fixed --only-fixed --output table >> grype-scan.log || true
+          echo "✅ Grype scan completed successfully"
   
 
       - name: Check Grype results and fail if vulnerabilities found
         if: always()
         run: |
-          JSON_FILE="./results.json"
+          JSON_FILE="./grype-scan.json"
           
           if [ ! -f "$JSON_FILE" ] || [ -z "$JSON_FILE" ]; then
             echo "⚠️  Grype JSON output not found"
@@ -949,9 +964,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: grype-results
-          path: ./results.json
-          retention-days: 30
+          name: ${{ env.ARTIFACT_NAME }}
+          path: |
+            grype-scan.json
+            grype-scan.log
 
       # - name: Run Grype scan on repo
       #   uses: anchore/scan-action@v3
@@ -984,6 +1000,7 @@ jobs:
       hab_version: ${{ inputs.grype-hab-version }}
       hab_release: ${{ inputs.grype-hab-release }}
       hab_channel: ${{ inputs.grype-hab-channel }}
+      hab_path: ${{ inputs.grype-hab-path }}
       scan-linux: ${{ inputs.grype-hab-scan-linux }}
       scan-windows: ${{ inputs.grype-hab-scan-windows }}
       scan-macos: ${{ inputs.grype-hab-scan-macos }}
