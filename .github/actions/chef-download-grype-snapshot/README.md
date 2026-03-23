@@ -1,11 +1,11 @@
-# Chef Download + Grype + Trivy Snapshot Action
+# Chef Download + Grype Snapshot Action
 
-Composite action that downloads Chef products and runs both Grype and Trivy vulnerability scans for comprehensive vulnerability detection.
+Composite action that downloads Chef products and runs Grype vulnerability scans.
 
 Supports three scan modes:
-- **native**: Downloads packages from Chef download sites and scans them (supports both Grype and Trivy)
+- **native**: Downloads packages from Chef download sites and scans them
 - **modern**: Downloads next-generation products (chef-ice) with flexible channel configurations
-- **habitat**: Installs Habitat packages and scans each dependency separately (Grype only)
+- **habitat**: Installs Habitat packages and scans each dependency separately
 
 ## Usage
 
@@ -24,8 +24,6 @@ Supports three scan modes:
     scan_mode: native
     scan_root: /opt/chef
     license_id: ${{ secrets.LICENSE_ID }}
-    enable_trivy: true
-    trivy_scanners: vuln
 ```
 
 ### Native Mode - CINC (Open Source)
@@ -42,7 +40,6 @@ Supports three scan modes:
     arch: x86_64
     scan_mode: native
     scan_root: /opt/cinc
-    enable_trivy: true
 ```
 
 ### Modern Mode - Next-Gen Products (chef-ice)
@@ -61,7 +58,6 @@ Supports three scan modes:
     scan_mode: modern
     scan_root: /hab
     license_id: ${{ secrets.LICENSE_ID }}
-    enable_trivy: true
 ```
 
 ### Modern Mode - With Base URL Override (current channel)
@@ -80,7 +76,6 @@ Supports three scan modes:
     scan_root: /hab
     license_id: ${{ secrets.CHEF_ACCEPTANCE_LICENSE_ID }}
     base_url_override: https://commercial-acceptance.downloads.chef.co
-    enable_trivy: true
 ```
 
 ### Habitat Mode
@@ -123,12 +118,6 @@ Supports three scan modes:
 | `hab_auth_token` | No | "" | Habitat Builder Personal Access Token for protected channels (pass via secrets) |
 | `out_dir` | No | out | Output directory for results |
 | `work_dir` | No | work | Working directory for temporary files |
-| `enable_trivy` | No | true | Enable Trivy scanning alongside Grype (native/modern modes only) |
-| `trivy_scanners` | No | vuln | Trivy scanner types (comma-separated: vuln, misconfig, secret, license) |
-| `trivy_severity` | No | UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL | Severity levels to report |
-| `trivy_ignore_unfixed` | No | false | Ignore vulnerabilities without fixes |
-| `trivy_timeout` | No | "" | Timeout for Trivy scan |
-| `trivy_cache_dir` | No | "" | Directory for Trivy cache |
 
 ## Outputs
 
@@ -139,42 +128,7 @@ Supports three scan modes:
 
 ## Security
 
-### Trivy Security Incident (March 2, 2026)
-
-**Background**: On March 2, 2026, Trivy and several other popular GitHub Actions projects were compromised via a GitHub Actions workflow vulnerability ([details](https://www.stepsecurity.io/blog/hackerbot-claw-github-actions-exploitation)). The attack:
-- Made the repository private and deleted GitHub Releases for versions 0.27.0-0.69.1
-- Potentially compromised the install script at `raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh`
-- Created malicious artifacts in related projects
-
-**Impact on This Action**: This action previously:
-- Used Trivy v0.58.1 (in the deleted release range)
-- Downloaded Trivy via the potentially compromised install script
-- Cached binaries without integrity verification
-
-**Security Measures Implemented**:
-
-1. **Updated to Safe Version**: Now uses Trivy v0.69.2 (the only republished safe version)
-
-2. **SHA256 Checksum Verification**: All Trivy binaries (cached or downloaded) are verified against known-good checksums:
-   - Linux AMD64: `a55443f5f8c4100020b7d453dd30328c5b55f88b2923daa81cca698053a4c561`
-   - Linux ARM64: `9bb98c4f7b32c58a8d9e59c6e7f0b0c8dc5d659e8dc9b5e8d6e9b6a2c6f7e8d9`
-
-3. **Direct GitHub Release Downloads**: No longer uses the install script. Downloads directly from:
-   - `https://github.com/aquasecurity/trivy/releases/download/v{VERSION}/trivy_{VERSION}_Linux-{ARCH}.tar.gz`
-
-4. **Cache Integrity Checks**: Validates cached binaries before use:
-   - Verifies SHA256 checksum matches expected value
-   - Removes and re-downloads if checksum mismatch detected
-   - Protects against using poisoned cached binaries
-
-5. **Fail-Safe on Integrity Failure**: Installation fails immediately if checksum verification fails, preventing execution of potentially malicious binaries
-
-**Recommendation**: If your workflows ran on March 2, 2026 before these fixes were applied:
-- Clear all GitHub Actions caches to remove potentially compromised binaries
-- Rotate secrets that workflows have access to (license tokens, auth tokens, etc.)
-- Review scan results from that date for potential tampering
-
-**Disabling Trivy**: Set `enable_trivy: false` to disable Trivy scanning entirely if needed.
+> **NOTE (March 22, 2026)**: Trivy has been permanently removed from this action due to a second security compromise. All scanning is now performed exclusively by Grype.
 
 ## Size Tracking
 
@@ -242,43 +196,11 @@ The action generates scanner-specific outputs in the `out_dir/scanners/` directo
 **Scanner Outputs (Canonical):**
 - **scanners/grype.latest.json**: Complete Grype scan results
 - **scanners/grype.metadata.json**: Grype scan metadata (version, DB info, severity counts)
-- **scanners/trivy.latest.json**: Complete Trivy scan results (if enabled)
-- **scanners/trivy.metadata.json**: Trivy scan metadata (version, DB info, severity counts)
-- **scanners/compare.json**: CVE-level comparison between Grype and Trivy results
 
 **Legacy Compatibility Files:**
 For backward compatibility during migration:
 - **latest.json**: Copy of `scanners/grype.latest.json`
 - **metadata.json**: Copy of `scanners/grype.metadata.json`
-
-**Comparison Format:**
-The `compare.json` file provides a CVE-level comparison:
-```json
-{
-  "schema_version": "1.0",
-  "generated_at_utc": "2026-02-03T10:15:30Z",
-  "target": {
-    "product": "chef",
-    "channel": "stable",
-    "resolved_version": "18.5.0"
-  },
-  "summary": {
-    "grype": {
-      "cve_count": 123,
-      "severity_counts": {"Critical": 5, "High": 20, ...}
-    },
-    "trivy": {
-      "cve_count": 120,
-      "severity_counts": {"Critical": 4, "High": 18, ...}
-    }
-  },
-  "diff": {
-    "only_in_grype": ["CVE-2023-1234", ...],
-    "only_in_trivy": ["CVE-2023-5678", ...],
-    "in_both": ["CVE-2023-9012", ...]
-  }
-}
-```
 
 ### Habitat Mode
 
@@ -326,7 +248,6 @@ out/
 ### Native and Modern Modes
 - Ubuntu runner (uses `dpkg` for package extraction)
 - Grype is automatically installed if not present
-- Trivy is automatically installed if not present
 - Valid license_id for the specified download_site:
   - **Commercial**: Requires a commercial license
   - **Community**: Requires a Free license
