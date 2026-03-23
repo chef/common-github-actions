@@ -110,11 +110,11 @@ on:
         required: false
         type: boolean
         default: true
-      perform-trivy-scan:
-        description: 'Perform Trivy scan'
-        required: false
-        type: boolean
-        default: true
+      # perform-trivy-scan:
+      #   description: 'Perform Trivy scan'
+      #   required: false
+      #   type: boolean
+      #   default: true
       perform-blackduck-polaris:
         description: 'Perform BlackDuck Polaris (SAST) scan'
         required: false
@@ -353,9 +353,6 @@ jobs:
           if [ ${{ inputs.perform-trufflehog-scan }} ]; then
             echo "  Perform trufflehog scan set to ${{ inputs.perform-trufflehog-scan }}"
           fi
-          if [ ${{ inputs.perform-trivy-scan }} ]; then
-            echo "  Perform Trivy scan set to ${{ inputs.perform-trivy-scan }}"
-          fi
           if [ ${{ inputs.perform-blackduck-polaris }} ]; then
             echo "  Perform BlackDuck polaris scan set to ${{ inputs.perform-blackduck-polaris }}"
             echo "  Polaris application name set to ${{ inputs.polaris-application-name }}"
@@ -556,13 +553,13 @@ jobs:
     if: ${{ inputs.perform-trufflehog-scan }}
     uses: chef/common-github-actions/.github/workflows/trufflehog.yml@main
     needs: checkout
-  run-trivy:
-    name: 'Trivy scan'
-    if: ${{ inputs.perform-trivy-scan }}
-    uses: chef/common-github-actions/.github/workflows/trivy.yml@main
-    needs: checkout
-    with:
-      version: ${{ inputs.version }}
+  # run-trivy:
+  #   name: 'Trivy scan'
+  #   if: ${{ inputs.perform-trivy-scan }}
+  #   uses: chef/common-github-actions/.github/workflows/trivy.yml@main
+  #   needs: checkout
+  #   with:
+  #     version: ${{ inputs.version }}
   
       # run-srcclr:
   #   if: ${{ inputs.perform-srcclr-scan == true }}
