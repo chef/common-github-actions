@@ -1377,7 +1377,7 @@ jobs:
     steps:
       - name: Install Chef Habitat (MacOS and Linux)
         run: |
-          curl https://raw.githubusercontent.com/habitat-sh/habitat/main/components/hab/install.sh | sudo bash
+          curl https://raw.githubusercontent.com/habitat-sh/habitat/main/components/hab/install.sh | sudo bash -s -- -v 1.6.1245
 
       - name: Configure Habitat (MacOS and Linux)
         run: |
