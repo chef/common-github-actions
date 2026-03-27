@@ -48,6 +48,12 @@ jobs:
     with:   
       visibility: ${{ github.event.repository.visibility }}
       language: 'go'  # go, ruby, rust
+      
+      # Optionally pin individual scan versions (all default to 'main')
+      # trufflehog-version: 'v1.0.7'
+      # grype-version: 'v1.0.7'
+      # sbom-version: 'v1.0.7'
+      
       perform-complexity-checks: true
       perform-trufflehog-scan: true
       perform-trivy-scan: true
@@ -101,6 +107,43 @@ Tags follow semantic versioning: `v{MAJOR}.{MINOR}.{PATCH}`
 ### Automatic Tagging
 
 When code is merged to `main` in `common-github-actions`, a new patch tag is automatically created via the `create-release-tag.yml` workflow. Manual version bumps can be triggered via workflow dispatch.
+
+### Sub-Workflow Versioning (NEW)
+
+**Each security scan can be pinned to its own version independently**, giving you fine-grained control over which scan versions to use:
+
+```yaml
+jobs:
+  ci:
+    uses: chef/common-github-actions/.github/workflows/ci-main-pull-request.yml@v1.0.7
+    with:
+      # Pin individual scan versions
+      scc-version: 'v1.0.7'              # Use stable SCC
+      trufflehog-version: 'v1.0.7'       # Use stable TruffleHog
+      grype-version: 'main'              # Use latest Grype
+      grype-hab-version: 'v1.0.6'        # Use older Habitat scan
+      polaris-version: 'v1.0.7'          # Use stable Polaris
+      sbom-version: 'v1.0.7'             # Use stable SBOM
+      quality-dashboard-version: 'main'  # Use latest dashboard
+```
+
+**Benefits:**
+- Pin versions that work well with your project
+- Update individual scans without affecting others
+- Test new scan versions without full pipeline upgrade
+- Avoid breaking changes in production workflows
+- Roll back specific scans if issues arise
+
+**Available Version Inputs:**
+- `scc-version` - Source code complexity checks
+- `trufflehog-version` - Secret scanning
+- `grype-version` - Grype image/source scanning
+- `grype-hab-version` - Grype Habitat package scanning
+- `polaris-version` - BlackDuck Polaris SAST
+- `sbom-version` - SBOM generation and BlackDuck SCA
+- `quality-dashboard-version` - Quality dashboard reporting
+
+**Default:** All sub-workflows default to `'main'` if not specified.
 
 ---
 
@@ -165,6 +208,12 @@ jobs:
       language: 'go'
       version: '1.0.0'
       build-profile: 'cli'
+      
+      # Pin scan versions for stability (optional)
+      trufflehog-version: 'v1.0.7'
+      grype-version: 'v1.0.7'
+      polaris-version: 'v1.0.7'
+      sbom-version: 'v1.0.7'
       
       # Code Quality
       perform-complexity-checks: true
@@ -258,6 +307,9 @@ jobs:
     with:
       visibility: ${{ github.event.repository.visibility }}
       language: 'go'
+      
+      # Use specific versions for critical scans
+      trufflehog-version: 'v1.0.7'  # Pin to stable version
       
       # Disable everything except security scans
       perform-complexity-checks: false

@@ -347,7 +347,12 @@ on:
         description: 'Report Sonar test coverage and other metrics to Atlassian dashboard (Irfans QA dashboard)'
         required: false
         type: boolean
-        default: true     
+        default: true
+      quality-dashboard-version:
+        description: 'Version of quality dashboard workflow to use (e.g., main, v1.0.7)'
+        required: false
+        type: string
+        default: 'main'
       quality-product-name:
         description: 'Product name for quality reporting (Chef360, Courier, Inspec)'
         required: false
@@ -734,7 +739,7 @@ jobs:
   scc:
     name: 'Source code complexity checks'
     if: ${{ inputs.perform-complexity-checks == true }}
-    uses: chef/common-github-actions/.github/workflows/scc.yml@main
+    uses: chef/common-github-actions/.github/workflows/scc.yml@${{ inputs.scc-version }}
     needs: checkout
     with:
       outputfilename: ${{ inputs.scc-output-filename }}
@@ -859,7 +864,7 @@ jobs:
   run-trufflehog:
     name: 'Trufflehog scan'
     if: ${{ inputs.perform-trufflehog-scan }}
-    uses: chef/common-github-actions/.github/workflows/trufflehog.yml@main
+    uses: chef/common-github-actions/.github/workflows/trufflehog.yml@${{ inputs.trufflehog-version }}
     needs: checkout
     with:
       github-event-name: ${{ inputs.github-event-name }}
@@ -979,7 +984,7 @@ jobs:
   run-grype-image:
     name: 'Grype Docker image scan'
     if: ${{ inputs.perform-grype-image-scan }}
-    uses: chef/common-github-actions/.github/workflows/grype.yml@main
+    uses: chef/common-github-actions/.github/workflows/grype.yml@${{ inputs.grype-version }}
     needs: checkout
     secrets: inherit
     with:
@@ -990,7 +995,7 @@ jobs:
   run-grype-hab-package-scan:
     name: 'Grype scan Habitat packages from bldr.habitat.sh'
     if: ${{ inputs.perform-grype-hab-scan == true }}
-    uses: chef/common-github-actions/.github/workflows/grype-hab-package-scan.yml@main
+    uses: chef/common-github-actions/.github/workflows/grype-hab-package-scan.yml@${{ inputs.grype-hab-version }}
     needs: checkout
     secrets: inherit
     with:
@@ -1301,7 +1306,7 @@ jobs:
   BlackDuck-Polaris-SAST:
     name: 'BlackDuck Polaris SAST scan'
     if: ${{ inputs.perform-blackduck-polaris }}
-    uses: chef/common-github-actions/.github/workflows/polaris-sast.yml@main
+    uses: chef/common-github-actions/.github/workflows/polaris-sast.yml@${{ inputs.polaris-version }}
     needs: checkout
     secrets: inherit
     with:
@@ -1568,7 +1573,7 @@ jobs:
     name: 'Generating SBOM'
     #    Create software bill-of-materials (SBOM) using SPDX format
     if: ${{ inputs.generate-sbom == true }}
-    uses: chef/common-github-actions/.github/workflows/sbom.yml@main
+    uses: chef/common-github-actions/.github/workflows/sbom.yml@${{ inputs.sbom-version }}
     needs: checkout # TODO: fix set-application-version
     secrets: inherit
     with:
@@ -1599,7 +1604,7 @@ jobs:
       id-token: write
       contents: read
     if: ${{ inputs.report-to-atlassian-dashboard == true && success() }}
-    uses: chef/common-github-actions/.github/workflows/irfan-quality-dashboard.yml@main
+    uses: chef/common-github-actions/.github/workflows/irfan-quality-dashboard.yml@${{ inputs.quality-dashboard-version }}
     with:
       perform-build: ${{ inputs.build }} # was ${{ inputs.perform-sonar-build }}
       build-profile: ${{ inputs.build-profile }}
