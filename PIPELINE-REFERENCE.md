@@ -491,7 +491,7 @@ graph LR
     
     C -->|secrets| D[HAB_PUBLIC_BLDR_PAT]
     C -->|inputs| E[publish-habitat-hab_package<br/>publish-habitat-hab_version<br/>publish-habitat-hab_release<br/>publish-habitat-hab_channel<br/>publish-habitat-hab_auth_token]
-    C -->|version| F[grype-version or grype-hab-version]
+    C -->|version| F[grype-version or grype-hab-workflow-version]
     
     style A fill:#ffe1e1
     style B fill:#ffd4d4
