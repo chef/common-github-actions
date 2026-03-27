@@ -1,0 +1,57 @@
+# Chef Automate Container - Dockerfile for Scanning
+# Based on Ubuntu 25.10 with systemd support for Chef Automate deployment
+FROM ubuntu:25.10
+
+# Build arguments for Chef Automate release channel and license
+ARG CHANNEL=current
+ARG LICENSE_ID
+
+# Avoid interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Update package list and install dependencies
+# Combine RUN commands to reduce layers and improve caching
+RUN apt-get update && apt-get install -y \
+    bash \
+    curl \
+    wget \
+    ca-certificates \
+    unzip \
+    systemd \
+    systemd-sysv \
+    python3 \
+    jq \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download and install Chef Automate CLI
+# Reference: https://docs.chef.io/automate/install/
+# Uses chefdownload-commercial API: /{channel}/automate/download?p=linux&m=amd64&v=latest&eol=false&license_id={license}
+RUN curl -L "https://chefdownload-commercial.chef.io/current/automate/download?p=linux&m=amd64&v=latest&eol=false&license_id=${LICENSE_ID}" \
+    -o /tmp/chef-automate.zip \
+    && unzip /tmp/chef-automate.zip -d /tmp \
+    && mv /tmp/chef-automate /usr/local/bin/chef-automate \
+    && chmod +x /usr/local/bin/chef-automate \
+    && rm /tmp/chef-automate.zip
+
+# Install Grype vulnerability scanner
+# Using official Anchore installation script
+RUN curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
+    | sh -s -- -b /usr/local/bin
+
+# Verify installations
+# Note: chef-automate version requires deployment, so we just verify the binary exists
+RUN test -f /usr/local/bin/chef-automate && echo "chef-automate binary present" && grype version
+
+# Set working directory
+WORKDIR /root
+
+# Entry point must be systemd for Automate to deploy properly
+# Chef Automate requires systemd to manage services (PostgreSQL, Elasticsearch, etc.)
+# Container must be run with --privileged and proper cgroup mounts:
+#   docker run -d --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw automate:latest
+ENTRYPOINT ["/lib/systemd/systemd"]
+
+# Metadata labels
+LABEL maintainer="Chef Software <info@chef.io>"
+LABEL description="Chef Automate container with Grype for vulnerability scanning"
+LABEL version="1.0"

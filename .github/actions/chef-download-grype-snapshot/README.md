@@ -1,11 +1,11 @@
-# Chef Download + Grype + Trivy Snapshot Action
+# Chef Download + Grype Snapshot Action
 
-Composite action that downloads Chef products and runs both Grype and Trivy vulnerability scans for comprehensive vulnerability detection.
+Composite action that downloads Chef products and runs Grype vulnerability scans.
 
 Supports three scan modes:
-- **native**: Downloads packages from Chef download sites and scans them (supports both Grype and Trivy)
+- **native**: Downloads packages from Chef download sites and scans them
 - **modern**: Downloads next-generation products (chef-ice) with flexible channel configurations
-- **habitat**: Installs Habitat packages and scans each dependency separately (Grype only)
+- **habitat**: Installs Habitat packages and scans each dependency separately
 
 ## Usage
 
@@ -24,8 +24,6 @@ Supports three scan modes:
     scan_mode: native
     scan_root: /opt/chef
     license_id: ${{ secrets.LICENSE_ID }}
-    enable_trivy: true
-    trivy_scanners: vuln
 ```
 
 ### Native Mode - CINC (Open Source)
@@ -42,7 +40,6 @@ Supports three scan modes:
     arch: x86_64
     scan_mode: native
     scan_root: /opt/cinc
-    enable_trivy: true
 ```
 
 ### Modern Mode - Next-Gen Products (chef-ice)
@@ -61,7 +58,6 @@ Supports three scan modes:
     scan_mode: modern
     scan_root: /hab
     license_id: ${{ secrets.LICENSE_ID }}
-    enable_trivy: true
 ```
 
 ### Modern Mode - With Base URL Override (current channel)
@@ -80,7 +76,6 @@ Supports three scan modes:
     scan_root: /hab
     license_id: ${{ secrets.CHEF_ACCEPTANCE_LICENSE_ID }}
     base_url_override: https://commercial-acceptance.downloads.chef.co
-    enable_trivy: true
 ```
 
 ### Habitat Mode
@@ -123,12 +118,6 @@ Supports three scan modes:
 | `hab_auth_token` | No | "" | Habitat Builder Personal Access Token for protected channels (pass via secrets) |
 | `out_dir` | No | out | Output directory for results |
 | `work_dir` | No | work | Working directory for temporary files |
-| `enable_trivy` | No | true | Enable Trivy scanning alongside Grype (native/modern modes only) |
-| `trivy_scanners` | No | vuln | Trivy scanner types (comma-separated: vuln, misconfig, secret, license) |
-| `trivy_severity` | No | UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL | Severity levels to report |
-| `trivy_ignore_unfixed` | No | false | Ignore vulnerabilities without fixes |
-| `trivy_timeout` | No | "" | Timeout for Trivy scan |
-| `trivy_cache_dir` | No | "" | Directory for Trivy cache |
 
 ## Outputs
 
@@ -136,6 +125,10 @@ Supports three scan modes:
 |--------|-------------|
 | `resolved_version` | The resolved product version that was scanned |
 | `download_url_redacted` | Download URL with license_id removed |
+
+## Security
+
+> **NOTE (March 22, 2026)**: Trivy has been permanently removed from this action due to a second security compromise. All scanning is now performed exclusively by Grype.
 
 ## Size Tracking
 
@@ -203,43 +196,11 @@ The action generates scanner-specific outputs in the `out_dir/scanners/` directo
 **Scanner Outputs (Canonical):**
 - **scanners/grype.latest.json**: Complete Grype scan results
 - **scanners/grype.metadata.json**: Grype scan metadata (version, DB info, severity counts)
-- **scanners/trivy.latest.json**: Complete Trivy scan results (if enabled)
-- **scanners/trivy.metadata.json**: Trivy scan metadata (version, DB info, severity counts)
-- **scanners/compare.json**: CVE-level comparison between Grype and Trivy results
 
 **Legacy Compatibility Files:**
 For backward compatibility during migration:
 - **latest.json**: Copy of `scanners/grype.latest.json`
 - **metadata.json**: Copy of `scanners/grype.metadata.json`
-
-**Comparison Format:**
-The `compare.json` file provides a CVE-level comparison:
-```json
-{
-  "schema_version": "1.0",
-  "generated_at_utc": "2026-02-03T10:15:30Z",
-  "target": {
-    "product": "chef",
-    "channel": "stable",
-    "resolved_version": "18.5.0"
-  },
-  "summary": {
-    "grype": {
-      "cve_count": 123,
-      "severity_counts": {"Critical": 5, "High": 20, ...}
-    },
-    "trivy": {
-      "cve_count": 120,
-      "severity_counts": {"Critical": 4, "High": 18, ...}
-    }
-  },
-  "diff": {
-    "only_in_grype": ["CVE-2023-1234", ...],
-    "only_in_trivy": ["CVE-2023-5678", ...],
-    "in_both": ["CVE-2023-9012", ...]
-  }
-}
-```
 
 ### Habitat Mode
 
@@ -287,7 +248,6 @@ out/
 ### Native and Modern Modes
 - Ubuntu runner (uses `dpkg` for package extraction)
 - Grype is automatically installed if not present
-- Trivy is automatically installed if not present
 - Valid license_id for the specified download_site:
   - **Commercial**: Requires a commercial license
   - **Community**: Requires a Free license
@@ -316,6 +276,31 @@ out/
 ### Habitat Mode
 - Channels are flexible: `stable`, `current`, `base-2025`, custom channels, etc.
 - Licensed channels (e.g., `base-2025`) require HAB_AUTH_TOKEN via license_id input
+
+## Version Matching Logic
+
+### Smart Stable Channel Selection
+
+When scanning the `stable` channel in native/modern modes, the action implements intelligent major version matching to ensure fair comparisons:
+
+**The Problem**: Comparing `stable` (e.g., v4.18.1) against `current` (e.g., v5.2.0) would show inflated vulnerability differences due to version gap rather than actual security improvements.
+
+**The Solution**: The action automatically:
+1. Queries the latest version from the `current` channel
+2. Extracts the major version number (e.g., `5` from `5.2.0`)
+3. Fetches all available versions from the `stable` channel
+4. Selects the highest stable version matching the same major version (e.g., `5.1.0`)
+
+**Example Flow**:
+```
+Current channel latest: 5.2.0
+Stable versions: [4.18.1, 4.18.0, 5.1.0, 5.0.2, 3.22.1]
+Selected stable version: 5.1.0 ✅ (matches major version 5)
+```
+
+This ensures apples-to-apples comparisons between `stable` and `current` releases, providing meaningful vulnerability trend analysis.
+
+**Fallback Behavior**: If no matching major version is found in stable, the action falls back to using `/versions/latest` from the stable channel.
 
 ## Error Handling
 

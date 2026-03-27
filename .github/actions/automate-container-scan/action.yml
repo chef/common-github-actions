@@ -1,0 +1,39 @@
+name: "Chef Automate Container Scan"
+description: "Deploy Chef Automate in a container and scan embedded Habitat packages using Grype"
+author: "Chef Software"
+
+inputs:
+  channel:
+    description: "Release channel for Chef Automate (stable or current)"
+    required: false
+    default: "current"
+  license_id:
+    description: "Chef download license ID (required for commercial downloads)"
+    required: true
+  out_dir:
+    description: "Output directory for scan results and logs"
+    required: false
+    default: "out"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Build Chef Automate container
+      shell: bash
+      run: |
+        echo "Building Chef Automate container image for channel: ${{ inputs.channel }}..."
+        docker build --build-arg CHANNEL=${{ inputs.channel }} --build-arg LICENSE_ID=${{ inputs.license_id }} -t automate:latest "${{ github.action_path }}"
+        echo "Container image built successfully"
+
+    - name: Run Chef Automate deployment and scan
+      shell: bash
+      run: |
+        bash "${{ github.action_path }}/run.sh"
+      env:
+        CHANNEL: ${{ inputs.channel }}
+        OUT_DIR: ${{ inputs.out_dir }}
+        ACTION_DIR: ${{ github.action_path }}
+
+branding:
+  icon: "shield"
+  color: "orange"
