@@ -96,6 +96,11 @@ on:
         required: false
         type: string
         default: 'scc-complexity'
+      scc-version:
+        description: 'Version of SCC workflow to use (e.g., main, v1.0.7)'
+        required: false
+        type: string
+        default: 'main'
       perform-language-linting:
         description: 'Perform language-specific linting and pre-compilation checks'
         required: false
@@ -111,6 +116,11 @@ on:
         required: false
         type: boolean
         default: true
+      trufflehog-version:
+        description: 'Version of Trufflehog workflow to use (e.g., main, v1.0.7)'
+        required: false
+        type: string
+        default: 'main'
       perform-trivy-scan:
         description: 'Perform Trivy scan'
         required: false
@@ -146,6 +156,11 @@ on:
         required: false
         type: boolean
         default: false
+      grype-version:
+        description: 'Version of Grype workflow to use (e.g., main, v1.0.7)'
+        required: false
+        type: string
+        default: 'main'
       grype-image-fail-on-high:
         description: 'Fail pipeline if Grype image scan finds HIGH vulnerabilities'
         required: false
@@ -166,6 +181,11 @@ on:
         required: false
         type: boolean
         default: false
+      grype-hab-workflow-version:
+        description: 'Version of Grype Habitat package scan workflow to use (e.g., main, v1.0.7)'
+        required: false
+        type: string
+        default: 'main'
       grype-hab-build-package:
         description: 'Build Habitat package from source before scanning (requires checkout)'
         required: false
@@ -248,6 +268,11 @@ on:
         required: false
         type: boolean
         default: false
+      polaris-version:
+        description: 'Version of Polaris SAST workflow to use (e.g., main, v1.0.7)'
+        required: false
+        type: string
+        default: 'main'
       polaris-application-name:
         description: 'Polaris application name, one of these {Chef-Agents | Chef-Automate | Chef-Chef360 | Chef-Habitat | Chef-Infrastructure-Server | Chef-Shared-Services}'
         required: false
@@ -445,6 +470,11 @@ on:
         required: false
         type: boolean
         default: true
+      sbom-version:
+        description: 'Version of SBOM workflow to use (e.g., main, v1.0.7)'
+        required: false
+        type: string
+        default: 'main'
       export-github-sbom:
         description: 'Export SBOM to GitHub'
         required: false
@@ -995,7 +1025,7 @@ jobs:
   run-grype-hab-package-scan:
     name: 'Grype scan Habitat packages from bldr.habitat.sh'
     if: ${{ inputs.perform-grype-hab-scan == true }}
-    uses: chef/common-github-actions/.github/workflows/grype-hab-package-scan.yml@${{ inputs.grype-hab-version }}
+    uses: chef/common-github-actions/.github/workflows/grype-hab-package-scan.yml@${{ inputs.grype-hab-workflow-version }}
     needs: checkout
     secrets: inherit
     with:

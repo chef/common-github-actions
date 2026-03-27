@@ -45,7 +45,7 @@ jobs:
 | `scc-version` | scc.yml | `main` | Source code complexity |
 | `trufflehog-version` | trufflehog.yml | `main` | Secret scanning |
 | `grype-version` | grype.yml | `main` | Image/source scanning |
-| `grype-hab-version` | grype-hab-package-scan.yml | `main` | Habitat package scanning |
+| `grype-hab-workflow-version` | grype-hab-package-scan.yml | `main` | Habitat package scanning |
 | `polaris-version` | polaris-sast.yml | `main` | BlackDuck Polaris SAST |
 | `sbom-version` | sbom.yml | `main` | SBOM + BlackDuck SCA |
 | `quality-dashboard-version` | irfan-quality-dashboard.yml | `main` | Quality reporting |
@@ -501,7 +501,7 @@ graph LR
 
 **Version Inputs:**
 - `grype-version` (string) - Version of Grype workflow for image/source scans, default: 'main'
-- `grype-hab-version` (string) - Version of Grype Habitat package scan workflow, default: 'main'
+- `grype-hab-workflow-version` (string) - Version of Grype Habitat package scan workflow, default: 'main'
 
 **Required Secrets:**
 - `HAB_PUBLIC_BLDR_PAT` - Habitat Builder personal access token (fallback)

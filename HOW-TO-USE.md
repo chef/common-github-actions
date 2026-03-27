@@ -121,7 +121,7 @@ jobs:
       scc-version: 'v1.0.7'              # Use stable SCC
       trufflehog-version: 'v1.0.7'       # Use stable TruffleHog
       grype-version: 'main'              # Use latest Grype
-      grype-hab-version: 'v1.0.6'        # Use older Habitat scan
+      grype-hab-workflow-version: 'v1.0.6' # Use older Habitat scan
       polaris-version: 'v1.0.7'          # Use stable Polaris
       sbom-version: 'v1.0.7'             # Use stable SBOM
       quality-dashboard-version: 'main'  # Use latest dashboard
@@ -138,7 +138,7 @@ jobs:
 - `scc-version` - Source code complexity checks
 - `trufflehog-version` - Secret scanning
 - `grype-version` - Grype image/source scanning
-- `grype-hab-version` - Grype Habitat package scanning
+- `grype-hab-workflow-version` - Grype Habitat package scanning
 - `polaris-version` - BlackDuck Polaris SAST
 - `sbom-version` - SBOM generation and BlackDuck SCA
 - `quality-dashboard-version` - Quality dashboard reporting
