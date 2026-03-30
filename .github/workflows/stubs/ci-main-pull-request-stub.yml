@@ -36,10 +36,33 @@ jobs:
       detect-version-source-parameter: '' # use for file name
       language: 'go'  # Go, Ruby, Rust, JavaScript, TypeScript, Python, Java, C#, PHP, other - used for build and SonarQube language setting
 
+      # ============================================================================
+      # SUB-WORKFLOW VERSION CONTROL (NEW IN v1.0.7+)
+      # ============================================================================
+      # Pin individual scan/workflow versions for stability. Uncomment to use.
+      # All default to 'main' if not specified. Use 'v1.0.7' format for stable versions.
+      # See: https://github.com/chef/common-github-actions/blob/main/HOW-TO-USE.md#sub-workflow-versioning-new
+      # ============================================================================
+      # scc-version: 'main'                    # Source code complexity checks
+      # dco-version: 'main'                    # Developer Certificate of Origin check
+      # trufflehog-version: 'main'             # Secret scanning (TruffleHog)
+      # grype-version: 'main'                  # Grype source/image scanning
+      # grype-hab-workflow-version: 'main'     # Grype Habitat package scanning
+      # polaris-version: 'main'                # BlackDuck Polaris SAST
+      # sbom-version: 'main'                   # SBOM generation and BlackDuck SCA
+      # quality-dashboard-version: 'main'      # Quality dashboard reporting
+
+      # ============================================================================
+      # SECURITY SCANS & CODE QUALITY
+      # ============================================================================
+      
       # complexity-checks
       perform-complexity-checks: true
       # scc-output-filename: 'scc-output.txt'
       perform-language-linting: false    # Perform language-specific linting and pre-compilation checks
+
+      # DCO (Developer Certificate of Origin) check
+      perform-dco-check: true  # Validate commit sign-offs on pull requests
 
       # trufflehog secret scanning
       perform-trufflehog-scan: true

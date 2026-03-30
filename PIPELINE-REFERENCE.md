@@ -6,6 +6,57 @@ This document provides comprehensive information about the security and quality 
 
 ## Pipeline Overview
 
+### Sub-Workflow Versioning
+
+**NEW in v1.0.7+**: Each security scan workflow can be pinned to a specific version independently. This allows you to:
+
+- **Pin stable versions** that work with your project
+- **Update incrementally** - test one scan at a time
+- **Avoid breaking changes** - stay on known-good versions
+- **Roll back easily** - revert specific scans if needed
+
+**Version Control Strategy:**
+
+```yaml
+# Example: Mix stable and latest versions
+jobs:
+  ci:
+    uses: chef/common-github-actions/.github/workflows/ci-main-pull-request.yml@v1.0.7
+    with:
+      # Production-critical scans: pin to tested versions
+      trufflehog-version: 'v1.0.7'
+      polaris-version: 'v1.0.7'
+      sbom-version: 'v1.0.7'
+      
+      # Non-blocking scans: use latest
+      scc-version: 'main'
+      grype-version: 'main'
+      
+      # Your scan configurations...
+      perform-trufflehog-scan: true
+      perform-blackduck-polaris: true
+      generate-sbom: true
+```
+
+**Available Version Inputs:**
+
+| Input | Workflow | Default | Description |
+|-------|----------|---------|-------------|
+| `scc-version` | scc.yml | `main` | Source code complexity |
+| `dco-version` | dco-check.yml | `main` | Developer Certificate of Origin check |
+| `trufflehog-version` | trufflehog.yml | `main` | Secret scanning |
+| `grype-version` | grype.yml | `main` | Image/source scanning |
+| `grype-hab-workflow-version` | grype-hab-package-scan.yml | `main` | Habitat package scanning |
+| `polaris-version` | polaris-sast.yml | `main` | BlackDuck Polaris SAST |
+| `sbom-version` | sbom.yml | `main` | SBOM + BlackDuck SCA |
+| `quality-dashboard-version` | irfan-quality-dashboard.yml | `main` | Quality reporting |
+
+**Recommendation:** Pin to specific versions (e.g., `v1.0.7`) for production repositories. Use `main` for development/testing repositories to get latest features.
+
+---
+
+## Pipeline Overview
+
 ```mermaid
 graph TD
     Start([Pull Request/Push Event]) --> PreCheck[precompilation-checks]
@@ -70,21 +121,71 @@ graph TD
 
 ```mermaid
 graph LR
-    A[scc Job] -->|calls| B[scc.yml]
+    A[scc Job] -->|calls| B[scc.yml@version]
     B -->|requires| C[Variables]
     
     C -->|input| D[outputfilename: string]
+    C -->|version| E[scc-version: string]
     
     style A fill:#e1f5ff
     style B fill:#d4edff
 ```
 
-**Workflow File:** `chef/common-github-actions/.github/workflows/scc.yml`
+**Workflow File:** `chef/common-github-actions/.github/workflows/scc.yml@{version}`
+
+**Version Input:**
+- `scc-version` (string) - Version of SCC workflow to use (e.g., 'main', 'v1.0.7'), default: 'main'
 
 **Required Variables:**
 - `outputfilename` (string) - Name of the SCC complexity output file artifact, default: 'scc-complexity'
 
 **Condition:** `inputs.perform-complexity-checks == true`
+
+---
+
+### **DCO (Developer Certificate of Origin) Check**
+
+**Purpose:** Validates that all commits in a pull request are signed with a Developer Certificate of Origin (DCO), ensuring contributors certify their right to submit the code.
+
+**What it checks:** 
+- Presence of "Signed-off-by" line in commit messages
+- Proper DCO signature format
+- All commits in the pull request have valid DCO sign-offs
+
+**Reporting:**
+- Job status (pass/fail) in GitHub Actions
+- Comments on pull requests indicating which commits are missing DCO signatures
+- Detailed logs available in workflow output
+
+#### Job Mapping
+
+```mermaid
+graph LR
+    A[run-dco-check Job] -->|calls| B[dco-check.yml]
+    B -->|requires| C[Variables]
+    
+    C -->|input| D[github-event-name: string]
+    C -->|version| E[dco-version: string]
+    
+    style A fill:#ffe1e1
+    style B fill:#ffd4d4
+```
+
+**Workflow File:** `chef/common-github-actions/.github/workflows/dco-check.yml@{version}`
+
+**Version Input:**
+- `dco-version` (string) - Version of DCO check workflow to use (e.g., 'main', 'v1.0.7'), default: 'main'
+
+**Required Variables:**
+- `github-event-name` (string) - GitHub event name to determine if this is a pull request event
+
+**Condition:** `inputs.perform-dco-check == true`
+
+**Notes:**
+- Only executes on pull_request events
+- Automatically skipped for push events and other triggers
+- Uses tim-actions/get-pr-commits and tim-actions/dco for validation
+- Contributors can add DCO sign-off using: `git commit -s` or `git commit --signoff`
 
 ---
 
@@ -143,16 +244,20 @@ graph LR
 
 ```mermaid
 graph LR
-    A[run-trufflehog Job] -->|calls| B[trufflehog.yml]
+    A[run-trufflehog Job] -->|calls| B[trufflehog.yml@version]
     B -->|requires| C[Variables]
     
     C -->|no inputs| D[None Required]
+    C -->|version| E[trufflehog-version: string]
     
     style A fill:#ffe1e1
     style B fill:#ffd4d4
 ```
 
-**Workflow File:** `chef/common-github-actions/.github/workflows/trufflehog.yml`
+**Workflow File:** `chef/common-github-actions/.github/workflows/trufflehog.yml@{version}`
+
+**Version Input:**
+- `trufflehog-version` (string) - Version of Trufflehog workflow to use (e.g., 'main', 'v1.0.7'), default: 'main'
 
 **Required Variables:**
 - None (inherits secrets automatically)
@@ -228,17 +333,21 @@ graph LR
 
 ```mermaid
 graph LR
-    A[BlackDuck-Polaris-SAST Job] -->|inline steps| B[Inline Implementation]
+    A[BlackDuck-Polaris-SAST Job] -->|calls| B[polaris-sast.yml@version]
     B -->|requires| C[Variables]
     
     C -->|secrets| D[POLARIS_SERVER_URL<br/>POLARIS_ACCESS_TOKEN]
     C -->|inputs| E[polaris-application-name<br/>polaris-project-name<br/>polaris-working-directory<br/>polaris-config-path<br/>polaris-coverity-config-path<br/>polaris-coverity-build-command<br/>polaris-coverity-clean-command<br/>polaris-coverity-args<br/>polaris-detect-search-depth<br/>polaris-detect-args<br/>polaris-assessment-mode<br/>wait-for-scan]
+    C -->|version| F[polaris-version: string]
     
     style A fill:#ffe1e1
     style B fill:#ffd4d4
 ```
 
-**Workflow File:** Inline implementation (no separate workflow)
+**Workflow File:** `chef/common-github-actions/.github/workflows/polaris-sast.yml@{version}`
+
+**Version Input:**
+- `polaris-version` (string) - Version of Polaris SAST workflow to use (e.g., 'main', 'v1.0.7'), default: 'main'
 
 **Required Secrets:**
 - `POLARIS_SERVER_URL` - BlackDuck Polaris server URL
@@ -429,12 +538,17 @@ graph LR
     
     C -->|secrets| D[HAB_PUBLIC_BLDR_PAT]
     C -->|inputs| E[publish-habitat-hab_package<br/>publish-habitat-hab_version<br/>publish-habitat-hab_release<br/>publish-habitat-hab_channel<br/>publish-habitat-hab_auth_token]
+    C -->|version| F[grype-version or grype-hab-workflow-version]
     
     style A fill:#ffe1e1
     style B fill:#ffd4d4
 ```
 
-**Workflow File:** Inline implementation
+**Workflow File:** Inline implementation (for inline scans) or `grype.yml@{version}` / `grype-hab-package-scan.yml@{version}`
+
+**Version Inputs:**
+- `grype-version` (string) - Version of Grype workflow for image/source scans, default: 'main'
+- `grype-hab-workflow-version` (string) - Version of Grype Habitat package scan workflow, default: 'main'
 
 **Required Secrets:**
 - `HAB_PUBLIC_BLDR_PAT` - Habitat Builder personal access token (fallback)
@@ -544,17 +658,21 @@ graph LR
 
 ```mermaid
 graph LR
-    A[generate-sbom Job] -->|calls| B[sbom.yml]
+    A[generate-sbom Job] -->|calls| B[sbom.yml@version]
     B -->|requires| C[Variables]
     
     C -->|secrets| D[BLACKDUCK_SBOM_URL<br/>BLACKDUCK_SCA_TOKEN]
     C -->|inputs| E[version<br/>export-github-sbom<br/>perform-blackduck-sca-scan<br/>blackduck-project-group-name<br/>blackduck-project-name<br/>generate-msft-sbom<br/>license_scout<br/>go-private-modules]
+    C -->|version| F[sbom-version: string]
     
     style A fill:#e1ffe1
     style B fill:#c5f5c5
 ```
 
-**Workflow File:** `chef/common-github-actions/.github/workflows/sbom.yml`
+**Workflow File:** `chef/common-github-actions/.github/workflows/sbom.yml@{version}`
+
+**Version Input:**
+- `sbom-version` (string) - Version of SBOM workflow to use (e.g., 'main', 'v1.0.7'), default: 'main'
 
 **Required Secrets:**
 - `BLACKDUCK_SBOM_URL` - BlackDuck SCA server URL
@@ -600,16 +718,20 @@ graph LR
 
 ```mermaid
 graph LR
-    A[quality-dashboard Job] -->|calls| B[irfan-quality-dashboard.yml]
+    A[quality-dashboard Job] -->|calls| B[irfan-quality-dashboard.yml@version]
     B -->|requires| C[Variables]
     
     C -->|inputs| D[perform-build<br/>build-profile<br/>language<br/>report-unit-test-coverage<br/>report-to-atlassian-dashboard<br/>quality-product-name<br/>quality-sonar-app-name<br/>quality-testing-type<br/>quality-service-name<br/>quality-junit-report<br/>visibility<br/>go-private-modules<br/>udf1, udf2, udf3]
+    C -->|version| E[quality-dashboard-version: string]
     
     style A fill:#f0e1ff
     style B fill:#e0c5ff
 ```
 
-**Workflow File:** `chef/common-github-actions/.github/workflows/irfan-quality-dashboard.yml`
+**Workflow File:** `chef/common-github-actions/.github/workflows/irfan-quality-dashboard.yml@{version}`
+
+**Version Input:**
+- `quality-dashboard-version` (string) - Version of quality dashboard workflow to use (e.g., 'main', 'v1.0.7'), default: 'main'
 
 **Required Variables:**
 - `perform-build` (boolean) - Whether build was performed
@@ -689,6 +811,7 @@ sequenceDiagram
 | Tool | Type | Primary Use | Workflow File | Output Location |
 |------|------|-------------|---------------|-----------------|
 | SCC | Complexity | Code metrics | scc.yml | GitHub Artifacts |
+| DCO Check | Compliance | Commit sign-off validation | dco-check.yml | Actions Logs/PR Comments |
 | TruffleHog | Secret Scan | Credential detection | trufflehog.yml | Actions Logs |
 | Trivy | Vulnerability | Dependencies & containers | trivy.yml | GitHub Artifacts/Security |
 | BlackDuck Polaris | SAST | Security vulnerabilities | Inline | polaris.blackduck.com |
