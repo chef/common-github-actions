@@ -36,25 +36,43 @@ jobs:
       detect-version-source-parameter: '' # use for file name
       language: 'go'  # Go, Ruby, Rust, JavaScript, TypeScript, Python, Java, C#, PHP, other - used for build and SonarQube language setting
 
+      # ============================================================================
+      # SUB-WORKFLOW VERSION CONTROL (NEW IN v1.0.7+)
+      # ============================================================================
+      # Pin individual scan/workflow versions for stability. Uncomment to use.
+      # All default to 'main' if not specified. Use 'v1.0.7' format for stable versions.
+      # See: https://github.com/chef/common-github-actions/blob/main/HOW-TO-USE.md#sub-workflow-versioning-new
+      # ============================================================================
+      # scc-version: 'main'                    # Source code complexity checks
+      # dco-version: 'main'                    # Developer Certificate of Origin check
+      # trufflehog-version: 'main'             # Secret scanning (TruffleHog)
+      # grype-version: 'main'                  # Grype source/image scanning
+      # grype-hab-workflow-version: 'main'     # Grype Habitat package scanning
+      # polaris-version: 'main'                # BlackDuck Polaris SAST
+      # sbom-version: 'main'                   # SBOM generation and BlackDuck SCA
+      # quality-dashboard-version: 'main'      # Quality dashboard reporting
+
+      # ============================================================================
+      # SECURITY SCANS & CODE QUALITY
+      # ============================================================================
+      
       # complexity-checks
       perform-complexity-checks: true
-      # scc-version: 'main'  # Version of SCC workflow (main, v1.0.7, etc.)
       # scc-output-filename: 'scc-output.txt'
       perform-language-linting: false    # Perform language-specific linting and pre-compilation checks
 
+      # DCO (Developer Certificate of Origin) check
+      perform-dco-check: true  # Validate commit sign-offs on pull requests
+
       # trufflehog secret scanning
       perform-trufflehog-scan: true
-      # trufflehog-version: 'main'  # Version of Trufflehog workflow (main, v1.0.7, etc.)
       
       # trivy dependency and container scanning
       perform-trivy-scan: true
-      # grype-version: 'main'  # Version of Grype workflow for source/image scans (main, v1.0.7, etc.)
-      # grype-hab-version: 'main'  # Version of Grype Habitat package scan workflow (main, v1.0.7, etc.)
       
       # BlackDuck SAST (Polaris) and SCA scans (requires a build or download to do SAST)
       # requires these secrets: POLARIS_SERVER_URL, POLARIS_ACCESS_TOKEN
       perform-blackduck-polaris: true
-      # polaris-version: 'main'  # Version of Polaris SAST workflow (main, v1.0.7, etc.)
       polaris-application-name: "Chef-Chef360"  # one of these: Chef-Agents, Chef-Automate, Chef-Chef360, Chef-Habitat, Chef-Infrastructure-Server, Chef-Shared-Services, Chef-Other, Chef-Non-Product
       polaris-project-name: ${{ github.event.repository.name }}
       # polaris-blackduck-executable: 'path/to/blackduck/binary'
@@ -87,7 +105,6 @@ jobs:
       perform-docker-scan: false  # scan Dockerfile and built images with Docker Scout or Trivy; see repo custom properties matching "container"
 
       # report to central developer dashboard
-      # quality-dashboard-version: 'main'  # Version of quality dashboard workflow (main, v1.0.7, etc.)
       report-to-atlassian-dashboard: false
       quality-product-name: 'Chef-360'   # product name for quality reporting, like Chef360, Courier, Inspec
       # quality-product-name: ${{ github.event.repository.name }}   # like 'Chef-360' - the product name for quality reporting, like Chef360, Courier, Inspec
@@ -111,7 +128,6 @@ jobs:
       publish-packages: false     # Publish packages (e.g., container from Dockerfile to ECR, go-releaser binary to releases page, omnibus to artifactory, gems, choco, homebrew, other app stores)
 
       # generate and export Software Bill of Materials (SBOM) in various formats
-      # sbom-version: 'main'  # Version of SBOM workflow (main, v1.0.7, etc.)
       generate-sbom: true
       export-github-sbom: true      # SPDX JSON artifact on job instance  
       perform-blackduck-sca-scan: true # combined with generate sbom & generate github-sbom, also needs version above

@@ -119,6 +119,7 @@ jobs:
     with:
       # Pin individual scan versions
       scc-version: 'v1.0.7'              # Use stable SCC
+      dco-version: 'v1.0.7'              # Use stable DCO check
       trufflehog-version: 'v1.0.7'       # Use stable TruffleHog
       grype-version: 'main'              # Use latest Grype
       grype-hab-workflow-version: 'v1.0.6' # Use older Habitat scan
@@ -136,6 +137,7 @@ jobs:
 
 **Available Version Inputs:**
 - `scc-version` - Source code complexity checks
+- `dco-version` - Developer Certificate of Origin check
 - `trufflehog-version` - Secret scanning
 - `grype-version` - Grype image/source scanning
 - `grype-hab-workflow-version` - Grype Habitat package scanning
@@ -344,6 +346,7 @@ jobs:
 | Input | Type | Default | Description |
 |-------|------|---------|-------------|
 | `perform-complexity-checks` | boolean | `true` | Run SCC complexity checks |
+| `perform-dco-check` | boolean | `true` | Run DCO (Developer Certificate of Origin) check on pull requests |
 | `perform-language-linting` | boolean | `true` | Run language-specific linting |
 | `perform-trufflehog-scan` | boolean | `true` | Run TruffleHog secret scan |
 | `perform-trivy-scan` | boolean | `true` | Run Trivy vulnerability scan |

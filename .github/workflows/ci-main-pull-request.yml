@@ -101,6 +101,16 @@ on:
         required: false
         type: string
         default: 'main'
+      perform-dco-check:
+        description: 'Perform DCO (Developer Certificate of Origin) check on pull requests'
+        required: false
+        type: boolean
+        default: true
+      dco-version:
+        description: 'Version of DCO check workflow to use (e.g., main, v1.0.7)'
+        required: false
+        type: string
+        default: 'main'
       perform-language-linting:
         description: 'Perform language-specific linting and pre-compilation checks'
         required: false

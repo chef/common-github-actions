@@ -43,6 +43,7 @@ jobs:
 | Input | Workflow | Default | Description |
 |-------|----------|---------|-------------|
 | `scc-version` | scc.yml | `main` | Source code complexity |
+| `dco-version` | dco-check.yml | `main` | Developer Certificate of Origin check |
 | `trufflehog-version` | trufflehog.yml | `main` | Secret scanning |
 | `grype-version` | grype.yml | `main` | Image/source scanning |
 | `grype-hab-workflow-version` | grype-hab-package-scan.yml | `main` | Habitat package scanning |
@@ -139,6 +140,52 @@ graph LR
 - `outputfilename` (string) - Name of the SCC complexity output file artifact, default: 'scc-complexity'
 
 **Condition:** `inputs.perform-complexity-checks == true`
+
+---
+
+### **DCO (Developer Certificate of Origin) Check**
+
+**Purpose:** Validates that all commits in a pull request are signed with a Developer Certificate of Origin (DCO), ensuring contributors certify their right to submit the code.
+
+**What it checks:** 
+- Presence of "Signed-off-by" line in commit messages
+- Proper DCO signature format
+- All commits in the pull request have valid DCO sign-offs
+
+**Reporting:**
+- Job status (pass/fail) in GitHub Actions
+- Comments on pull requests indicating which commits are missing DCO signatures
+- Detailed logs available in workflow output
+
+#### Job Mapping
+
+```mermaid
+graph LR
+    A[run-dco-check Job] -->|calls| B[dco-check.yml]
+    B -->|requires| C[Variables]
+    
+    C -->|input| D[github-event-name: string]
+    C -->|version| E[dco-version: string]
+    
+    style A fill:#ffe1e1
+    style B fill:#ffd4d4
+```
+
+**Workflow File:** `chef/common-github-actions/.github/workflows/dco-check.yml@{version}`
+
+**Version Input:**
+- `dco-version` (string) - Version of DCO check workflow to use (e.g., 'main', 'v1.0.7'), default: 'main'
+
+**Required Variables:**
+- `github-event-name` (string) - GitHub event name to determine if this is a pull request event
+
+**Condition:** `inputs.perform-dco-check == true`
+
+**Notes:**
+- Only executes on pull_request events
+- Automatically skipped for push events and other triggers
+- Uses tim-actions/get-pr-commits and tim-actions/dco for validation
+- Contributors can add DCO sign-off using: `git commit -s` or `git commit --signoff`
 
 ---
 
@@ -764,6 +811,7 @@ sequenceDiagram
 | Tool | Type | Primary Use | Workflow File | Output Location |
 |------|------|-------------|---------------|-----------------|
 | SCC | Complexity | Code metrics | scc.yml | GitHub Artifacts |
+| DCO Check | Compliance | Commit sign-off validation | dco-check.yml | Actions Logs/PR Comments |
 | TruffleHog | Secret Scan | Credential detection | trufflehog.yml | Actions Logs |
 | Trivy | Vulnerability | Dependencies & containers | trivy.yml | GitHub Artifacts/Security |
 | BlackDuck Polaris | SAST | Security vulnerabilities | Inline | polaris.blackduck.com |
