@@ -103,8 +103,8 @@ jobs:
         run: |
             if [ -n "${{ inputs.hab_auth_token }}" ]; then
                 export HAB_AUTH_TOKEN="${{ inputs.hab_auth_token }}"
-            elif [ -n "${{ secrets.HAB_AUTH_TOKEN }}" ]; then
-                export HAB_AUTH_TOKEN="${{ secrets.HAB_AUTH_TOKEN }}"
+            elif [ -n "${{ secrets.HAB_TEST_TOKEN }}" ]; then
+                export HAB_AUTH_TOKEN="${{ secrets.HAB_TEST_TOKEN }}"
             fi
             HABITAT_VERSION="1.6.1245"
             curl https://raw.githubusercontent.com/habitat-sh/habitat/master/components/hab/install.sh | sudo bash -s -- -v "$HABITAT_VERSION"
@@ -133,8 +133,8 @@ jobs:
         run: |
             if [ -n "${{ inputs.hab_auth_token }}" ]; then
                 export HAB_AUTH_TOKEN="${{ inputs.hab_auth_token }}"
-            elif [ -n "${{ secrets.HAB_AUTH_TOKEN }}" ]; then
-                export HAB_AUTH_TOKEN="${{ secrets.HAB_AUTH_TOKEN }}"
+            elif [ -n "${{ secrets.HAB_TEST_TOKEN }}" ]; then
+                export HAB_AUTH_TOKEN="${{ secrets.HAB_TEST_TOKEN }}"
             fi
             export HAB_STUDIO_SECRET_GITHUB_TOKEN=${{ secrets.GH_TOKEN }}
             export HAB_ORIGIN=${{ inputs.hab_origin }}
@@ -199,8 +199,8 @@ jobs:
                 export HAB_AUTH_TOKEN="${{ inputs.hab_auth_token }}"
                 INSTALL_CMD="${INSTALL_CMD} -z ${HAB_AUTH_TOKEN}"
                 echo "Using token from workflow input"
-            elif [ -n "${{ secrets.HAB_AUTH_TOKEN }}" ]; then
-                export HAB_AUTH_TOKEN="${{ secrets.HAB_AUTH_TOKEN }}"
+            elif [ -n "${{ secrets.HAB_TEST_TOKEN }}" ]; then
+                export HAB_AUTH_TOKEN="${{ secrets.HAB_TEST_TOKEN }}"
                 INSTALL_CMD="${INSTALL_CMD} -z ${HAB_AUTH_TOKEN}"
                 echo "Using token from repository secret"
             fi
@@ -288,8 +288,8 @@ jobs:
         run: |
             if (-not [string]::IsNullOrEmpty("${{ inputs.hab_auth_token }}")) {
                 $env:HAB_AUTH_TOKEN = "${{ inputs.hab_auth_token }}"
-            } elseif (-not [string]::IsNullOrEmpty("${{ secrets.HAB_AUTH_TOKEN }}")) {
-                $env:HAB_AUTH_TOKEN = "${{ secrets.HAB_AUTH_TOKEN }}"
+            } elseif (-not [string]::IsNullOrEmpty("${{ secrets.HAB_TEST_TOKEN }}")) {
+                $env:HAB_AUTH_TOKEN = "${{ secrets.HAB_TEST_TOKEN }}"
             }
             $env:HAB_LICENSE = "accept-no-persist"
             Invoke-Expression "& { $(Invoke-RestMethod https://raw.githubusercontent.com/habitat-sh/habitat/main/components/hab/install.ps1) } -Version '1.6.1245'"
@@ -323,8 +323,8 @@ jobs:
         run: |
             if (-not [string]::IsNullOrEmpty("${{ inputs.hab_auth_token }}")) {
                 $env:HAB_AUTH_TOKEN = "${{ inputs.hab_auth_token }}"
-            } elseif (-not [string]::IsNullOrEmpty("${{ secrets.HAB_AUTH_TOKEN }}")) {
-                $env:HAB_AUTH_TOKEN = "${{ secrets.HAB_AUTH_TOKEN }}"
+            } elseif (-not [string]::IsNullOrEmpty("${{ secrets.HAB_TEST_TOKEN }}")) {
+                $env:HAB_AUTH_TOKEN = "${{ secrets.HAB_TEST_TOKEN }}"
             }
             $env:BUILD_ARGS = "-X 'main.version=${{ inputs.hab_version }}' -X 'main.build_date_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
             $env:Path += ";C:\ProgramData\Habitat"
@@ -405,9 +405,9 @@ jobs:
                 $env:HAB_AUTH_TOKEN = "${{ inputs.hab_auth_token }}"
                 $InstallCmd = "${InstallCmd} -z ${{ inputs.hab_auth_token }}"
                 Write-Host "Using token from workflow input"
-            } elseif (-not [string]::IsNullOrEmpty("${{ secrets.HAB_AUTH_TOKEN }}")) {
-                $env:HAB_AUTH_TOKEN = "${{ secrets.HAB_AUTH_TOKEN }}"
-                $InstallCmd = "${InstallCmd} -z ${{ secrets.HAB_AUTH_TOKEN }}"
+            } elseif (-not [string]::IsNullOrEmpty("${{ secrets.HAB_TEST_TOKEN }}")) {
+                $env:HAB_AUTH_TOKEN = "${{ secrets.HAB_TEST_TOKEN }}"
+                $InstallCmd = "${InstallCmd} -z ${{ secrets.HAB_TEST_TOKEN }}"
                 Write-Host "Using token from repository secret"
             }
             
@@ -498,8 +498,8 @@ jobs:
         run: |
             if [ -n "${{ inputs.hab_auth_token }}" ]; then
                 export HAB_AUTH_TOKEN="${{ inputs.hab_auth_token }}"
-            elif [ -n "${{ secrets.HAB_AUTH_TOKEN }}" ]; then
-                export HAB_AUTH_TOKEN="${{ secrets.HAB_AUTH_TOKEN }}"
+            elif [ -n "${{ secrets.HAB_TEST_TOKEN }}" ]; then
+                export HAB_AUTH_TOKEN="${{ secrets.HAB_TEST_TOKEN }}"
             fi
             curl https://raw.githubusercontent.com/habitat-sh/habitat/main/components/hab/install.sh | sudo -E bash
             hab license accept
@@ -526,8 +526,8 @@ jobs:
         run: |
             if [ -n "${{ inputs.hab_auth_token }}" ]; then
                 export HAB_AUTH_TOKEN="${{ inputs.hab_auth_token }}"
-            elif [ -n "${{ secrets.HAB_AUTH_TOKEN }}" ]; then
-                export HAB_AUTH_TOKEN="${{ secrets.HAB_AUTH_TOKEN }}"
+            elif [ -n "${{ secrets.HAB_TEST_TOKEN }}" ]; then
+                export HAB_AUTH_TOKEN="${{ secrets.HAB_TEST_TOKEN }}"
             fi
             hab origin key download ${{ inputs.hab_origin }}
             hab origin key download --auth $HAB_AUTH_TOKEN --secret ${{ inputs.hab_origin }}
@@ -537,8 +537,8 @@ jobs:
         run: |
             if [ -n "${{ inputs.hab_auth_token }}" ]; then
                 export HAB_AUTH_TOKEN="${{ inputs.hab_auth_token }}"
-            elif [ -n "${{ secrets.HAB_AUTH_TOKEN }}" ]; then
-                export HAB_AUTH_TOKEN="${{ secrets.HAB_AUTH_TOKEN }}"
+            elif [ -n "${{ secrets.HAB_TEST_TOKEN }}" ]; then
+                export HAB_AUTH_TOKEN="${{ secrets.HAB_TEST_TOKEN }}"
             fi
             if [ -z "${{ inputs.hab_path }}" ]; then
                 hab pkg build .
@@ -597,8 +597,8 @@ jobs:
                 export HAB_AUTH_TOKEN="${{ inputs.hab_auth_token }}"
                 INSTALL_CMD="${INSTALL_CMD} -z ${HAB_AUTH_TOKEN}"
                 echo "Using token from workflow input"
-            elif [ -n "${{ secrets.HAB_AUTH_TOKEN }}" ]; then
-                export HAB_AUTH_TOKEN="${{ secrets.HAB_AUTH_TOKEN }}"
+            elif [ -n "${{ secrets.HAB_TEST_TOKEN }}" ]; then
+                export HAB_AUTH_TOKEN="${{ secrets.HAB_TEST_TOKEN }}"
                 INSTALL_CMD="${INSTALL_CMD} -z ${HAB_AUTH_TOKEN}"
                 echo "Using token from repository secret"
             fi
