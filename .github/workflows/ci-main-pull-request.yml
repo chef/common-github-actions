@@ -541,6 +541,16 @@ on:
       #   required: false
       #   default: 'https://polaris.blackduck.com'
       #   type: string
+      perform-wiz-scan:
+        description: 'Perform Wiz CLI security scan on Docker image'
+        required: false
+        type: boolean
+        default: false
+      wiz-fail-build:
+        description: 'Fail the build on Wiz policy violations'
+        required: false
+        type: boolean
+        default: true
         
 env:
   PRIMARY_APPLICATION: ${{ inputs.application }} # was 'default'   # Custom repo property [primaryApplication]: chef360, automate, infra-server, habitat, supermarket, licensing, downloads, chef-client, inspec, chef-workstation (or derivatives like habitat-builder)
@@ -1129,6 +1139,14 @@ jobs:
     #         echo "VERSION=$VER" >> $GITHUB_ENV
     #   then ${{ env.VERSION }}
   
+  run-wiz-scan:
+    name: 'Wiz CLI security scan'
+    if: ${{ inputs.perform-wiz-scan == true }}
+    uses: chef/common-github-actions/.github/workflows/wiz.yml@main
+    with:
+      fail-build: ${{ inputs.wiz-fail-build }}
+    secrets: inherit
+
   set-application-version:
     runs-on: ubuntu-latest
     name: 'Detect SBOM version for application'
