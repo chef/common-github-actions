@@ -990,7 +990,7 @@ jobs:
   run-grype-hab-package-scan:
     name: 'Grype scan Habitat packages from bldr.habitat.sh'
     if: ${{ inputs.perform-grype-hab-scan == true }}
-    uses: chef/common-github-actions/.github/workflows/grype-hab-package-scan.yml@main
+    uses: chef/common-github-actions/.github/workflows/grype-hab-package-scan.yml@fix/grype-hab-token-fallback
     needs: checkout
     secrets: inherit
     with:
