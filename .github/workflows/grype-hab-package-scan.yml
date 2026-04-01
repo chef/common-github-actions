@@ -197,11 +197,9 @@ jobs:
             
             if [ -n "${{ inputs.hab_auth_token }}" ]; then
                 export HAB_AUTH_TOKEN="${{ inputs.hab_auth_token }}"
-                INSTALL_CMD="${INSTALL_CMD} -z ${HAB_AUTH_TOKEN}"
                 echo "Using token from workflow input"
             elif [ -n "${{ secrets.HAB_AUTH_TOKEN }}" ]; then
                 export HAB_AUTH_TOKEN="${{ secrets.HAB_AUTH_TOKEN }}"
-                INSTALL_CMD="${INSTALL_CMD} -z ${HAB_AUTH_TOKEN}"
                 echo "Using token from repository secret"
             fi
             
@@ -403,11 +401,9 @@ jobs:
             
             if (-not [string]::IsNullOrEmpty("${{ inputs.hab_auth_token }}")) {
                 $env:HAB_AUTH_TOKEN = "${{ inputs.hab_auth_token }}"
-                $InstallCmd = "${InstallCmd} -z ${{ inputs.hab_auth_token }}"
                 Write-Host "Using token from workflow input"
             } elseif (-not [string]::IsNullOrEmpty("${{ secrets.HAB_AUTH_TOKEN }}")) {
                 $env:HAB_AUTH_TOKEN = "${{ secrets.HAB_AUTH_TOKEN }}"
-                $InstallCmd = "${InstallCmd} -z ${{ secrets.HAB_AUTH_TOKEN }}"
                 Write-Host "Using token from repository secret"
             }
             
@@ -595,11 +591,9 @@ jobs:
             
             if [ -n "${{ inputs.hab_auth_token }}" ]; then
                 export HAB_AUTH_TOKEN="${{ inputs.hab_auth_token }}"
-                INSTALL_CMD="${INSTALL_CMD} -z ${HAB_AUTH_TOKEN}"
                 echo "Using token from workflow input"
             elif [ -n "${{ secrets.HAB_AUTH_TOKEN }}" ]; then
                 export HAB_AUTH_TOKEN="${{ secrets.HAB_AUTH_TOKEN }}"
-                INSTALL_CMD="${INSTALL_CMD} -z ${HAB_AUTH_TOKEN}"
                 echo "Using token from repository secret"
             fi
             
