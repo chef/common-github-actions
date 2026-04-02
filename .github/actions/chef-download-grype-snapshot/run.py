@@ -517,18 +517,23 @@ if scan_mode == "habitat":
     # Accept the Chef License for Habitat (CI environment - create marker file for root)
     run(["bash", "-lc", "sudo mkdir -p /hab/accepted-licenses && sudo touch /hab/accepted-licenses/habitat"], check=True)
     
+    # Capture hab version for debugging
+    rc, hab_version_out, _ = run(["bash", "-lc", "hab --version 2>&1 || echo 'version unknown'"], check=False)
+    print(f"hab version: {hab_version_out}")
+    
     # Determine package identifier
     pkg_to_install = hab_ident if hab_ident else f"{hab_origin}/{product}"
     
     # Install the package (with channel if specified) - requires sudo for /hab/pkgs/ access
     # Note: Chef packages now require HAB_AUTH_TOKEN even for stable channel
+    # Note: hab defaults to 'base' channel, so we must explicitly specify stable if needed
     install_cmd = f"sudo hab pkg install {pkg_to_install}"
-    if hab_channel and hab_channel != "stable":
+    if hab_channel:
         install_cmd += f" --channel {hab_channel}"
     
     # Set HAB_AUTH_TOKEN if provided (required for protected packages including chef/* in stable)
     if hab_auth_token:
-        if hab_channel and hab_channel != "stable":
+        if hab_channel:
             install_cmd = f"sudo HAB_AUTH_TOKEN={hab_auth_token} hab pkg install {pkg_to_install} --channel {hab_channel}"
         else:
             install_cmd = f"sudo HAB_AUTH_TOKEN={hab_auth_token} hab pkg install {pkg_to_install}"
