@@ -1300,7 +1300,7 @@ jobs:
       
   BlackDuck-Polaris-SAST:
     name: 'BlackDuck Polaris SAST scan'
-    if: ${{ inputs.perform-blackduck-polaris }}
+    if: ${{ inputs.perform-blackduck-polaris && github.event_name == 'push' }}}
     uses: chef/common-github-actions/.github/workflows/polaris-sast.yml@main
     needs: checkout
     secrets: inherit
@@ -1576,7 +1576,7 @@ jobs:
       github-branch-name: ${{ inputs.github-branch-name }}
       version: ${{ inputs.version }}
       export-github-sbom: ${{ inputs.export-github-sbom }}
-      perform-blackduck-sca-scan: ${{ inputs.perform-blackduck-sca-scan }}
+      perform-blackduck-sca-scan: ${{ inputs.perform-blackduck-sca-scan && github.event_name == 'push' }}}
       # generate-blackduck-sbom: ${{ inputs.generate-blackduck-sbom }}  # obsolete, remove TODO
       blackduck-project-group-name: ${{ inputs.blackduck-project-group-name }}
       blackduck-project-name: ${{ inputs.blackduck-project-name }}
