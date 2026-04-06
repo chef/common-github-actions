@@ -152,7 +152,7 @@ jobs:
             hartifacts=$(ls results/*.hart)
             if [ -f "$hartifacts" ]; then
                 echo "Built package artifact: $hartifacts"
-                sudo hab pkg install $hartifacts
+                sudo -E hab pkg install $hartifacts
             else
                 echo "Error: No .hart file found in results/"
                 exit 1
@@ -189,7 +189,7 @@ jobs:
                 PACKAGE="${PACKAGE}/${{ inputs.hab_release }}"
             fi
             
-            INSTALL_CMD="sudo hab pkg install ${PACKAGE}"
+            INSTALL_CMD="sudo -E hab pkg install ${PACKAGE}"
             
             if [ -n "${{ inputs.hab_channel }}" ]; then
                 INSTALL_CMD="${INSTALL_CMD} --channel ${{ inputs.hab_channel }}"
@@ -298,6 +298,7 @@ jobs:
             echo "HAB_LICENSE=accept-no-persist" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
             New-Item -ItemType Directory -Force -Path "C:\hab\accepted-licenses"
             New-Item -ItemType File -Force -Path "C:\hab\accepted-licenses\habitat"
+            echo "C:\ProgramData\Habitat" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Checkout code
         if: ${{ inputs.build_package == true }}
@@ -582,7 +583,7 @@ jobs:
                 PACKAGE="${PACKAGE}/${{ inputs.hab_release }}"
             fi
             
-            INSTALL_CMD="sudo hab pkg install ${PACKAGE}"
+            INSTALL_CMD="sudo -E hab pkg install ${PACKAGE}"
             
             if [ -n "${{ inputs.hab_channel }}" ]; then
                 INSTALL_CMD="${INSTALL_CMD} --channel ${{ inputs.hab_channel }}"
