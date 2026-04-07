@@ -1007,15 +1007,24 @@ jobs:
       fail-grype-on-critical: ${{ inputs.grype-image-fail-on-critical }}
       grype-image-skip-aws: ${{ inputs.grype-image-skip-aws }}
 
+  build-docker-image:
+    name: 'Build Docker image for security scans'
+    if: ${{ inputs.perform-wiz-scan == true }}
+    uses: chef/common-github-actions/.github/workflows/build-docker-image.yml@grype-wiz
+    needs: checkout
+    secrets: inherit
+
   run-wiz-scan:
     name: 'Wiz CLI security scan'
     if: ${{ inputs.perform-wiz-scan == true }}
     uses: chef/common-github-actions/.github/workflows/wiz.yml@grype-wiz
-    needs: checkout
+    needs: [checkout, build-docker-image]
     with:
       fail-build: ${{ inputs.wiz-fail-build }}
       fail-on-critical: ${{ inputs.wiz-fail-on-critical }}
       fail-on-high: ${{ inputs.wiz-fail-on-high }}
+      prebuilt-image-artifact: docker-image-for-scans
+      prebuilt-image-names: ${{ needs.build-docker-image.outputs.image-names }}
     secrets: inherit
 
   run-grype-hab-package-scan:
