@@ -22,6 +22,16 @@ on:
         required: false
         type: boolean
         default: false
+      prebuilt-image-artifact:
+        description: 'Name of uploaded artifact containing a Docker image tar (skip Docker build if provided)'
+        required: false
+        type: string
+        default: ''
+      prebuilt-image-names:
+        description: 'Space-separated list of Docker image:tag names inside the prebuilt artifact tar'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   grype-scan:
@@ -65,13 +75,29 @@ jobs:
         if: ${{ !inputs.grype-image-skip-aws }}
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Scan with Grype
-        id: grype-scan
+      - name: Download prebuilt Docker image
+        if: ${{ inputs.prebuilt-image-artifact != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.prebuilt-image-artifact }}
+          path: /tmp
+
+      - name: Load prebuilt Docker image
+        id: load-image
+        if: ${{ inputs.prebuilt-image-artifact != '' }}
+        run: |
+          echo "Loading prebuilt images from artifact..."
+          docker load -i /tmp/docker-image.tar
+          echo "IMAGES=${{ inputs.prebuilt-image-names }}" >> "$GITHUB_OUTPUT"
+          echo "Loaded images: ${{ inputs.prebuilt-image-names }}"
+          docker images
+
+      - name: Build Docker image
+        id: build-image
+        if: ${{ inputs.prebuilt-image-artifact == '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          SCAN_NAME="${{ github.repository }}"
-          
           if [ ! -f "Dockerfile" ]; then
             echo "❌ No Dockerfile found - this workflow requires a Dockerfile to scan Docker image"
             exit 1
@@ -101,13 +127,19 @@ jobs:
             make compose-build
             
             echo "Detecting built images..."
-            docker compose images
-            
-            IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "^${REPO_NAME}" | grep -v "^<none>")
+            # Get all image names from compose, then keep only ones that exist locally (i.e., were actually built)
+            IMAGES=""
+            for img in $(docker compose config --images 2>/dev/null | sort -u); do
+              TAG_IMG=$(echo "$img" | grep -q ':' && echo "$img" || echo "${img}:latest")
+              if docker image inspect "$TAG_IMG" &>/dev/null; then
+                IMAGES="${IMAGES}${TAG_IMG} "
+              fi
+            done
+            IMAGES=$(echo "$IMAGES" | xargs)
             
             if [ -z "$IMAGES" ]; then
-              echo "No images found with prefix ${REPO_NAME}, scanning all recent images"
-              IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -v "^<none>" | head -5)
+              echo "⚠️ Could not detect built images from compose config, falling back to repo name match"
+              IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "^${REPO_NAME}" | grep -v "^<none>")
             fi
           # Strategy 3: Fallback to standard docker build
           else
@@ -120,6 +152,28 @@ jobs:
             echo "❌ No Docker images found after build"
             exit 1
           fi
+          
+          echo "IMAGES=$(echo $IMAGES | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
+          echo "Found images: $IMAGES"
+
+      - name: Determine scan targets
+        id: scan-target
+        run: |
+          IMAGES="${{ steps.load-image.outputs.IMAGES || steps.build-image.outputs.IMAGES }}"
+          if [ -z "$IMAGES" ]; then
+            echo "❌ No images available to scan"
+            exit 1
+          fi
+          echo "IMAGES=$IMAGES" >> "$GITHUB_OUTPUT"
+          echo "Scan targets: $IMAGES"
+
+      - name: Scan with Grype
+        id: grype-scan
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          SCAN_NAME="${{ github.repository }}"
+          IMAGES="${{ steps.scan-target.outputs.IMAGES }}"
           
           echo "Found images to scan:"
           echo "$IMAGES"

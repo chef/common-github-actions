@@ -12,6 +12,12 @@ name: Build Docker image
 
 on:
   workflow_call:
+    inputs:
+      skip-aws:
+        description: 'Skip AWS ECR login (for repos that do not need ECR base images)'
+        required: false
+        type: boolean
+        default: false
     outputs:
       image-names:
         description: 'Space-separated list of built Docker image names (repository:tag)'
@@ -21,6 +27,9 @@ jobs:
   build:
     name: Build and upload Docker image
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     outputs:
       image-names: ${{ steps.build-image.outputs.IMAGES }}
     steps:
@@ -31,6 +40,20 @@ jobs:
 
       - name: Configure git for private repos
         run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Configure AWS credentials
+        if: ${{ !inputs.skip-aws }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-2
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        if: ${{ !inputs.skip-aws }}
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build Docker image
         id: build-image
@@ -66,13 +89,19 @@ jobs:
             make compose-build
 
             echo "Detecting built images..."
-            docker compose images
-
-            IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "^${REPO_NAME}" | grep -v "^<none>")
+            # Get all image names from compose, then keep only ones that exist locally (i.e., were actually built)
+            IMAGES=""
+            for img in $(docker compose config --images 2>/dev/null | sort -u); do
+              TAG_IMG=$(echo "$img" | grep -q ':' && echo "$img" || echo "${img}:latest")
+              if docker image inspect "$TAG_IMG" &>/dev/null; then
+                IMAGES="${IMAGES}${TAG_IMG} "
+              fi
+            done
+            IMAGES=$(echo "$IMAGES" | xargs)
 
             if [ -z "$IMAGES" ]; then
-              echo "No images found with prefix ${REPO_NAME}, scanning all recent images"
-              IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -v "^<none>" | head -5)
+              echo "⚠️ Could not detect built images from compose config, falling back to repo name match"
+              IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "^${REPO_NAME}" | grep -v "^<none>")
             fi
           # Strategy 3: Fallback to standard docker build
           else
