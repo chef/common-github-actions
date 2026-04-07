@@ -24,6 +24,21 @@ on:
         required: false
         type: boolean
         default: false
+      wiz-image-skip-aws:
+        description: 'Skip AWS ECR login (for repos that do not need ECR base images)'
+        required: false
+        type: boolean
+        default: false
+      prebuilt-image-artifact:
+        description: 'Name of uploaded artifact containing a Docker image tar (skip Docker build if provided)'
+        required: false
+        type: string
+        default: ''
+      prebuilt-image-names:
+        description: 'Space-separated list of Docker image:tag names inside the prebuilt artifact tar'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   wiz-scan:
@@ -41,22 +56,46 @@ jobs:
       - name: Configure git for private repos
         run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
-      # - name: Configure AWS credentials
-      #   uses: aws-actions/configure-aws-credentials@v4
-      #   if: ${{ !inputs.wiz-image-skip-aws }}
-      #   with:
-      #     aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      #     aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-      #     aws-region: us-east-2
+      - name: Generate Artifact Name
+        run: |
+            TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+            ARTIFACT_NAME=$(echo "wiz-scan-${{ github.event.repository.name }}-${TIMESTAMP}" | sed 's|/|-|g')
+            echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >> $GITHUB_ENV
 
-      # - name: Login to Amazon ECR
-      #   id: login-ecr
-      #   if: ${{ !inputs.wiz-image-skip-aws }}
-      #   uses: aws-actions/amazon-ecr-login@v2
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        if: ${{ !inputs.wiz-image-skip-aws }}
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-2
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        if: ${{ !inputs.wiz-image-skip-aws }}
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Download prebuilt Docker image
+        if: ${{ inputs.prebuilt-image-artifact != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.prebuilt-image-artifact }}
+          path: /tmp
+
+      - name: Load prebuilt Docker image
+        id: load-image
+        if: ${{ inputs.prebuilt-image-artifact != '' }}
+        run: |
+          echo "Loading prebuilt images from artifact..."
+          docker load -i /tmp/docker-image.tar
+          echo "IMAGES=${{ inputs.prebuilt-image-names }}" >> "$GITHUB_OUTPUT"
+          echo "Loaded images: ${{ inputs.prebuilt-image-names }}"
+          docker images
 
       - name: Build Docker image
         id: build-image
+        if: ${{ inputs.prebuilt-image-artifact == '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
@@ -74,60 +113,61 @@ jobs:
             chmod +x build-docker.sh
             GITHUB_TOKEN="${{ secrets.GH_TOKEN }}" ./build-docker.sh
 
-            IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -E "^${REPO_NAME}" | grep -v "^<none>" | head -1)
+            IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -E "^${REPO_NAME}" | grep -v "^<none>")
 
-            if [ -z "$IMAGE" ]; then
-              echo "⚠️ No image found with prefix ${REPO_NAME} after build-docker.sh"
+            if [ -z "$IMAGES" ]; then
+              echo "⚠️ No images found with prefix ${REPO_NAME} after build-docker.sh"
               echo "Checking for any recently built images..."
-              IMAGE=$(docker images --format "{{.CreatedAt}}\t{{.Repository}}:{{.Tag}}" | sort -r | head -1 | cut -f2)
+              IMAGES=$(docker images --format "{{.CreatedAt}}\t{{.Repository}}:{{.Tag}}" | sort -r | head -5 | cut -f2 | grep -v "^<none>")
             fi
           # Strategy 2: Check for Makefile with compose-build target
           elif [ -f "Makefile" ] && grep -q "^compose-build:" Makefile; then
             echo "Using Makefile compose-build target with GITHUB_TOKEN"
             export GITHUB_TOKEN="${{ secrets.GH_TOKEN }}"
-            
-            # Record image IDs before build to detect newly built images
-            BEFORE_IDS=$(docker images -q --no-trunc | sort)
-            
             make compose-build
 
-            echo "Detecting built image..."
-            # Find newly created images by comparing before/after image IDs
-            AFTER_IDS=$(docker images -q --no-trunc | sort)
-            NEW_IDS=$(comm -13 <(echo "$BEFORE_IDS") <(echo "$AFTER_IDS"))
-            
-            if [ -n "$NEW_IDS" ]; then
-              for id in $NEW_IDS; do
-                # Use docker inspect instead of --filter (compatible with all Docker versions)
-                IMAGE=$(docker inspect --format '{{index .RepoTags 0}}' "$id" 2>/dev/null || true)
-                [ -n "$IMAGE" ] && [ "$IMAGE" != "<none>:<none>" ] && break
-                IMAGE=""
-              done
-            fi
+            echo "Detecting built images..."
+            # Get all image names from compose, then keep only ones that exist locally (i.e., were actually built)
+            IMAGES=""
+            for img in $(docker compose config --images 2>/dev/null | sort -u); do
+              TAG_IMG=$(echo "$img" | grep -q ':' && echo "$img" || echo "${img}:latest")
+              if docker image inspect "$TAG_IMG" &>/dev/null; then
+                IMAGES="${IMAGES}${TAG_IMG} "
+              fi
+            done
+            IMAGES=$(echo "$IMAGES" | xargs)
 
-            if [ -z "$IMAGE" ]; then
-              echo "No new image detected by ID comparison, falling back to repo name match"
-              IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -E "^${REPO_NAME}" | grep -v "<none>" | head -1)
-            fi
-
-            if [ -z "$IMAGE" ]; then
-              echo "⚠️ No image found matching ${REPO_NAME}, using most recent non-runner image"
-              IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -v "^<none>" | grep -v "^ghcr.io/github/" | grep -v "^ghcr.io/dependabot/" | head -1)
+            if [ -z "$IMAGES" ]; then
+              echo "⚠️ Could not detect built images from compose config, falling back to repo name match"
+              IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "^${REPO_NAME}" | grep -v "^<none>")
             fi
           # Strategy 3: Fallback to standard docker build
           else
             echo "Using standard docker build with GITHUB_TOKEN build arg"
             docker build --build-arg GITHUB_TOKEN="${{ secrets.GH_TOKEN }}" -t "${REPO_NAME}:latest" .
-            IMAGE="${REPO_NAME}:latest"
+            IMAGES="${REPO_NAME}:latest"
           fi
 
-          if [ -z "$IMAGE" ]; then
-            echo "❌ No Docker image found after build"
+          if [ -z "$IMAGES" ]; then
+            echo "❌ No Docker images found after build"
             exit 1
           fi
 
-          echo "Image to scan: $IMAGE"
-          echo "IMAGE=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "Found images to scan:"
+          echo "$IMAGES"
+          echo "IMAGES=$(echo $IMAGES | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
+
+      - name: Set scan target images
+        id: scan-target
+        run: |
+          # Use prebuilt images if available, otherwise use freshly built images
+          IMAGES="${{ steps.load-image.outputs.IMAGES || steps.build-image.outputs.IMAGES }}"
+          if [ -z "$IMAGES" ]; then
+            echo "❌ No Docker images available for scanning"
+            exit 1
+          fi
+          echo "Scan targets: $IMAGES"
+          echo "IMAGES=$IMAGES" >> "$GITHUB_OUTPUT"
 
       - name: Fetch Wiz credentials from AKeyless
         id: fetch-secrets
@@ -150,50 +190,55 @@ jobs:
         run: |
           set -o pipefail
 
-          SCAN_TYPE='container-image'
-          SCAN_TARGET='${{ steps.build-image.outputs.IMAGE }}'
+          IMAGES='${{ steps.scan-target.outputs.IMAGES }}'
+          SCAN_RESULT="passed"
 
-          args=("$SCAN_TYPE")
-          if [ -n "$SCAN_TARGET" ]; then
-            args+=("$SCAN_TARGET")
-          fi
+          # Initialize combined output files
+          > /tmp/wiz-scan.json
+          > /tmp/wiz-scan-results.txt
 
-          # Always output JSON for severity analysis
-          args+=("--json-output-file" "/tmp/wiz-scan.json")
+          for IMAGE_NAME in $IMAGES; do
+            echo ""
+            echo "============================================"
+            echo "Scanning Docker image: $IMAGE_NAME"
+            echo "============================================"
 
-          ./wizcli scan "${args[@]}" 2>&1 | tee /tmp/wiz-scan-results.txt
-          EXIT_CODE=${PIPESTATUS[0]}
+            JSON_FILE="/tmp/wiz-scan-$(echo $IMAGE_NAME | tr '/:' '__').json"
+
+            ./wizcli scan container-image "$IMAGE_NAME" --json-output-file "$JSON_FILE" 2>&1 | tee -a /tmp/wiz-scan-results.txt
+            EXIT_CODE=${PIPESTATUS[0]}
+
+            # Append JSON result to combined file
+            cat "$JSON_FILE" >> /tmp/wiz-scan.json 2>/dev/null || true
+
+            if [ $EXIT_CODE -ne 0 ]; then
+              SCAN_RESULT="failed"
+            fi
+          done
 
           echo ""
           echo "============================================"
-          echo "Wiz CLI Scan Output"
+          echo "Wiz CLI Scan Complete - Result: $SCAN_RESULT"
           echo "============================================"
-          cat /tmp/wiz-scan-results.txt
-          echo "============================================"
-          echo ""
 
-          if [ $EXIT_CODE -eq 0 ]; then
-            echo "scan-result=passed" >> $GITHUB_OUTPUT
-          else
-            echo "scan-result=failed" >> $GITHUB_OUTPUT
-          fi
-          exit $EXIT_CODE
+          echo "scan-result=$SCAN_RESULT" >> $GITHUB_OUTPUT
+          [ "$SCAN_RESULT" = "failed" ] && exit 1 || exit 0
 
       - name: Check Wiz results for severity violations
         id: severity-check
         if: always()
         run: |
-          JSON_FILE="/tmp/wiz-scan.json"
+          # Aggregate vulnerability counts across all per-image JSON files
+          CRITICAL_COUNT=0
+          HIGH_COUNT=0
 
-          if [ ! -f "$JSON_FILE" ]; then
-            echo "⚠️  Wiz JSON output not found, skipping severity check"
-            echo "severity-result=skipped" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          # Count vulnerabilities by severity from Wiz JSON analytics summary
-          CRITICAL_COUNT=$(jq '.result.analytics.vulnerabilities.criticalCount // 0' "$JSON_FILE" 2>/dev/null || echo "0")
-          HIGH_COUNT=$(jq '.result.analytics.vulnerabilities.highCount // 0' "$JSON_FILE" 2>/dev/null || echo "0")
+          for JSON_FILE in /tmp/wiz-scan-*.json; do
+            [ -f "$JSON_FILE" ] || continue
+            C=$(jq '.result.analytics.vulnerabilities.criticalCount // 0' "$JSON_FILE" 2>/dev/null || echo "0")
+            H=$(jq '.result.analytics.vulnerabilities.highCount // 0' "$JSON_FILE" 2>/dev/null || echo "0")
+            CRITICAL_COUNT=$((CRITICAL_COUNT + C))
+            HIGH_COUNT=$((HIGH_COUNT + H))
+          done
 
           echo ""
           echo "============================================"
@@ -222,50 +267,11 @@ jobs:
             echo "severity-result=passed" >> $GITHUB_OUTPUT
           fi
 
-      - name: Write Job Summary
-        if: always()
-        run: |
-          SCAN_RESULT="${{ steps.wiz-scan.outputs.scan-result }}"
-          SEVERITY_RESULT="${{ steps.severity-check.outputs.severity-result }}"
-
-          # Overall result: fail if either policy or severity check failed
-          if [ "$SCAN_RESULT" = "passed" ] && [ "$SEVERITY_RESULT" != "failed" ]; then
-            ICON="✅"
-            OVERALL="passed"
-          else
-            ICON="❌"
-            OVERALL="failed"
-          fi
-
-          {
-            echo "## ${ICON} Wiz CLI Scan Results"
-            echo ""
-            echo "| Field | Value |"
-            echo "|-------|-------|"
-            echo "| **Scan type** | \`container-image\` |"
-            echo "| **Target** | \`${{ steps.build-image.outputs.IMAGE }}\` |"
-            echo "| **Policy result** | **${SCAN_RESULT}** |"
-            echo "| **Severity result** | **${SEVERITY_RESULT}** |"
-            echo "| **Overall** | **${OVERALL}** |"
-            echo ""
-            echo "### Vulnerability Counts"
-            echo ""
-            echo "| Severity | Count | Fail on? |"
-            echo "|----------|-------|----------|"
-            echo "| CRITICAL | ${{ steps.severity-check.outputs.critical-count || '0' }} | ${{ inputs.fail-on-critical }} |"
-            echo "| HIGH | ${{ steps.severity-check.outputs.high-count || '0' }} | ${{ inputs.fail-on-high }} |"
-            echo ""
-            echo "### Scan Output"
-            echo '```'
-            cat /tmp/wiz-scan-results.txt 2>/dev/null || echo "(no output captured)"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-
       - name: Upload Wiz scan results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: wiz-scan-${{ github.event.repository.name }}
+          name: ${{ env.ARTIFACT_NAME }}
           path: |
-            /tmp/wiz-scan.json
+            /tmp/wiz-scan*.json
             /tmp/wiz-scan-results.txt
