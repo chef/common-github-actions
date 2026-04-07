@@ -1,0 +1,136 @@
+# build-docker-image.yml
+# Reusable workflow to build a Docker image and upload it as an artifact.
+# Supports three build strategies:
+#   1. build-docker.sh script (e.g., dsm-erchef)
+#   2. Makefile with compose-build target
+#   3. Standard docker build (fallback)
+#
+# The built image is saved as a tar and uploaded as a GitHub Actions artifact
+# for downstream jobs (e.g., Wiz CLI scan, Grype scan) to consume.
+
+name: Build Docker image
+
+on:
+  workflow_call:
+    inputs:
+      skip-aws:
+        description: 'Skip AWS ECR login (for repos that do not need ECR base images)'
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      image-names:
+        description: 'Space-separated list of built Docker image names (repository:tag)'
+        value: ${{ jobs.build.outputs.image-names }}
+
+jobs:
+  build:
+    name: Build and upload Docker image
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      image-names: ${{ steps.build-image.outputs.IMAGES }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Configure git for private repos
+        run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        if: ${{ !inputs.skip-aws }}
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-2
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        if: ${{ !inputs.skip-aws }}
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker image
+        id: build-image
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          if [ ! -f "Dockerfile" ]; then
+            echo "❌ No Dockerfile found - cannot build"
+            exit 1
+          fi
+
+          echo "Building Docker image..."
+          REPO_NAME=$(basename $(pwd))
+
+          # Strategy 1: Check for build-docker.sh script (e.g., dsm-erchef)
+          if [ -f "build-docker.sh" ]; then
+            echo "Found build-docker.sh script - using it to build images"
+            chmod +x build-docker.sh
+            GITHUB_TOKEN="${{ secrets.GH_TOKEN }}" ./build-docker.sh
+
+            # Detect all images built (typically repo name or repo-name-init)
+            IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -E "^${REPO_NAME}" | grep -v "^<none>")
+
+            if [ -z "$IMAGES" ]; then
+              echo "⚠️ No images found with prefix ${REPO_NAME} after build-docker.sh"
+              echo "Checking for any recently built images..."
+              IMAGES=$(docker images --format "{{.CreatedAt}}\t{{.Repository}}:{{.Tag}}" | sort -r | head -5 | cut -f2 | grep -v "^<none>")
+            fi
+          # Strategy 2: Check for Makefile with compose-build target (e.g., chef-platform-user-accounts-service)
+          elif [ -f "Makefile" ] && grep -q "^compose-build:" Makefile; then
+            echo "Using Makefile compose-build target with GITHUB_TOKEN"
+            export GITHUB_TOKEN="${{ secrets.GH_TOKEN }}"
+            make compose-build
+
+            echo "Detecting built images..."
+            # Get all image names from compose, then keep only ones that exist locally (i.e., were actually built)
+            IMAGES=""
+            for img in $(docker compose config --images 2>/dev/null | sort -u); do
+              TAG_IMG=$(echo "$img" | grep -q ':' && echo "$img" || echo "${img}:latest")
+              if docker image inspect "$TAG_IMG" &>/dev/null; then
+                IMAGES="${IMAGES}${TAG_IMG} "
+              fi
+            done
+            IMAGES=$(echo "$IMAGES" | xargs)
+
+            if [ -z "$IMAGES" ]; then
+              echo "⚠️ Could not detect built images from compose config, falling back to repo name match"
+              IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "^${REPO_NAME}" | grep -v "^<none>")
+            fi
+          # Strategy 3: Fallback to standard docker build
+          else
+            echo "Using standard docker build with GITHUB_TOKEN build arg"
+            docker build --build-arg GITHUB_TOKEN="${{ secrets.GH_TOKEN }}" -t "${REPO_NAME}:latest" .
+            IMAGES="${REPO_NAME}:latest"
+          fi
+
+          if [ -z "$IMAGES" ]; then
+            echo "❌ No Docker images found after build"
+            exit 1
+          fi
+
+          echo "Found images:"
+          echo "$IMAGES"
+
+          # Output as space-separated list for downstream jobs
+          echo "IMAGES=$(echo $IMAGES | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
+
+      - name: Save Docker images to tar
+        run: |
+          IMAGES="${{ steps.build-image.outputs.IMAGES }}"
+          echo "Saving images to /tmp/docker-image.tar: $IMAGES"
+          docker save $IMAGES -o /tmp/docker-image.tar
+          ls -lh /tmp/docker-image.tar
+
+      - name: Upload Docker image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image-for-scans
+          path: /tmp/docker-image.tar
+          retention-days: 1
