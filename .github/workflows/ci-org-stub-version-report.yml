@@ -1,0 +1,97 @@
+# Workflow to find all repositories in the chef organization that use
+# ci-main-pull-request-stub.yml with STUB_VERSION 1.0.5 or higher
+
+name: Report - Repos using ci-main-pull-request-stub.yml v1.0.5+
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  find-repos-with-stub-version:
+    name: 'Find repos with ci-main-pull-request-stub.yml v1.0.5+'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Find repos with stub version 1.0.5 or higher
+        env:
+          # GH_TOKEN (PAT) is required instead of GITHUB_TOKEN because this workflow reads
+          # repositories across the entire chef organization, which requires org-level access
+          # that the default GITHUB_TOKEN (scoped to the current repo) cannot provide.
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          ORG="chef"
+          WORKFLOW_FILE=".github/workflows/ci-main-pull-request-stub.yml"
+          MIN_VERSION="1.0.5"
+
+          echo "Searching chef org repos for $WORKFLOW_FILE with STUB_VERSION >= $MIN_VERSION"
+          echo "============================================================"
+
+          matching_repos=()
+          lower_version_repos=()
+
+          # Returns 0 (true) if the found version ($1) is >= MIN_VERSION
+          is_gte_min_version() {
+            local v=$1
+            [ "$(printf '%s\n%s\n' "$MIN_VERSION" "$v" | sort -V | head -1)" = "$MIN_VERSION" ]
+          }
+
+          # Get all repos in the org (paginated)
+          page=1
+          total=0
+          while true; do
+            repos_json=$(gh api "orgs/$ORG/repos?per_page=100&page=$page&type=all" 2>/dev/null)
+            repo_count=$(echo "$repos_json" | jq 'length')
+
+            if [ "$repo_count" -eq 0 ]; then
+              break
+            fi
+
+            repo_names=$(echo "$repos_json" | jq -r '.[].name')
+
+            while IFS= read -r repo; do
+              [ -z "$repo" ] && continue
+              total=$((total + 1))
+
+              # Try to get the workflow file content from the default branch
+              file_info=$(gh api "repos/$ORG/$repo/contents/$WORKFLOW_FILE" 2>/dev/null || echo "")
+
+              if [ -n "$file_info" ]; then
+                # Decode base64 content
+                content=$(echo "$file_info" | jq -r '.content // ""' | base64 -d 2>/dev/null || echo "")
+
+                # Extract STUB_VERSION value (handles both double-quoted and unquoted values)
+                version=$(echo "$content" | grep -oP 'STUB_VERSION:\s*"?\K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+
+                if [ -n "$version" ]; then
+                  if is_gte_min_version "$version"; then
+                    matching_repos+=("$repo ($version)")
+                    echo "MATCH: $repo - STUB_VERSION=$version"
+                  else
+                    lower_version_repos+=("$repo ($version)")
+                    echo "LOWER: $repo - STUB_VERSION=$version"
+                  fi
+                else
+                  echo "FOUND (no version detected): $repo"
+                fi
+              fi
+            done <<< "$repo_names"
+
+            page=$((page + 1))
+          done
+
+          echo ""
+          echo "============================== SUMMARY =============================="
+          echo "Total repos scanned: $total"
+          echo ""
+          echo "Repos with $WORKFLOW_FILE at STUB_VERSION >= $MIN_VERSION (${#matching_repos[@]}):"
+          for repo in "${matching_repos[@]}"; do
+            echo "  - $repo"
+          done
+
+          echo ""
+          echo "Repos with $WORKFLOW_FILE at STUB_VERSION < $MIN_VERSION (${#lower_version_repos[@]}):"
+          for repo in "${lower_version_repos[@]}"; do
+            echo "  - $repo"
+          done
