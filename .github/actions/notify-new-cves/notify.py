@@ -542,8 +542,11 @@ def send_teams_notification(notifications: list[Notification], webhook_url: str,
     for notification in notifications:
         card = format_teams_card(notification)
         
+        # Build descriptive identifier
+        identifier = f"{notification.cve_id} in {notification.product}/{notification.channel}"
+        
         if dry_run:
-            gha_notice(f"[DRY RUN] Would send Teams notification for {notification.cve_id}")
+            gha_notice(f"[DRY RUN] Would send Teams notification for {identifier}")
             print(json.dumps(card, indent=2))
         else:
             try:
@@ -557,14 +560,135 @@ def send_teams_notification(notifications: list[Notification], webhook_url: str,
                 
                 with urllib.request.urlopen(req, timeout=10) as response:
                     if response.status == 200:
-                        gha_notice(f"Sent Teams notification for {notification.cve_id}")
+                        gha_notice(f"Sent Teams notification for {identifier}")
                     else:
                         gha_warning(
-                            f"Teams webhook returned status {response.status} for {notification.cve_id}"
+                            f"Teams webhook returned status {response.status} for {identifier}"
                         )
             
             except Exception as e:
-                gha_error(f"Failed to send Teams notification for {notification.cve_id}: {e}")
+                gha_error(f"Failed to send Teams notification for {identifier}: {e}")
+
+
+# ---------------------------------------------------------------------------
+# GitHub Actions summary output
+# ---------------------------------------------------------------------------
+
+def write_github_summary(notifications: list[Notification]) -> None:
+    """
+    Write CVE notifications to GitHub Actions workflow summary.
+    
+    Creates a markdown summary of each notification that appears in the
+    workflow Summary tab, making it easy to visualize what would be sent
+    to Teams without needing to check Teams directly.
+    """
+    summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary_file:
+        # Not running in GitHub Actions, skip
+        return
+    
+    try:
+        with open(summary_file, "a", encoding="utf-8") as f:
+            f.write("## 🚨 New CVE Notifications\n\n")
+            f.write(f"**Total:** {len(notifications)} new CVE(s) detected\n\n")
+            f.write("---\n\n")
+            
+            for i, notification in enumerate(notifications, 1):
+                canonical_cve = notification.get_canonical_cve()
+                cvss_score = notification.get_cvss_score()
+                epss_percentile = notification.get_epss_percentile()
+                description = notification.get_description()
+                cwes = notification.get_cwes()
+                urls = notification.get_urls()
+                install_paths = notification.get_install_paths()
+                purl = notification.get_purl()
+                
+                # Severity badge/emoji
+                severity_emoji = {
+                    "Critical": "🔴",
+                    "High": "🟠",
+                    "Medium": "🟡",
+                    "Low": "🟢",
+                }
+                emoji = severity_emoji.get(notification.severity, "⚪")
+                
+                # Header
+                f.write(f"### {emoji} {i}. {canonical_cve} - {notification.severity}\n\n")
+                
+                # Product info
+                f.write(f"**Product:** `{notification.product}` ")
+                if notification.resolved_version:
+                    f.write(f"version `{notification.resolved_version}` ")
+                f.write(f"({notification.channel}/{notification.download_site})\n\n")
+                
+                # Affected package
+                f.write(f"**Affected Package:** `{notification.package_name} {notification.package_version}`\n\n")
+                
+                # Metrics table
+                f.write("| Metric | Value |\n")
+                f.write("|--------|-------|\n")
+                if cvss_score is not None:
+                    f.write(f"| CVSS Score | **{cvss_score:.1f}** |\n")
+                if epss_percentile is not None:
+                    f.write(f"| EPSS Percentile | {epss_percentile:.1%} |\n")
+                if notification.fix_available:
+                    fix_text = notification.fix_version or "Available (version unknown)"
+                    f.write(f"| Fix Available | ✅ {fix_text} |\n")
+                else:
+                    f.write(f"| Fix Available | ❌ Not available |\n")
+                f.write(f"| First Observed | {notification.first_observed_at.strftime('%Y-%m-%d %H:%M UTC')} |\n")
+                f.write("\n")
+                
+                # Description
+                if description:
+                    desc_preview = description[:300] + "..." if len(description) > 300 else description
+                    f.write(f"**Description:**\n> {desc_preview}\n\n")
+                
+                # CWEs
+                if cwes:
+                    f.write(f"**CWEs:** {', '.join(f'`{cwe}`' for cwe in cwes)}\n\n")
+                
+                # Install paths
+                if install_paths:
+                    f.write("**Install Locations:**\n")
+                    for path in install_paths[:3]:
+                        f.write(f"- `{path}`\n")
+                    if len(install_paths) > 3:
+                        f.write(f"- *(and {len(install_paths) - 3} more)*\n")
+                    f.write("\n")
+                
+                # PURL
+                if purl:
+                    f.write(f"**Package URL:** `{purl}`\n\n")
+                
+                # Reference URLs
+                if urls:
+                    f.write("**References:**\n")
+                    for url in urls[:5]:
+                        f.write(f"- {url}\n")
+                    if len(urls) > 5:
+                        f.write(f"- *(and {len(urls) - 5} more)*\n")
+                    f.write("\n")
+                
+                # Scan metadata
+                if notification.scan_timestamp:
+                    f.write(f"<details>\n")
+                    f.write(f"<summary>Scan Metadata</summary>\n\n")
+                    f.write(f"- **Scan Date:** {notification.scan_timestamp.strftime('%Y-%m-%d %H:%M UTC')}\n")
+                    if notification.grype_version:
+                        f.write(f"- **Grype Version:** {notification.grype_version}\n")
+                    if notification.grype_db_version:
+                        f.write(f"- **Grype DB:** {notification.grype_db_version}\n")
+                    if notification.os:
+                        f.write(f"- **Platform:** {notification.os} {notification.os_version} ({notification.arch})\n")
+                    f.write(f"\n</details>\n\n")
+                
+                f.write("---\n\n")
+        
+        gha_notice(f"Wrote {len(notifications)} CVE(s) to workflow summary")
+    
+    except Exception as e:
+        gha_warning(f"Failed to write GitHub Actions summary: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -587,6 +711,9 @@ def dispatch_notifications(
         return
     
     gha_notice(f"Found {len(notifications)} new CVE(s) to notify")
+    
+    # Write to GitHub Actions summary (always, for visibility)
+    write_github_summary(notifications)
     
     # Teams channel
     if teams_webhook:
@@ -668,8 +795,9 @@ def main() -> int:
             
             if not notification.vulnerability:
                 gha_warning(
-                    f"Could not find Grype match for {row['cve_id']} / "
-                    f"{row['package_name']} {row['package_version']} — "
+                    f"Could not find Grype match for {row['cve_id']} in "
+                    f"{row['product']}/{row['channel']} "
+                    f"({row['package_name']} {row['package_version']}) — "
                     "notification will have limited details"
                 )
         
