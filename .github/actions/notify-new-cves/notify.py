@@ -138,7 +138,17 @@ class Notification:
         """Get list of CWE IDs."""
         cwes = self.vulnerability.get("cwes", [])
         if isinstance(cwes, list):
-            return [cwe for cwe in cwes if cwe]
+            result = []
+            for cwe in cwes:
+                if isinstance(cwe, dict):
+                    # Grype format: {"id": "CWE-79", "name": "..."}
+                    cwe_id = cwe.get("id", "")
+                    if cwe_id:
+                        result.append(cwe_id)
+                elif isinstance(cwe, str) and cwe:
+                    # Plain string format
+                    result.append(cwe)
+            return result
         return []
     
     def get_urls(self) -> list[str]:
