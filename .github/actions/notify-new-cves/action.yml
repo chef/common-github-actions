@@ -1,0 +1,87 @@
+name: "Notify New CVEs"
+description: >
+  Queries the vulnerability analytics database for CVEs first observed within
+  the last 25 hours, enriches each finding with full Grype match details from
+  chef-vuln-scan-data, and dispatches notifications to configured channels
+  (Teams, email, Jira, etc.).
+
+  Detection uses first_observed_at and last_seen_at to identify truly new CVEs
+  that appeared in the most recent scan run.
+
+  The 25-hour window (not 24h) provides resilience for workflows that run
+  slightly late.
+
+inputs:
+  # ── Database ─────────────────────────────────────────────────────────────
+  database-url:
+    description: >
+      Full PostgreSQL connection string (DSN) for the scanwriter role.
+      Example: postgresql://USERNAME:PASSWORD@HOST:5432/dbname
+    required: true
+
+  # ── Data repository ──────────────────────────────────────────────────────
+  data-repo-path:
+    description: >
+      Path to the checked-out chef-vuln-scan-data repository containing
+      grype.latest.json and metadata.json files for enrichment.
+    required: true
+    default: "chef-vuln-scan-data"
+
+  # ── Notification filters ─────────────────────────────────────────────────
+  severities:
+    description: >
+      Comma-separated list of severity levels to notify.
+      Valid values: Critical, High, Medium, Low
+    required: false
+    default: "Critical"
+
+  # ── Teams webhook ────────────────────────────────────────────────────────
+  teams-webhook-url:
+    description: >
+      Microsoft Teams incoming webhook URL. If provided, notifications will
+      be sent as Adaptive Cards to this webhook.
+    required: false
+
+  # ── Execution mode ───────────────────────────────────────────────────────
+  dry-run:
+    description: >
+      If true, print notification payloads to the workflow log without sending
+      them to any channels. Useful for testing.
+    required: false
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Python dependencies
+      shell: bash
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install psycopg2-binary
+
+    - name: Run notification script
+      shell: bash
+      env:
+        DATABASE_URL: ${{ inputs.database-url }}
+        DATA_REPO: ${{ inputs.data-repo-path }}
+        SEVERITIES: ${{ inputs.severities }}
+        TEAMS_WEBHOOK: ${{ inputs.teams-webhook-url }}
+        DRY_RUN: ${{ inputs.dry-run }}
+      run: |
+        SCRIPT_DIR="${{ github.action_path }}"
+        
+        ARGS="--database-url $DATABASE_URL --data-repo $DATA_REPO"
+        
+        if [ -n "$SEVERITIES" ]; then
+          ARGS="$ARGS --severities $SEVERITIES"
+        fi
+        
+        if [ -n "$TEAMS_WEBHOOK" ]; then
+          ARGS="$ARGS --teams-webhook $TEAMS_WEBHOOK"
+        fi
+        
+        if [ "$DRY_RUN" = "true" ]; then
+          ARGS="$ARGS --dry-run"
+        fi
+        
+        python3 "$SCRIPT_DIR/notify.py" $ARGS
