@@ -57,7 +57,7 @@ Each CVE is formatted as a Microsoft Teams Adaptive Card with:
 - name: Notify new CVEs
   uses: ./.github/actions/notify-new-cves
   with:
-    database-url: ${{ secrets.DATABASE_URL }}
+    database-url: ${{ secrets.DATABASE_URL_RO }}
     data-repo-path: chef-vuln-scan-data
     severities: Critical,High
     teams-webhook-url: ${{ secrets.TEAMS_WEBHOOK_URL }}
@@ -74,7 +74,7 @@ Set `dry-run: true` to print the notification payloads to the Actions log withou
 
 | Secret | Description | Scope |
 |--------|-------------|-------|
-| `DATABASE_URL` | Postgres connection string for the scanwriter role | Org or repo |
+| `DATABASE_URL_RO` | Postgres connection string (read-only user; only performs SELECT queries) | Org or repo |
 | `TEAMS_WEBHOOK_URL` | Teams incoming webhook URL (get from Teams channel connectors) | Org or repo |
 | `DATA_REPO_TOKEN` | PAT for checking out chef-vuln-scan-data (already exists) | Org or repo |
 

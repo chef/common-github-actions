@@ -15,7 +15,8 @@ inputs:
   # ── Database ─────────────────────────────────────────────────────────────
   database-url:
     description: >
-      Full PostgreSQL connection string (DSN) for the scanwriter role.
+      Full PostgreSQL connection string (DSN). Read-only permissions sufficient
+      (only performs SELECT queries).
       Example: postgresql://USERNAME:PASSWORD@HOST:5432/dbname
     required: true
 

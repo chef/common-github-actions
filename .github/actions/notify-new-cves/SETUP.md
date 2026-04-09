@@ -6,7 +6,7 @@ The CVE notification system has been implemented in three components:
 
 1. **notify.py** - Python script that queries the database, enriches with Grype data, and sends Teams notifications
 2. **action.yml** - GitHub Action wrapper around notify.py
-3. **cd-notify-new-cves.yml** - Scheduled workflow that runs daily at 10:00 UTC
+3. **cd-notify-new-cves.yml** - Scheduled workflow that runs daily at 10:00 UTC (in another repo).
 
 ## Files Created
 
@@ -30,9 +30,11 @@ Add these secrets to the `chef/chef-vuln-scan-orchestrator` repository (or at or
 
 | Secret Name | Description | How to Get It |
 |------------|-------------|---------------|
-| `DATABASE_URL` | Postgres connection string | From your RDS instance or infrastructure team |
+| `DATABASE_URL_RO` | Postgres connection string (read-only user) | From your RDS instance or infrastructure team |
 | `TEAMS_WEBHOOK_URL` | Teams incoming webhook URL | Create in Teams: Channel → Connectors → Incoming Webhook |
 | `DATA_REPO_TOKEN` | PAT for chef-vuln-scan-data | Should already exist (used by scan workflows) |
+
+**Note**: The notification workflow only performs `SELECT` queries on `scan_runs`, `native_cve_details`, and `native_scan_results`. No write operations are performed—you can use a dedicated read-only database user for security.
 
 #### Database URL Format
 ```
@@ -210,9 +212,9 @@ Similar pattern:
 - Test webhook manually with curl
 
 **Database connection fails:**
-- Verify DATABASE_URL secret is correct
+- Verify DATABASE_URL_RO secret is correct
 - Check database is accessible from GitHub Actions runners (security groups/firewalls)
-- Ensure scanwriter user has SELECT permissions on the required tables
+- Ensure the read-only user has SELECT permissions on the required tables
 
 ## Architecture
 
@@ -244,7 +246,7 @@ Similar pattern:
 
 ## Next Steps
 
-1. ✅ Create GitHub secrets (DATABASE_URL, TEAMS_WEBHOOK_URL)
+1. ✅ Create GitHub secrets (DATABASE_URL_RO, TEAMS_WEBHOOK_URL)
 2. ✅ Run dry-run test
 3. ✅ Inject test CVE and verify detection
 4. ✅ Run live test (send one notification to Teams)
