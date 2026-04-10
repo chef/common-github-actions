@@ -286,15 +286,28 @@ jobs:
         with:
           go-version: 'stable'
 
-      - name: Vendor Go workspace dependencies
+      - name: Prepare Go workspace for BlackDuck scanning
         if: ${{ hashFiles('go.work') != '' }}
         run: |
-          go work vendor
-          # Tell all subsequent Go commands (including those run by Detect) to use the vendor directory
-          echo "GOFLAGS=-mod=vendor" >> "$GITHUB_ENV"
-          # Calculate the detector search depth needed to find go.mod files in workspace module subdirs
-          GO_WORK_DEPTH=$(grep -E '^\s*use\s+\.' go.work | awk '{print $2}' | tr -d '"' | awk -F'/' '{print NF-1}' | sort -n | tail -1)
+          # Extract all relative module paths from go.work.
+          # grep -oE handles both single-line (use ./path) and block (use (\n  ./path\n)) syntax
+          # because it matches any './' sequence anywhere in the file.
+          GO_WORK_DEPTH=$(grep -oE '\./[^[:space:]"/)]+' go.work \
+            | awk -F'/' '{print NF-1}' \
+            | sort -rn | head -1)
+          # Default to 1 if all modules sit at root or grep returned nothing
+          [[ -z "$GO_WORK_DEPTH" || "$GO_WORK_DEPTH" -le 0 ]] && GO_WORK_DEPTH=1
           echo "GO_WORK_DETECTOR_DEPTH=${GO_WORK_DEPTH}" >> "$GITHUB_ENV"
+          echo "Go workspace detector search depth: ${GO_WORK_DEPTH}"
+          # Vendor all workspace dependencies (requires Go 1.22+).
+          # If this fails (e.g. private module network issue) Detect will still run
+          # with the correct search depth and resolve modules via the Go toolchain.
+          if go work vendor; then
+            echo "GOFLAGS=-mod=vendor" >> "$GITHUB_ENV"
+            echo "Successfully vendored Go workspace dependencies"
+          else
+            echo "go work vendor did not complete; Detect will resolve modules via Go toolchain"
+          fi
 
       - name: Construct BlackDuck detect arguments
         id: detect-args
@@ -320,8 +333,9 @@ jobs:
             DETECT_ARGS="${DETECT_ARGS} --detect.blackduck.scan.mode=RAPID"
           fi
 
-          # If a Go workspace was vendored, set detector search depth so Detect finds go.mod in module subdirs
-          if [[ -f "go.work" && -d "vendor" && -n "${{ env.GO_WORK_DETECTOR_DEPTH }}" ]]; then
+          # If repo uses a Go workspace, increase detector search depth so Detect finds
+          # go.mod files inside module subdirectories (default depth 0 = root only = only Git found)
+          if [[ -f "go.work" ]]; then
             DETECT_ARGS="${DETECT_ARGS} --detect.detector.search.depth=${{ env.GO_WORK_DETECTOR_DEPTH }}"
           fi
           
