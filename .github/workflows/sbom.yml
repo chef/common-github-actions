@@ -280,6 +280,16 @@ jobs:
           path: ${{ inputs.ruby-app-directory != '' && format('{0}/Gemfile.lock', inputs.ruby-app-directory) || 'Gemfile.lock' }}
           name: ${{ github.event.repository.name }}-Gemfile-lock.txt 
 
+      - name: Set up Go (required for Go workspace vendoring)
+        if: ${{ hashFiles('go.work') != '' }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: Vendor Go workspace dependencies
+        if: ${{ hashFiles('go.work') != '' }}
+        run: go work vendor
+
       - name: Construct BlackDuck detect arguments
         id: detect-args
         run: |
@@ -302,6 +312,11 @@ jobs:
           if [[ "${{ inputs.github-event-name }}" == "pull_request" ]]; then
             # RAPID scan for PRs - automatically compares against baseline from target branch
             DETECT_ARGS="${DETECT_ARGS} --detect.blackduck.scan.mode=RAPID"
+          fi
+
+          # If a Go workspace was vendored, tell Detect to use the vendor directory
+          if [[ -f "go.work" && -d "vendor" ]]; then
+            DETECT_ARGS="${DETECT_ARGS} --detect.go.mod.cli.opts=vendor"
           fi
           
           echo "DETECT_ARGS=${DETECT_ARGS}" >> $GITHUB_ENV

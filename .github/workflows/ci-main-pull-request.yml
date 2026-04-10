@@ -930,10 +930,10 @@ jobs:
             exit 0
           fi
           
-          # Extract vulnerability counts using jq or grep fallback
+          # Extract vulnerability counts using jq with deduplication (unique_by vulnerability ID + package + version)
           if command -v jq &> /dev/null; then
-            CRITICAL_COUNT=$(jq '[.matches[]? | select(.vulnerability.severity == "Critical")] | length' "$JSON_FILE" 2>/dev/null || echo "0")
-            HIGH_COUNT=$(jq '[.matches[]? | select(.vulnerability.severity == "High")] | length' "$JSON_FILE" 2>/dev/null || echo "0")
+            CRITICAL_COUNT=$(jq '[.matches[]? | select(.vulnerability.severity == "Critical")] | unique_by(.vulnerability.id + .artifact.name + .artifact.version) | length' "$JSON_FILE" 2>/dev/null || echo "0")
+            HIGH_COUNT=$(jq '[.matches[]? | select(.vulnerability.severity == "High")] | unique_by(.vulnerability.id + .artifact.name + .artifact.version) | length' "$JSON_FILE" 2>/dev/null || echo "0")
           else
             CRITICAL_COUNT=$(grep -o '"severity":"Critical"' "$JSON_FILE" | wc -l | tr -d ' ' || echo "0")
             HIGH_COUNT=$(grep -o '"severity":"High"' "$JSON_FILE" | wc -l | tr -d ' ' || echo "0")
@@ -1576,7 +1576,7 @@ jobs:
       github-branch-name: ${{ inputs.github-branch-name }}
       version: ${{ inputs.version }}
       export-github-sbom: ${{ inputs.export-github-sbom }}
-      perform-blackduck-sca-scan: ${{ inputs.perform-blackduck-sca-scan && github.event_name == 'push' }}
+      perform-blackduck-sca-scan: ${{ inputs.perform-blackduck-sca-scan }}
       # generate-blackduck-sbom: ${{ inputs.generate-blackduck-sbom }}  # obsolete, remove TODO
       blackduck-project-group-name: ${{ inputs.blackduck-project-group-name }}
       blackduck-project-name: ${{ inputs.blackduck-project-name }}
