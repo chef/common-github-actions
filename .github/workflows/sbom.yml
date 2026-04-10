@@ -334,9 +334,13 @@ jobs:
           fi
 
           # If repo uses a Go workspace, increase detector search depth so Detect finds
-          # go.mod files inside module subdirectories (default depth 0 = root only = only Git found)
+          # go.mod files inside module subdirectories (default depth 0 = root only = only Git found).
+          # Also set accuracy.required=NONE: Detect's default HIGH accuracy check fails for multi-module
+          # Go workspaces (FAILURE_ACCURACY_NOT_MET / exit 15) because it can't fully resolve the graph
+          # via `go list` across workspace modules. Vendor mode resolves deps; accuracy=NONE lets it proceed.
           if [[ -f "go.work" ]]; then
             DETECT_ARGS="${DETECT_ARGS} --detect.detector.search.depth=${{ env.GO_WORK_DETECTOR_DEPTH }}"
+            DETECT_ARGS="${DETECT_ARGS} --detect.accuracy.required=NONE"
           fi
           
           echo "DETECT_ARGS=${DETECT_ARGS}" >> $GITHUB_ENV
