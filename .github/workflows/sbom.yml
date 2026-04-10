@@ -288,7 +288,13 @@ jobs:
 
       - name: Vendor Go workspace dependencies
         if: ${{ hashFiles('go.work') != '' }}
-        run: go work vendor
+        run: |
+          go work vendor
+          # Tell all subsequent Go commands (including those run by Detect) to use the vendor directory
+          echo "GOFLAGS=-mod=vendor" >> "$GITHUB_ENV"
+          # Calculate the detector search depth needed to find go.mod files in workspace module subdirs
+          GO_WORK_DEPTH=$(grep -E '^\s*use\s+\.' go.work | awk '{print $2}' | tr -d '"' | awk -F'/' '{print NF-1}' | sort -n | tail -1)
+          echo "GO_WORK_DETECTOR_DEPTH=${GO_WORK_DEPTH}" >> "$GITHUB_ENV"
 
       - name: Construct BlackDuck detect arguments
         id: detect-args
@@ -314,9 +320,9 @@ jobs:
             DETECT_ARGS="${DETECT_ARGS} --detect.blackduck.scan.mode=RAPID"
           fi
 
-          # If a Go workspace was vendored, tell Detect to use the vendor directory
-          if [[ -f "go.work" && -d "vendor" ]]; then
-            DETECT_ARGS="${DETECT_ARGS} --detect.go.mod.cli.opts=vendor"
+          # If a Go workspace was vendored, set detector search depth so Detect finds go.mod in module subdirs
+          if [[ -f "go.work" && -d "vendor" && -n "${{ env.GO_WORK_DETECTOR_DEPTH }}" ]]; then
+            DETECT_ARGS="${DETECT_ARGS} --detect.detector.search.depth=${{ env.GO_WORK_DETECTOR_DEPTH }}"
           fi
           
           echo "DETECT_ARGS=${DETECT_ARGS}" >> $GITHUB_ENV
