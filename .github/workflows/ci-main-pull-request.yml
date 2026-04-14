@@ -888,6 +888,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Ruby
+        if: ${{ inputs.language == 'ruby' && inputs.run-bundle-install == true }}
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: false
+
+      - name: Run bundle install to generate Gemfile.lock
+        if: ${{ inputs.language == 'ruby' && inputs.run-bundle-install == true }}
+        run: |
+          echo "Generating Gemfile.lock for Grype scan..."
+          bundle install
+          echo "Gemfile.lock generated successfully"
+
       - name: Determine severity threshold
         id: severity
         run: |
@@ -1568,7 +1582,7 @@ jobs:
     name: 'Generating SBOM'
     #    Create software bill-of-materials (SBOM) using SPDX format
     if: ${{ inputs.generate-sbom == true }}
-    uses: chef/common-github-actions/.github/workflows/sbom.yml@main
+    uses: chef/common-github-actions/.github/workflows/sbom.yml@nikhil/bundle-install-grype-scan
     needs: checkout # TODO: fix set-application-version
     secrets: inherit
     with:
