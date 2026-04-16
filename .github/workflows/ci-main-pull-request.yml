@@ -487,7 +487,7 @@ on:
         required: false
         type: boolean
         default: false
-      run-bundle-install: # Added to support projects without committed Gemfile.lock (e.g., chef-cli)
+      run-bundle-install:
         description: 'Run bundle install before scanning to generate Gemfile.lock at runtime'
         required: false
         type: boolean
@@ -899,13 +899,8 @@ jobs:
         if: ${{ inputs.language == 'ruby' && inputs.run-bundle-install == true }}
         run: |
           echo "Generating Gemfile.lock for Grype scan..."
-          # Change to ruby-app-directory if specified, otherwise stay in root
-          if [ -n "${{ inputs.ruby-app-directory }}" ]; then
-            echo "Changing to Ruby app directory: ${{ inputs.ruby-app-directory }}"
-            cd "${{ inputs.ruby-app-directory }}"
-          fi
           bundle install
-          echo "Gemfile.lock generated successfully at: $(pwd)/Gemfile.lock"
+          echo "Gemfile.lock generated successfully"
 
       - name: Determine severity threshold
         id: severity
