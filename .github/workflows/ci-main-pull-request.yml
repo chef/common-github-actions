@@ -899,8 +899,13 @@ jobs:
         if: ${{ inputs.language == 'ruby' && inputs.run-bundle-install == true }}
         run: |
           echo "Generating Gemfile.lock for Grype scan..."
+          # Change to ruby-app-directory if specified, otherwise stay in root
+          if [ -n "${{ inputs.ruby-app-directory }}" ]; then
+            echo "Changing to Ruby app directory: ${{ inputs.ruby-app-directory }}"
+            cd "${{ inputs.ruby-app-directory }}"
+          fi
           bundle install
-          echo "Gemfile.lock generated successfully"
+          echo "Gemfile.lock generated successfully at: $(pwd)/Gemfile.lock"
 
       - name: Determine severity threshold
         id: severity
