@@ -109,17 +109,26 @@ deploy_automate() {
         fail "sysctl configuration failed"
     fi
     
+    # Configure Habitat authentication if token provided
+    if [[ -n "${HAB_AUTH_TOKEN:-}" ]]; then
+        log "HAB_AUTH_TOKEN provided - configuring Habitat authentication"
+        # Create Habitat CLI config directory and config file with auth token
+        # This ensures the token is available to all hab processes, including those spawned by systemd
+        docker exec -w /root "${CONTAINER_ID}" bash -c "mkdir -p /hab/etc && cat > /hab/etc/cli.toml <<EOF
+auth_token = \"${HAB_AUTH_TOKEN}\"
+EOF" > "${LOGS_DIR}/hab-config.log" 2>&1 || log "WARNING: Failed to configure Habitat auth (may not be critical)"
+        
+        # Also set as environment variable for immediate processes
+        docker exec -w /root "${CONTAINER_ID}" bash -c "echo 'export HAB_AUTH_TOKEN=${HAB_AUTH_TOKEN}' >> /root/.bashrc" \
+            >> "${LOGS_DIR}/hab-config.log" 2>&1 || true
+    fi
+    
     # Deploy Automate (this takes 10-15 minutes)
     log "Deploying Automate (this may take 10-15 minutes)..."
     log "Progress will be logged to ${LOGS_DIR}/deploy.log"
     
-    # Build docker exec command with optional HAB_AUTH_TOKEN
-    local docker_exec_cmd="docker exec -w /root"
-    if [[ -n "${HAB_AUTH_TOKEN:-}" ]]; then
-        log "HAB_AUTH_TOKEN provided - enabling Habitat authentication"
-        docker_exec_cmd="${docker_exec_cmd} -e HAB_AUTH_TOKEN=${HAB_AUTH_TOKEN}"
-    fi
-    docker_exec_cmd="${docker_exec_cmd} ${CONTAINER_ID} timeout 1800 chef-automate deploy --channel ${CHANNEL} --skip-preflight config.toml --accept-terms-and-mlsa"
+    # Run deploy command
+    local docker_exec_cmd="docker exec -w /root ${CONTAINER_ID} timeout 1800 chef-automate deploy --channel ${CHANNEL} --skip-preflight config.toml --accept-terms-and-mlsa"
     
     # Run deploy with timeout and capture output
     # tee streams output to Actions log in real-time while also writing to file
