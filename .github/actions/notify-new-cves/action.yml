@@ -16,8 +16,7 @@ inputs:
   database-url:
     description: >
       Full PostgreSQL connection string (DSN). Read-only permissions sufficient
-      (only performs SELECT queries).
-      Example: postgresql://USERNAME:PASSWORD@HOST:5432/dbname
+      (only performs SELECT queries). See SETUP.md for connection string format.
     required: true
 
   # ── Data repository ──────────────────────────────────────────────────────

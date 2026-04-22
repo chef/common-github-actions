@@ -37,14 +37,13 @@ Add these secrets to the `chef/chef-vuln-scan-orchestrator` repository (or at or
 **Note**: The notification workflow only performs `SELECT` queries on `scan_runs`, `native_cve_details`, and `native_scan_results`. No write operations are performed—you can use a dedicated read-only database user for security.
 
 #### Database URL Format
-```
-postgresql://USERNAME:PASSWORD@HOSTNAME:5432/DATABASE_NAME
-```
 
-Example:
-```
-postgresql://scanwriter:***@chef-vuln-db.abc123.us-east-2.rds.amazonaws.com:5432/chef_vuln_analytics
-```
+PostgreSQL connection string format:
+- Scheme: `postgresql`
+- Format: `<scheme>://<username>:<password>@<hostname>:<port>/<database>`
+- Default port: `5432`
+
+Replace the angle-bracketed placeholders with your actual connection details.
 
 #### Teams Webhook URL
 1. In Microsoft Teams, go to the channel where you want notifications
