@@ -113,13 +113,20 @@ deploy_automate() {
     log "Deploying Automate (this may take 10-15 minutes)..."
     log "Progress will be logged to ${LOGS_DIR}/deploy.log"
     
+    # Build docker exec command with optional HAB_AUTH_TOKEN
+    local docker_exec_cmd="docker exec -w /root"
+    if [[ -n "${HAB_AUTH_TOKEN:-}" ]]; then
+        log "HAB_AUTH_TOKEN provided - enabling Habitat authentication"
+        docker_exec_cmd="${docker_exec_cmd} -e HAB_AUTH_TOKEN=${HAB_AUTH_TOKEN}"
+    fi
+    docker_exec_cmd="${docker_exec_cmd} ${CONTAINER_ID} timeout 1800 chef-automate deploy --channel ${CHANNEL} --skip-preflight config.toml --accept-terms-and-mlsa"
+    
     # Run deploy with timeout and capture output
     # tee streams output to Actions log in real-time while also writing to file
     # --skip-preflight: the CLI is always downloaded from the 'current' channel (no 'dev' download URL
     # exists), so when deploying --channel dev the preflight CLI version check will always fail because
     # dev has a newer build than current. The skip is safe: the CLI is still fully capable of deploying.
-    if docker exec -w /root "${CONTAINER_ID}" timeout 1800 chef-automate deploy --channel ${CHANNEL} --skip-preflight config.toml --accept-terms-and-mlsa \
-        2>&1 | tee "${LOGS_DIR}/deploy.log"; then
+    if eval "${docker_exec_cmd}" 2>&1 | tee "${LOGS_DIR}/deploy.log"; then
         log "Automate deployment completed successfully"
     else
         log "ERROR: Automate deployment failed or timed out"
