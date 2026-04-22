@@ -20,6 +20,8 @@ This action provides automated vulnerability scanning for Chef Automate's embedd
   uses: chef/common-github-actions/.github/actions/automate-container-scan@main
   with:
     channel: current
+    license_id: ${{ secrets.GA_DOWNLOAD_GRYPE_LICENSE_ID }}
+    hab_auth_token: ${{ secrets.HAB_AUTH_TOKEN }}  # Required for dev channel
     out_dir: out
 ```
 
@@ -48,6 +50,8 @@ jobs:
         uses: ./common-github-actions/.github/actions/automate-container-scan
         with:
           channel: current
+          license_id: ${{ secrets.GA_DOWNLOAD_GRYPE_LICENSE_ID }}
+          hab_auth_token: ${{ secrets.HAB_AUTH_TOKEN }}
           out_dir: out
       
       - name: Upload scan results
@@ -66,7 +70,11 @@ jobs:
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
 | `channel` | Release channel for Chef Automate (`stable` or `current`) | No | `current` |
+| `license_id` | Chef download license ID (required for commercial downloads) | Yes | N/A |
+| `hab_auth_token` | Habitat Builder Personal Access Token for protected channels (pass via secrets) | No | `""` |
 | `out_dir` | Output directory for scan results and logs | No | `out` |
+
+**Note on `hab_auth_token`**: This parameter is **required for the `dev` channel** and other protected Habitat channels that contain packages requiring authentication. The `current` and `stable` channels typically have public packages that don't require authentication. If you see `401 Unauthorized` errors during deployment, ensure you've provided a valid HAB_AUTH_TOKEN.
 
 ## Outputs
 
