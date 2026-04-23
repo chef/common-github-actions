@@ -156,8 +156,8 @@ on:
         required: false
         type: boolean
         default: false
-      grype-image-skip-aws:
-        description: 'Skip Grype image scan on AWS ECR images to avoid rate limits (assumes these images are scanned with Amazon ECR scan or Trivy)'
+      image-skip-aws:
+        description: 'Skip AWS ECR login for Docker image scans (for repos that do not need ECR base images)'
         required: false
         type: boolean
         default: false
@@ -541,6 +541,26 @@ on:
       #   required: false
       #   default: 'https://polaris.blackduck.com'
       #   type: string
+      perform-wiz-scan:
+        description: 'Perform Wiz CLI security scan on Docker image'
+        required: false
+        type: boolean
+        default: false
+      wiz-fail-build:
+        description: 'Fail the build on Wiz policy violations'
+        required: false
+        type: boolean
+        default: true
+      wiz-fail-on-critical:
+        description: 'Fail the pipeline if Wiz finds CRITICAL vulnerabilities'
+        required: false
+        type: boolean
+        default: false
+      wiz-fail-on-high:
+        description: 'Fail the pipeline if Wiz finds HIGH vulnerabilities'
+        required: false
+        type: boolean
+        default: false
         
 env:
   PRIMARY_APPLICATION: ${{ inputs.application }} # was 'default'   # Custom repo property [primaryApplication]: chef360, automate, infra-server, habitat, supermarket, licensing, downloads, chef-client, inspec, chef-workstation (or derivatives like habitat-builder)
@@ -994,12 +1014,37 @@ jobs:
     name: 'Grype Docker image scan'
     if: ${{ inputs.perform-grype-image-scan }}
     uses: chef/common-github-actions/.github/workflows/grype.yml@main
-    needs: checkout
+    needs: [checkout, build-docker-image]
     secrets: inherit
     with:
       fail-grype-on-high: ${{ inputs.grype-image-fail-on-high }}
       fail-grype-on-critical: ${{ inputs.grype-image-fail-on-critical }}
-      grype-image-skip-aws: ${{ inputs.grype-image-skip-aws }}
+      grype-image-skip-aws: ${{ inputs.image-skip-aws }}
+      prebuilt-image-artifact: docker-image-for-scans
+      prebuilt-image-names: ${{ needs.build-docker-image.outputs.image-names }}
+
+  build-docker-image:
+    name: 'Build Docker image for security scans'
+    if: ${{ inputs.perform-grype-image-scan == true || inputs.perform-wiz-scan == true }}
+    uses: chef/common-github-actions/.github/workflows/build-docker-image.yml@main
+    needs: checkout
+    secrets: inherit
+    with:
+      skip-aws: ${{ inputs.image-skip-aws }}
+
+  run-wiz-scan:
+    name: 'Wiz CLI security scan'
+    if: ${{ inputs.perform-wiz-scan == true }}
+    uses: chef/common-github-actions/.github/workflows/wiz.yml@main
+    needs: [checkout, build-docker-image]
+    with:
+      fail-build: ${{ inputs.wiz-fail-build }}
+      fail-on-critical: ${{ inputs.wiz-fail-on-critical }}
+      fail-on-high: ${{ inputs.wiz-fail-on-high }}
+      wiz-image-skip-aws: ${{ inputs.image-skip-aws }}
+      prebuilt-image-artifact: docker-image-for-scans
+      prebuilt-image-names: ${{ needs.build-docker-image.outputs.image-names }}
+    secrets: inherit
 
   run-grype-hab-package-scan:
     name: 'Grype scan Habitat packages from bldr.habitat.sh'
@@ -1142,7 +1187,7 @@ jobs:
     #         VER=$(cat VERSION)
     #         echo "VERSION=$VER" >> $GITHUB_ENV
     #   then ${{ env.VERSION }}
-  
+
   set-application-version:
     runs-on: ubuntu-latest
     name: 'Detect SBOM version for application'
