@@ -894,13 +894,16 @@ jobs:
         with:
           ruby-version: '3.4'
           bundler-cache: false
+          working-directory: ${{ inputs.ruby-app-directory != '' && inputs.ruby-app-directory || '.' }}
 
       - name: Run bundle install to generate Gemfile.lock
         if: ${{ inputs.language == 'ruby' && inputs.run-bundle-install == true }}
+        continue-on-error: true
+        working-directory: ${{ inputs.ruby-app-directory != '' && inputs.ruby-app-directory || '.' }}
         run: |
-          echo "Generating Gemfile.lock for Grype scan..."
-          bundle install
-          echo "Gemfile.lock generated successfully"
+          if [ ! -f Gemfile.lock ]; then
+            bundle install
+          fi
 
       - name: Determine severity threshold
         id: severity
@@ -1582,7 +1585,7 @@ jobs:
     name: 'Generating SBOM'
     #    Create software bill-of-materials (SBOM) using SPDX format
     if: ${{ inputs.generate-sbom == true }}
-    uses: chef/common-github-actions/.github/workflows/sbom.yml@sandhi/support-go-work
+    uses: chef/common-github-actions/.github/workflows/sbom.yml@main
     needs: checkout # TODO: fix set-application-version
     secrets: inherit
     with:
@@ -1590,7 +1593,7 @@ jobs:
       github-branch-name: ${{ inputs.github-branch-name }}
       version: ${{ inputs.version }}
       export-github-sbom: ${{ inputs.export-github-sbom }}
-      perform-blackduck-sca-scan: ${{ inputs.perform-blackduck-sca-scan }}
+      perform-blackduck-sca-scan: ${{ inputs.perform-blackduck-sca-scan && github.event_name == 'push' }}
       # generate-blackduck-sbom: ${{ inputs.generate-blackduck-sbom }}  # obsolete, remove TODO
       blackduck-project-group-name: ${{ inputs.blackduck-project-group-name }}
       blackduck-project-name: ${{ inputs.blackduck-project-name }}
