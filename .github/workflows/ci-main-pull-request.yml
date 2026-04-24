@@ -894,13 +894,16 @@ jobs:
         with:
           ruby-version: '3.4'
           bundler-cache: false
+          working-directory: ${{ inputs.ruby-app-directory != '' && inputs.ruby-app-directory || '.' }}
 
       - name: Run bundle install to generate Gemfile.lock
         if: ${{ inputs.language == 'ruby' && inputs.run-bundle-install == true }}
+        continue-on-error: true
+        working-directory: ${{ inputs.ruby-app-directory != '' && inputs.ruby-app-directory || '.' }}
         run: |
-          echo "Generating Gemfile.lock for Grype scan..."
-          bundle install
-          echo "Gemfile.lock generated successfully"
+          if [ ! -f Gemfile.lock ]; then
+            bundle install
+          fi
 
       - name: Determine severity threshold
         id: severity
@@ -1314,8 +1317,8 @@ jobs:
       
   BlackDuck-Polaris-SAST:
     name: 'BlackDuck Polaris SAST scan'
-    if: ${{ inputs.perform-blackduck-polaris && github.event_name == 'push' }}
-    uses: chef/common-github-actions/.github/workflows/polaris-sast.yml@main
+    if: ${{ inputs.perform-blackduck-polaris }}
+    uses: chef/common-github-actions/.github/workflows/polaris-sast.yml@sandhi/support-go-work
     needs: checkout
     secrets: inherit
     with:
