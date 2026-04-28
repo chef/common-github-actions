@@ -280,6 +280,35 @@ jobs:
           path: ${{ inputs.ruby-app-directory != '' && format('{0}/Gemfile.lock', inputs.ruby-app-directory) || 'Gemfile.lock' }}
           name: ${{ github.event.repository.name }}-Gemfile-lock.txt 
 
+      - name: Set up Go (required for Go workspace vendoring)
+        if: ${{ hashFiles('go.work') != '' }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: Prepare Go workspace for BlackDuck scanning
+        if: ${{ hashFiles('go.work') != '' }}
+        run: |
+          # Extract all relative module paths from go.work.
+          # grep -oE handles both single-line (use ./path) and block (use (\n  ./path\n)) syntax
+          # because it matches any './' sequence anywhere in the file.
+          GO_WORK_DEPTH=$(grep -oE '\./[^[:space:]"/)]+' go.work \
+            | awk -F'/' '{print NF-1}' \
+            | sort -rn | head -1)
+          # Default to 1 if all modules sit at root or grep returned nothing
+          [[ -z "$GO_WORK_DEPTH" || "$GO_WORK_DEPTH" -le 0 ]] && GO_WORK_DEPTH=1
+          echo "GO_WORK_DETECTOR_DEPTH=${GO_WORK_DEPTH}" >> "$GITHUB_ENV"
+          echo "Go workspace detector search depth: ${GO_WORK_DEPTH}"
+          # Vendor all workspace dependencies (requires Go 1.22+).
+          # If this fails (e.g. private module network issue) Detect will still run
+          # with the correct search depth and resolve modules via the Go toolchain.
+          if go work vendor; then
+            echo "GOFLAGS=-mod=vendor" >> "$GITHUB_ENV"
+            echo "Successfully vendored Go workspace dependencies"
+          else
+            echo "go work vendor did not complete; Detect will resolve modules via Go toolchain"
+          fi
+
       - name: Construct BlackDuck detect arguments
         id: detect-args
         run: |
@@ -302,6 +331,16 @@ jobs:
           if [[ "${{ inputs.github-event-name }}" == "pull_request" ]]; then
             # RAPID scan for PRs - automatically compares against baseline from target branch
             DETECT_ARGS="${DETECT_ARGS} --detect.blackduck.scan.mode=RAPID"
+          fi
+
+          # If repo uses a Go workspace, increase detector search depth so Detect finds
+          # go.mod files inside module subdirectories (default depth 0 = root only = only Git found).
+          # Also set accuracy.required=NONE: Detect's default HIGH accuracy check fails for multi-module
+          # Go workspaces (FAILURE_ACCURACY_NOT_MET / exit 15) because it can't fully resolve the graph
+          # via `go list` across workspace modules. Vendor mode resolves deps; accuracy=NONE lets it proceed.
+          if [[ -f "go.work" ]]; then
+            DETECT_ARGS="${DETECT_ARGS} --detect.detector.search.depth=${{ env.GO_WORK_DETECTOR_DEPTH }}"
+            DETECT_ARGS="${DETECT_ARGS} --detect.accuracy.required=NONE"
           fi
           
           echo "DETECT_ARGS=${DETECT_ARGS}" >> $GITHUB_ENV
