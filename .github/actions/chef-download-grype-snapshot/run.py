@@ -522,16 +522,11 @@ if scan_mode == "habitat":
     
     # Install the package (with channel if specified) - requires sudo for /hab/pkgs/ access
     # Note: Chef packages now require HAB_AUTH_TOKEN even for stable channel
-    install_cmd = f"sudo hab pkg install {pkg_to_install}"
-    if hab_channel and hab_channel != "stable":
-        install_cmd += f" --channel {hab_channel}"
+    install_cmd = f"sudo hab pkg install {pkg_to_install} --channel {hab_channel}"
     
     # Set HAB_AUTH_TOKEN if provided (required for protected packages including chef/* in stable)
     if hab_auth_token:
-        if hab_channel and hab_channel != "stable":
             install_cmd = f"sudo HAB_AUTH_TOKEN={hab_auth_token} hab pkg install {pkg_to_install} --channel {hab_channel}"
-        else:
-            install_cmd = f"sudo HAB_AUTH_TOKEN={hab_auth_token} hab pkg install {pkg_to_install}"
     
     run(["bash", "-lc", install_cmd], check=True)
     
