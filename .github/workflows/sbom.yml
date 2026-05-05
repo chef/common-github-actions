@@ -294,6 +294,45 @@ jobs:
         with:
           go-version: 'stable'
 
+      - name: Resolve Erlang/HEX dependencies for BlackDuck scanning
+        if: inputs.language == 'erlang' || inputs.language == 'ruby-erlang'
+        continue-on-error: true
+        run: |
+          # BlackDuck Detect needs rebar.lock files to accurately detect HEX dependencies.
+          # Run `rebar3 get-deps` in every directory containing a rebar.config to generate
+          # the lock files that the HEX detector relies on.
+          echo "Resolving Erlang/HEX dependencies via rebar3..."
+          find . -name "rebar.config" -not -path "*/.bridge/*" -not -path "*/node_modules/*" | while read cfg; do
+            dir=$(dirname "$cfg")
+            echo "Running rebar3 get-deps in: $dir"
+            (cd "$dir" && rebar3 get-deps) || echo "rebar3 get-deps failed in $dir (continuing)"
+          done
+          echo "Erlang dependency resolution complete"
+
+      - name: Resolve Ruby dependencies for BlackDuck scanning
+        if: ${{ inputs.run-bundle-install != true && (inputs.language == 'ruby' || inputs.language == 'ruby-erlang') }}
+        continue-on-error: true
+        run: |
+          # BlackDuck Detect needs Gemfile.lock files to accurately detect RubyGems dependencies.
+          # Repos like chef-server have multiple Gemfiles across subdirectories at varying depths.
+          # Find every Gemfile that lacks a corresponding Gemfile.lock and run bundle install in
+          # that directory so Detect's Bundler detector can pick up all Ruby dependency trees.
+          BASE_DIR="${{ inputs.ruby-app-directory != '' && inputs.ruby-app-directory || '.' }}"
+          echo "Scanning for Gemfiles under: $BASE_DIR"
+          find "$BASE_DIR" -name "Gemfile" -not -name "*.lock" \
+            -not -path "*/.bridge/*" -not -path "*/node_modules/*" -not -path "*/.git/*" \
+            | while read gemfile; do
+              dir=$(dirname "$gemfile")
+              if [ ! -f "$dir/Gemfile.lock" ]; then
+                echo "No Gemfile.lock in $dir — running bundle install..."
+                (cd "$dir" && bundle install --without development test) \
+                  || echo "bundle install failed in $dir (continuing)"
+              else
+                echo "Gemfile.lock already exists in $dir — skipping"
+              fi
+            done
+          echo "Ruby dependency resolution complete"
+
       - name: Prepare Go workspace for BlackDuck scanning
         if: ${{ hashFiles('go.work') != '' }}
         run: |
@@ -349,6 +388,14 @@ jobs:
           if [[ -f "go.work" ]]; then
             DETECT_ARGS="${DETECT_ARGS} --detect.detector.search.depth=${{ env.GO_WORK_DETECTOR_DEPTH }}"
             DETECT_ARGS="${DETECT_ARGS} --detect.accuracy.required=NONE"
+          fi
+
+          # For Erlang and ruby-erlang repos, rebar.config/rebar.lock files are often in
+          # subdirectories. Default detector search depth is 0 (root only), which means only
+          # the Git detector runs and HEX dependencies are never scanned.
+          # Increase depth to 5 to find rebar.config/rebar.lock in nested app directories.
+          if [[ "${{ inputs.language }}" == "erlang" || "${{ inputs.language }}" == "ruby-erlang" ]]; then
+            DETECT_ARGS="${DETECT_ARGS} --detect.detector.search.depth=5"
           fi
           
           echo "DETECT_ARGS=${DETECT_ARGS}" >> $GITHUB_ENV
