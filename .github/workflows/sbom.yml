@@ -301,12 +301,22 @@ jobs:
           # BlackDuck Detect needs rebar.lock files to accurately detect HEX dependencies.
           # Run `rebar3 get-deps` in every directory containing a rebar.config to generate
           # the lock files that the HEX detector relies on.
+          # Also calculate the maximum nesting depth of rebar.config files so the detector
+          # search depth can be set dynamically — works for any repo layout, not just chef-server.
           echo "Resolving Erlang/HEX dependencies via rebar3..."
-          find . -name "rebar.config" -not -path "*/.bridge/*" -not -path "*/node_modules/*" | while read cfg; do
+          MAX_DEPTH=0
+          while IFS= read -r cfg; do
             dir=$(dirname "$cfg")
             echo "Running rebar3 get-deps in: $dir"
             (cd "$dir" && rebar3 get-deps) || echo "rebar3 get-deps failed in $dir (continuing)"
-          done
+            # Count directory depth relative to repo root (number of '/' separators after leading ./)
+            depth=$(echo "$dir" | tr -cd '/' | wc -c)
+            [ "$depth" -gt "$MAX_DEPTH" ] && MAX_DEPTH="$depth"
+          done < <(find . -name "rebar.config" -not -path "*/.bridge/*" -not -path "*/node_modules/*" -not -path "*/.git/*")
+          # Ensure at least depth 1 so the root rebar.config is always found
+          [ "$MAX_DEPTH" -lt 1 ] && MAX_DEPTH=1
+          echo "ERLANG_DETECTOR_DEPTH=${MAX_DEPTH}" >> "$GITHUB_ENV"
+          echo "Erlang detector search depth: ${MAX_DEPTH}"
           echo "Erlang dependency resolution complete"
 
       - name: Resolve Ruby dependencies for BlackDuck scanning
@@ -314,23 +324,28 @@ jobs:
         continue-on-error: true
         run: |
           # BlackDuck Detect needs Gemfile.lock files to accurately detect RubyGems dependencies.
-          # Repos like chef-server have multiple Gemfiles across subdirectories at varying depths.
-          # Find every Gemfile that lacks a corresponding Gemfile.lock and run bundle install in
-          # that directory so Detect's Bundler detector can pick up all Ruby dependency trees.
+          # Find every Gemfile across the repo (at any depth), run bundle install where a
+          # Gemfile.lock is missing, and calculate the max nesting depth so the detector
+          # search depth covers all Gemfile locations — works for any repo layout.
           BASE_DIR="${{ inputs.ruby-app-directory != '' && inputs.ruby-app-directory || '.' }}"
           echo "Scanning for Gemfiles under: $BASE_DIR"
-          find "$BASE_DIR" -name "Gemfile" -not -name "*.lock" \
-            -not -path "*/.bridge/*" -not -path "*/node_modules/*" -not -path "*/.git/*" \
-            | while read gemfile; do
-              dir=$(dirname "$gemfile")
-              if [ ! -f "$dir/Gemfile.lock" ]; then
-                echo "No Gemfile.lock in $dir — running bundle install..."
-                (cd "$dir" && bundle install --without development test) \
-                  || echo "bundle install failed in $dir (continuing)"
-              else
-                echo "Gemfile.lock already exists in $dir — skipping"
-              fi
-            done
+          MAX_DEPTH=0
+          while IFS= read -r gemfile; do
+            dir=$(dirname "$gemfile")
+            depth=$(echo "$dir" | tr -cd '/' | wc -c)
+            [ "$depth" -gt "$MAX_DEPTH" ] && MAX_DEPTH="$depth"
+            if [ ! -f "$dir/Gemfile.lock" ]; then
+              echo "No Gemfile.lock in $dir — running bundle install..."
+              (cd "$dir" && bundle install --without development test) \
+                || echo "bundle install failed in $dir (continuing)"
+            else
+              echo "Gemfile.lock already exists in $dir — skipping"
+            fi
+          done < <(find "$BASE_DIR" -name "Gemfile" -not -name "*.lock" \
+            -not -path "*/.bridge/*" -not -path "*/node_modules/*" -not -path "*/.git/*")
+          [ "$MAX_DEPTH" -lt 1 ] && MAX_DEPTH=1
+          echo "RUBY_DETECTOR_DEPTH=${MAX_DEPTH}" >> "$GITHUB_ENV"
+          echo "Ruby detector search depth: ${MAX_DEPTH}"
           echo "Ruby dependency resolution complete"
 
       - name: Prepare Go workspace for BlackDuck scanning
@@ -390,12 +405,21 @@ jobs:
             DETECT_ARGS="${DETECT_ARGS} --detect.accuracy.required=NONE"
           fi
 
-          # For Erlang and ruby-erlang repos, rebar.config/rebar.lock files are often in
-          # subdirectories. Default detector search depth is 0 (root only), which means only
-          # the Git detector runs and HEX dependencies are never scanned.
-          # Increase depth to 5 to find rebar.config/rebar.lock in nested app directories.
+          # For Erlang, ruby-erlang, and pure Ruby repos, rebar.config/Gemfile files may
+          # be nested in subdirectories. Default detector search depth is 0 (root only),
+          # which causes only the Git detector to run. Use the dynamically calculated depth
+          # (max nesting of rebar.config or Gemfile in this repo) so this works for any layout.
           if [[ "${{ inputs.language }}" == "erlang" || "${{ inputs.language }}" == "ruby-erlang" ]]; then
-            DETECT_ARGS="${DETECT_ARGS} --detect.detector.search.depth=5"
+            ERLANG_DEPTH="${{ env.ERLANG_DETECTOR_DEPTH }}"
+            RUBY_DEPTH="${{ env.RUBY_DETECTOR_DEPTH }}"
+            # Use the greater of the two depths to cover both Ruby and Erlang file trees
+            MAX_DEPTH=$(( ERLANG_DEPTH > RUBY_DEPTH ? ERLANG_DEPTH : RUBY_DEPTH ))
+            [ "$MAX_DEPTH" -lt 1 ] && MAX_DEPTH=1
+            DETECT_ARGS="${DETECT_ARGS} --detect.detector.search.depth=${MAX_DEPTH}"
+          elif [[ "${{ inputs.language }}" == "ruby" ]]; then
+            RUBY_DEPTH="${{ env.RUBY_DETECTOR_DEPTH }}"
+            [ -n "$RUBY_DEPTH" ] && [ "$RUBY_DEPTH" -gt 0 ] && \
+              DETECT_ARGS="${DETECT_ARGS} --detect.detector.search.depth=${RUBY_DEPTH}"
           fi
           
           echo "DETECT_ARGS=${DETECT_ARGS}" >> $GITHUB_ENV
