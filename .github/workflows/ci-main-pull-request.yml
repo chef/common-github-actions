@@ -1593,7 +1593,7 @@ jobs:
       github-branch-name: ${{ inputs.github-branch-name }}
       version: ${{ inputs.version }}
       export-github-sbom: ${{ inputs.export-github-sbom }}
-      perform-blackduck-sca-scan: ${{ inputs.perform-blackduck-sca-scan && github.event_name == 'push' }}
+      perform-blackduck-sca-scan: ${{ inputs.perform-blackduck-sca-scan && (github.event_name == 'push' || github.event_name == 'pull_request') }} # TODO: revert to 'push' only after ruby-erlang testing is complete
       # generate-blackduck-sbom: ${{ inputs.generate-blackduck-sbom }}  # obsolete, remove TODO
       blackduck-project-group-name: ${{ inputs.blackduck-project-group-name }}
       blackduck-project-name: ${{ inputs.blackduck-project-name }}
