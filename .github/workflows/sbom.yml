@@ -83,7 +83,7 @@ on:
         type: boolean
         default: false
       language:
-        description: 'Primary programming language of the project, used for SBOM enrichment (e.g., "ruby", "go", "python")'
+        description: 'Primary programming language of the project, used for SBOM enrichment (e.g., "ruby", "go", "python", "erlang", "ruby-erlang")'
         required: false
         type: string
         default: 'ruby'
@@ -234,7 +234,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Set up Ruby and run bundle install
-        if: inputs.language == 'ruby'
+        if: inputs.language == 'ruby' || inputs.language == 'ruby-erlang'
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.4.2'
@@ -242,7 +242,7 @@ jobs:
           working-directory: ${{ inputs.ruby-app-directory != '' && inputs.ruby-app-directory || '.' }}
 
       - name: Configure Bundler for private Ruby gems
-        if: ${{ inputs.run-bundle-install == true && inputs.language == 'ruby' }}
+        if: ${{ inputs.run-bundle-install == true && (inputs.language == 'ruby' || inputs.language == 'ruby-erlang') }}
         run: |
           if [ -z "${{ secrets.PRIVATE_ACCESS_KITCHEN_CHEF_ENTERPRISE }}" ]; then
             echo "Skipping: PRIVATE_ACCESS_KITCHEN_CHEF_ENTERPRISE secret not configured or not in scope"
@@ -251,11 +251,19 @@ jobs:
           bundle config set --local github.com "x-access-token:${{ secrets.PRIVATE_ACCESS_KITCHEN_CHEF_ENTERPRISE }}"
 
       - name: Set up Erlang/OTP and rebar3
-        if: inputs.language == 'erlang'
+        if: inputs.language == 'erlang' || inputs.language == 'ruby-erlang'
         uses: erlef/setup-beam@v1
         with:
           otp-version: '25.3.2.16'
           rebar3-version: '3.22.0'
+
+      - name: Verify rebar3 installation and add to PATH
+        if: inputs.language == 'erlang' || inputs.language == 'ruby-erlang'
+        run: |
+          echo "Checking for rebar3..."
+          which rebar3 || echo "rebar3 not found in PATH"
+          rebar3 version || echo "rebar3 command failed"
+          echo "PATH: $PATH"
 
       - name: Configure git for private Go modules
         if : ${{ inputs.go-private-modules != '' }}
@@ -264,7 +272,7 @@ jobs:
         run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - name: generate Gemfile.lock if needed for Ruby projects
-        if: ${{ inputs.run-bundle-install == true && inputs.language == 'ruby' }} 
+        if: ${{ inputs.run-bundle-install == true && (inputs.language == 'ruby' || inputs.language == 'ruby-erlang') }} 
         continue-on-error: true
         working-directory: ${{ inputs.ruby-app-directory != '' && inputs.ruby-app-directory || '.' }}
         run: |
@@ -273,7 +281,7 @@ jobs:
           fi
 
       - name: attach artifact for Gemfile.lock for debugging
-        if: ${{ inputs.language == 'ruby' }} 
+        if: ${{ inputs.language == 'ruby' || inputs.language == 'ruby-erlang' }} 
         uses: actions/upload-artifact@v4
         continue-on-error: true
         with:
@@ -285,6 +293,60 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: 'stable'
+
+      - name: Resolve Erlang/HEX dependencies for BlackDuck scanning
+        if: inputs.language == 'erlang' || inputs.language == 'ruby-erlang'
+        continue-on-error: true
+        run: |
+          # BlackDuck Detect needs rebar.lock files to accurately detect HEX dependencies.
+          # Run `rebar3 get-deps` in every directory containing a rebar.config to generate
+          # the lock files that the HEX detector relies on.
+          # Also calculate the maximum nesting depth of rebar.config files so the detector
+          # search depth can be set dynamically — works for any repo layout.
+          echo "Resolving Erlang/HEX dependencies via rebar3..."
+          MAX_DEPTH=0
+          while IFS= read -r cfg; do
+            dir=$(dirname "$cfg")
+            echo "Running rebar3 get-deps in: $dir"
+            (cd "$dir" && rebar3 get-deps) || echo "rebar3 get-deps failed in $dir (continuing)"
+            # Count directory depth relative to repo root (number of '/' separators after leading ./)
+            depth=$(echo "$dir" | tr -cd '/' | wc -c)
+            [ "$depth" -gt "$MAX_DEPTH" ] && MAX_DEPTH="$depth"
+          done < <(find . -name "rebar.config" -not -path "*/.bridge/*" -not -path "*/node_modules/*" -not -path "*/.git/*")
+          # Ensure at least depth 1 so the root rebar.config is always found
+          [ "$MAX_DEPTH" -lt 1 ] && MAX_DEPTH=1
+          echo "ERLANG_DETECTOR_DEPTH=${MAX_DEPTH}" >> "$GITHUB_ENV"
+          echo "Erlang detector search depth: ${MAX_DEPTH}"
+          echo "Erlang dependency resolution complete"
+
+      - name: Resolve Ruby dependencies for BlackDuck scanning
+        if: ${{ inputs.run-bundle-install != true && (inputs.language == 'ruby' || inputs.language == 'ruby-erlang') }}
+        continue-on-error: true
+        run: |
+          # BlackDuck Detect needs Gemfile.lock files to accurately detect RubyGems dependencies.
+          # Find every Gemfile across the repo (at any depth), run bundle install where a
+          # Gemfile.lock is missing, and calculate the max nesting depth so the detector
+          # search depth covers all Gemfile locations — works for any repo layout.
+          BASE_DIR="${{ inputs.ruby-app-directory != '' && inputs.ruby-app-directory || '.' }}"
+          echo "Scanning for Gemfiles under: $BASE_DIR"
+          MAX_DEPTH=0
+          while IFS= read -r gemfile; do
+            dir=$(dirname "$gemfile")
+            depth=$(echo "$dir" | tr -cd '/' | wc -c)
+            [ "$depth" -gt "$MAX_DEPTH" ] && MAX_DEPTH="$depth"
+            if [ ! -f "$dir/Gemfile.lock" ]; then
+              echo "No Gemfile.lock in $dir — running bundle install..."
+              (cd "$dir" && bundle install --without development test) \
+                || echo "bundle install failed in $dir (continuing)"
+            else
+              echo "Gemfile.lock already exists in $dir — skipping"
+            fi
+          done < <(find "$BASE_DIR" -name "Gemfile" -not -name "*.lock" \
+            -not -path "*/.bridge/*" -not -path "*/node_modules/*" -not -path "*/.git/*")
+          [ "$MAX_DEPTH" -lt 1 ] && MAX_DEPTH=1
+          echo "RUBY_DETECTOR_DEPTH=${MAX_DEPTH}" >> "$GITHUB_ENV"
+          echo "Ruby detector search depth: ${MAX_DEPTH}"
+          echo "Ruby dependency resolution complete"
 
       - name: Prepare Go workspace for BlackDuck scanning
         if: ${{ hashFiles('go.work') != '' }}
@@ -341,6 +403,23 @@ jobs:
           if [[ -f "go.work" ]]; then
             DETECT_ARGS="${DETECT_ARGS} --detect.detector.search.depth=${{ env.GO_WORK_DETECTOR_DEPTH }}"
             DETECT_ARGS="${DETECT_ARGS} --detect.accuracy.required=NONE"
+          fi
+
+          # For Erlang, ruby-erlang, and pure Ruby repos, rebar.config/Gemfile files may
+          # be nested in subdirectories. Default detector search depth is 0 (root only),
+          # which causes only the Git detector to run. Use the dynamically calculated depth
+          # (max nesting of rebar.config or Gemfile in this repo) so this works for any layout.
+          if [[ "${{ inputs.language }}" == "erlang" || "${{ inputs.language }}" == "ruby-erlang" ]]; then
+            ERLANG_DEPTH="${{ env.ERLANG_DETECTOR_DEPTH }}"
+            RUBY_DEPTH="${{ env.RUBY_DETECTOR_DEPTH }}"
+            # Use the greater of the two depths to cover both Ruby and Erlang file trees
+            MAX_DEPTH=$(( ERLANG_DEPTH > RUBY_DEPTH ? ERLANG_DEPTH : RUBY_DEPTH ))
+            [ "$MAX_DEPTH" -lt 1 ] && MAX_DEPTH=1
+            DETECT_ARGS="${DETECT_ARGS} --detect.detector.search.depth=${MAX_DEPTH}"
+          elif [[ "${{ inputs.language }}" == "ruby" ]]; then
+            RUBY_DEPTH="${{ env.RUBY_DETECTOR_DEPTH }}"
+            [ -n "$RUBY_DEPTH" ] && [ "$RUBY_DEPTH" -gt 0 ] && \
+              DETECT_ARGS="${DETECT_ARGS} --detect.detector.search.depth=${RUBY_DEPTH}"
           fi
           
           echo "DETECT_ARGS=${DETECT_ARGS}" >> $GITHUB_ENV
