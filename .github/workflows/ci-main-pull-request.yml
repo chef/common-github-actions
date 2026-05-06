@@ -1317,7 +1317,7 @@ jobs:
       
   BlackDuck-Polaris-SAST:
     name: 'BlackDuck Polaris SAST scan'
-    if: ${{ inputs.perform-blackduck-polaris && (github.event_name == 'push' || github.event_name == 'pull_request') }} # TODO: revert to 'push' only after ruby-erlang testing is complete
+    if: ${{ inputs.perform-blackduck-polaris && github.event_name == 'push' }}
     uses: chef/common-github-actions/.github/workflows/polaris-sast.yml@main
     needs: checkout
     secrets: inherit
@@ -1585,7 +1585,7 @@ jobs:
     name: 'Generating SBOM'
     #    Create software bill-of-materials (SBOM) using SPDX format
     if: ${{ inputs.generate-sbom == true }}
-    uses: chef/common-github-actions/.github/workflows/sbom.yml@ruby-erlang-fix # TODO: revert to @main after ruby-erlang-fix is merged
+    uses: chef/common-github-actions/.github/workflows/sbom.yml@main
     needs: checkout # TODO: fix set-application-version
     secrets: inherit
     with:
@@ -1593,7 +1593,7 @@ jobs:
       github-branch-name: ${{ inputs.github-branch-name }}
       version: ${{ inputs.version }}
       export-github-sbom: ${{ inputs.export-github-sbom }}
-      perform-blackduck-sca-scan: ${{ inputs.perform-blackduck-sca-scan && (github.event_name == 'push' || github.event_name == 'pull_request') }} # TODO: revert to 'push' only after ruby-erlang testing is complete
+      perform-blackduck-sca-scan: ${{ inputs.perform-blackduck-sca-scan && github.event_name == 'push' }}
       # generate-blackduck-sbom: ${{ inputs.generate-blackduck-sbom }}  # obsolete, remove TODO
       blackduck-project-group-name: ${{ inputs.blackduck-project-group-name }}
       blackduck-project-name: ${{ inputs.blackduck-project-name }}

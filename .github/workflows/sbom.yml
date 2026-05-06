@@ -302,7 +302,7 @@ jobs:
           # Run `rebar3 get-deps` in every directory containing a rebar.config to generate
           # the lock files that the HEX detector relies on.
           # Also calculate the maximum nesting depth of rebar.config files so the detector
-          # search depth can be set dynamically — works for any repo layout, not just chef-server.
+          # search depth can be set dynamically — works for any repo layout.
           echo "Resolving Erlang/HEX dependencies via rebar3..."
           MAX_DEPTH=0
           while IFS= read -r cfg; do
