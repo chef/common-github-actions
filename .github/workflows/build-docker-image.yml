@@ -59,6 +59,9 @@ jobs:
         id: build-image
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          # WARNING: This workflow accesses a non-default secret. Ensure this secret is
+          # required and that it is stored securely in the repository or organization settings.
+          NPM_AZURE_KEY: ${{ secrets.NPM_AZURE_KEY }}
         run: |
           if [ ! -f "Dockerfile" ]; then
             echo "❌ No Dockerfile found - cannot build"
@@ -68,8 +71,25 @@ jobs:
           echo "Building Docker image..."
           REPO_NAME=$(basename $(pwd))
 
+          # Strategy 0: platform-ui - build with NPM Azure Key via buildx secret
+          if [ "${{ github.event.repository.name }}" = "platform-ui" ]; then
+            echo "Detected platform-ui - building with NPM Azure Key secret"
+            trap 'rm -f .npmrc.tmp' EXIT
+            printf '%s' "$NPM_AZURE_KEY" > .npmrc.tmp
+            docker buildx create --use
+            docker buildx build \
+              --secret id=npmrc,src=.npmrc.tmp \
+              --load \
+              --platform linux/amd64 \
+              --build-arg GITHUB_TOKEN="$GITHUB_TOKEN" \
+              --build-arg GIT_SHA="${{ github.sha }}" \
+              --build-arg APP_VERSION="${{ github.ref_name }}" \
+              --build-arg DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              -t "${REPO_NAME}:latest" .
+            IMAGES="${REPO_NAME}:latest"
+
           # Strategy 1: Check for build-docker.sh script (e.g., dsm-erchef)
-          if [ -f "build-docker.sh" ]; then
+          elif [ -f "build-docker.sh" ]; then
             echo "Found build-docker.sh script - using it to build images"
             chmod +x build-docker.sh
             GITHUB_TOKEN="${{ secrets.GH_TOKEN }}" ./build-docker.sh

@@ -1029,7 +1029,7 @@ jobs:
   build-docker-image:
     name: 'Build Docker image for security scans'
     if: ${{ inputs.perform-grype-image-scan == true || inputs.perform-wiz-scan == true }}
-    uses: chef/common-github-actions/.github/workflows/build-docker-image.yml@main
+    uses: chef/common-github-actions/.github/workflows/build-docker-image.yml@vaibhav/CHEF-33431-platform-ui-docker-build-fix
     needs: checkout
     secrets: inherit
     with:
