@@ -97,9 +97,6 @@ jobs:
         if: ${{ inputs.prebuilt-image-artifact == '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-          # WARNING: This workflow accesses a non-default secret. Ensure this secret is
-          # required and that it is stored securely in the repository or organization settings.
-          NPM_AZURE_KEY: ${{ secrets.NPM_AZURE_KEY }}
         run: |
           if [ ! -f "Dockerfile" ]; then
             echo "❌ No Dockerfile found - this workflow requires a Dockerfile to scan Docker image"
@@ -109,22 +106,19 @@ jobs:
           echo "Building Docker image..."
           REPO_NAME=$(basename $(pwd))
           
-          # Strategy 0: platform-ui - build with NPM Azure Key via buildx secret
+          # Strategy 0: platform-ui — delegate entirely to build-docker.sh which handles
+          # submodule checkout (PAT), NPM Azure Key secret, and docker buildx build.
           if [ "${{ github.event.repository.name }}" = "platform-ui" ]; then
-            echo "Detected platform-ui - building with NPM Azure Key secret"
-            trap 'rm -f .npmrc.tmp' EXIT
-            printf '%s' "$NPM_AZURE_KEY" > .npmrc.tmp
-            docker buildx create --use
-            docker buildx build \
-              --secret id=npmrc,src=.npmrc.tmp \
-              --load \
-              --platform linux/amd64 \
-              --build-arg GITHUB_TOKEN="$GITHUB_TOKEN" \
-              --build-arg GIT_SHA="${{ github.sha }}" \
-              --build-arg APP_VERSION="${{ github.ref_name }}" \
-              --build-arg DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-              -t "${REPO_NAME}:latest" .
-            IMAGES="${REPO_NAME}:latest"
+            echo "Detected platform-ui - delegating to build-docker.sh"
+            chmod +x build-docker.sh
+            GITHUB_TOKEN="${{ secrets.GH_TOKEN }}" \
+            NPM_AZURE_KEY="${{ secrets.NPM_AZURE_KEY }}" \
+            BRANCH_NAME="${{ github.head_ref || github.ref_name }}" \
+            GIT_SHA="${{ github.sha }}" \
+            APP_VERSION="${{ github.ref_name }}" \
+            LOCALES="en" \
+            ./build-docker.sh
+            IMAGES="platform-ui:local"
 
           # Strategy 1: Check for build-docker.sh script (e.g., dsm-erchef)
           elif [ -f "build-docker.sh" ]; then
