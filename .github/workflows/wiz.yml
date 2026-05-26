@@ -107,8 +107,22 @@ jobs:
           echo "Building Docker image..."
           REPO_NAME=$(basename $(pwd))
 
+          # Strategy 0: platform-ui — delegate entirely to build-docker.sh which handles
+          # submodule checkout (GITHUB_TOKEN), NPM Azure Key secret, and docker buildx build.
+          if [ "${{ github.event.repository.name }}" = "platform-ui" ]; then
+            echo "Detected platform-ui - delegating to build-docker.sh"
+            chmod +x build-docker.sh
+            GITHUB_TOKEN="${{ secrets.GH_TOKEN }}" \
+            NPM_AZURE_KEY="${{ secrets.NPM_AZURE_KEY }}" \
+            BRANCH_NAME="${{ github.head_ref || github.ref_name }}" \
+            GIT_SHA="${{ github.sha }}" \
+            APP_VERSION="${{ github.ref_name }}" \
+            LOCALES="en" \
+            ./build-docker.sh
+            IMAGES="platform-ui:local"
+
           # Strategy 1: Check for build-docker.sh script (e.g., dsm-erchef)
-          if [ -f "build-docker.sh" ]; then
+          elif [ -f "build-docker.sh" ]; then
             echo "Found build-docker.sh script - using it to build images"
             chmod +x build-docker.sh
             GITHUB_TOKEN="${{ secrets.GH_TOKEN }}" ./build-docker.sh

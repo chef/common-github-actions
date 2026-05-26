@@ -78,9 +78,10 @@ jobs:
             BRANCH_NAME="${{ github.head_ref || github.ref_name }}" \
             GIT_SHA="${{ github.sha }}" \
             APP_VERSION="${{ github.ref_name }}" \
+            RUN_ID="${{ github.run_id }}" \
             LOCALES="en" \
             ./build-docker.sh
-            IMAGES="platform-ui:local"
+            IMAGES="platform-ui:${{ github.run_id }}"
 
           # Strategy 1: Check for build-docker.sh script (e.g., dsm-erchef)
           elif [ -f "build-docker.sh" ]; then
