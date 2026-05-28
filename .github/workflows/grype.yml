@@ -118,7 +118,7 @@ jobs:
             APP_VERSION="${{ github.ref_name }}" \
             LOCALES="en" \
             ./build-docker.sh
-            IMAGES="platform-ui:local"
+            IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -E "^${REPO_NAME}" | grep -v "^<none>")
 
           # Strategy 1: Check for build-docker.sh script (e.g., dsm-erchef)
           elif [ -f "build-docker.sh" ]; then
