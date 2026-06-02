@@ -1051,7 +1051,7 @@ jobs:
 
   run-grype-hab-package-scan:
     name: 'Grype scan Habitat packages from bldr.habitat.sh'
-    if: ${{ inputs.perform-grype-hab-scan == true }}
+    if: ${{ inputs.perform-grype-hab-scan == true && github.event_name == 'push' }}
     uses: chef/common-github-actions/.github/workflows/grype-hab-package-scan.yml@main
     needs: checkout
     secrets: inherit
