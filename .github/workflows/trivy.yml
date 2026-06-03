@@ -43,7 +43,7 @@ jobs:
 
       # The first call to the action will invoke setup-trivy and install trivy
       - name: Generate Trivy Vulnerability Report (JSON)
-        uses: aquasecurity/trivy-action@0.34.2
+        uses: aquasecurity/trivy-action@0.35.0
         env:
           TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2
           TRIVY_DISABLE_VEX_NOTICE: true
@@ -65,7 +65,7 @@ jobs:
 
 
       - name: Generate Trivy Vulnerability Report (TABLE)
-        uses: aquasecurity/trivy-action@0.34.2
+        uses: aquasecurity/trivy-action@0.35.0
         env:
           TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2
           TRIVY_DISABLE_VEX_NOTICE: true
@@ -103,7 +103,7 @@ jobs:
 
       - name: Fail build on High/Critical Vulnerabilities
         if: ${{ inputs.trivy-fail-on-high || inputs.trivy-fail-on-critical }}
-        uses: aquasecurity/trivy-action@0.34.2
+        uses: aquasecurity/trivy-action@0.35.0
         env:
           TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2
           TRIVY_DISABLE_VEX_NOTICE: true
