@@ -220,20 +220,25 @@ git clone https://github.com/chef/common-github-actions.git
 cd common-github-actions/.github/actions/automate-container-scan
 
 # Build the container
-docker build -t automate:latest .
+export LICENSE_ID="<your_chef_commercial_license_id>"
+docker build --build-arg LICENSE_ID="$LICENSE_ID" --build-arg CHANNEL=current -t automate:latest .
 
 # Run the scan script
 export CHANNEL=current
 export OUT_DIR=out
 export ACTION_DIR=$(pwd)
 bash run.sh
+
+# After the scan completes, results are available in:
+# out/container/automate/${CHANNEL}/ubuntu/25.10/x86_64
 ```
 
 ### Interactive Container Access
 
 ```bash
 # Build container
-docker build -t automate:latest .
+export LICENSE_ID="<your_chef_commercial_license_id>"
+docker build --build-arg LICENSE_ID="$LICENSE_ID" --build-arg CHANNEL=current -t automate:latest .
 
 # Start container with systemd
 docker run -d --privileged --cgroupns=host \
