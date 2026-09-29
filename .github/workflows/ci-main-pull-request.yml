@@ -181,8 +181,8 @@ on:
         required: false
         type: boolean
         default: false
-      grype-image-skip-aws:
-        description: 'Skip Grype image scan on AWS ECR images to avoid rate limits (assumes these images are scanned with Amazon ECR scan or Trivy)'
+      image-skip-aws:
+        description: 'Skip AWS ECR login for Docker image scans (for repos that do not need ECR base images)'
         required: false
         type: boolean
         default: false
@@ -532,7 +532,7 @@ on:
         required: false
         type: boolean
         default: false
-      run-bundle-install: # Added to support projects without committed Gemfile.lock (e.g., chef-cli)
+      run-bundle-install:
         description: 'Run bundle install before scanning to generate Gemfile.lock at runtime'
         required: false
         type: boolean
@@ -586,6 +586,26 @@ on:
       #   required: false
       #   default: 'https://polaris.blackduck.com'
       #   type: string
+      perform-wiz-scan:
+        description: 'Perform Wiz CLI security scan on Docker image'
+        required: false
+        type: boolean
+        default: false
+      wiz-fail-build:
+        description: 'Fail the build on Wiz policy violations'
+        required: false
+        type: boolean
+        default: true
+      wiz-fail-on-critical:
+        description: 'Fail the pipeline if Wiz finds CRITICAL vulnerabilities'
+        required: false
+        type: boolean
+        default: false
+      wiz-fail-on-high:
+        description: 'Fail the pipeline if Wiz finds HIGH vulnerabilities'
+        required: false
+        type: boolean
+        default: false
         
 env:
   PRIMARY_APPLICATION: ${{ inputs.application }} # was 'default'   # Custom repo property [primaryApplication]: chef360, automate, infra-server, habitat, supermarket, licensing, downloads, chef-client, inspec, chef-workstation (or derivatives like habitat-builder)
@@ -933,6 +953,23 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Ruby
+        if: ${{ inputs.language == 'ruby' && inputs.run-bundle-install == true }}
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: false
+          working-directory: ${{ inputs.ruby-app-directory != '' && inputs.ruby-app-directory || '.' }}
+
+      - name: Run bundle install to generate Gemfile.lock
+        if: ${{ inputs.language == 'ruby' && inputs.run-bundle-install == true }}
+        continue-on-error: true
+        working-directory: ${{ inputs.ruby-app-directory != '' && inputs.ruby-app-directory || '.' }}
+        run: |
+          if [ ! -f Gemfile.lock ]; then
+            bundle install
+          fi
+
       - name: Determine severity threshold
         id: severity
         run: |
@@ -975,10 +1012,10 @@ jobs:
             exit 0
           fi
           
-          # Extract vulnerability counts using jq or grep fallback
+          # Extract vulnerability counts using jq with deduplication (unique_by vulnerability ID + package + version)
           if command -v jq &> /dev/null; then
-            CRITICAL_COUNT=$(jq '[.matches[]? | select(.vulnerability.severity == "Critical")] | length' "$JSON_FILE" 2>/dev/null || echo "0")
-            HIGH_COUNT=$(jq '[.matches[]? | select(.vulnerability.severity == "High")] | length' "$JSON_FILE" 2>/dev/null || echo "0")
+            CRITICAL_COUNT=$(jq '[.matches[]? | select(.vulnerability.severity == "Critical")] | unique_by(.vulnerability.id + .artifact.name + .artifact.version) | length' "$JSON_FILE" 2>/dev/null || echo "0")
+            HIGH_COUNT=$(jq '[.matches[]? | select(.vulnerability.severity == "High")] | unique_by(.vulnerability.id + .artifact.name + .artifact.version) | length' "$JSON_FILE" 2>/dev/null || echo "0")
           else
             CRITICAL_COUNT=$(grep -o '"severity":"Critical"' "$JSON_FILE" | wc -l | tr -d ' ' || echo "0")
             HIGH_COUNT=$(grep -o '"severity":"High"' "$JSON_FILE" | wc -l | tr -d ' ' || echo "0")
@@ -1030,7 +1067,32 @@ jobs:
     with:
       fail-grype-on-high: ${{ inputs.grype-image-fail-on-high }}
       fail-grype-on-critical: ${{ inputs.grype-image-fail-on-critical }}
-      grype-image-skip-aws: ${{ inputs.grype-image-skip-aws }}
+      grype-image-skip-aws: ${{ inputs.image-skip-aws }}
+      prebuilt-image-artifact: docker-image-for-scans
+      prebuilt-image-names: ${{ needs.build-docker-image.outputs.image-names }}
+
+  build-docker-image:
+    name: 'Build Docker image for security scans'
+    if: ${{ inputs.perform-grype-image-scan == true || inputs.perform-wiz-scan == true }}
+    uses: chef/common-github-actions/.github/workflows/build-docker-image.yml@main
+    needs: checkout
+    secrets: inherit
+    with:
+      skip-aws: ${{ inputs.image-skip-aws }}
+
+  run-wiz-scan:
+    name: 'Wiz CLI security scan'
+    if: ${{ inputs.perform-wiz-scan == true }}
+    uses: chef/common-github-actions/.github/workflows/wiz.yml@main
+    needs: [checkout, build-docker-image]
+    with:
+      fail-build: ${{ inputs.wiz-fail-build }}
+      fail-on-critical: ${{ inputs.wiz-fail-on-critical }}
+      fail-on-high: ${{ inputs.wiz-fail-on-high }}
+      wiz-image-skip-aws: ${{ inputs.image-skip-aws }}
+      prebuilt-image-artifact: docker-image-for-scans
+      prebuilt-image-names: ${{ needs.build-docker-image.outputs.image-names }}
+    secrets: inherit
 
   run-grype-hab-package-scan:
     name: 'Grype scan Habitat packages from bldr.habitat.sh'
@@ -1173,7 +1235,7 @@ jobs:
     #         VER=$(cat VERSION)
     #         echo "VERSION=$VER" >> $GITHUB_ENV
     #   then ${{ env.VERSION }}
-  
+
   set-application-version:
     runs-on: ubuntu-latest
     name: 'Detect SBOM version for application'
@@ -1621,7 +1683,7 @@ jobs:
       github-branch-name: ${{ inputs.github-branch-name }}
       version: ${{ inputs.version }}
       export-github-sbom: ${{ inputs.export-github-sbom }}
-      perform-blackduck-sca-scan: ${{ inputs.perform-blackduck-sca-scan }}
+      perform-blackduck-sca-scan: ${{ inputs.perform-blackduck-sca-scan && github.event_name == 'push' }}
       # generate-blackduck-sbom: ${{ inputs.generate-blackduck-sbom }}  # obsolete, remove TODO
       blackduck-project-group-name: ${{ inputs.blackduck-project-group-name }}
       blackduck-project-name: ${{ inputs.blackduck-project-name }}

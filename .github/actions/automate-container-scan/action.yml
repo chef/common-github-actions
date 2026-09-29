@@ -10,6 +10,10 @@ inputs:
   license_id:
     description: "Chef download license ID (required for commercial downloads)"
     required: true
+  hab_auth_token:
+    description: "Habitat Builder Personal Access Token for protected channels (pass via secrets)"
+    required: false
+    default: ""
   out_dir:
     description: "Output directory for scan results and logs"
     required: false
@@ -33,6 +37,7 @@ runs:
         CHANNEL: ${{ inputs.channel }}
         OUT_DIR: ${{ inputs.out_dir }}
         ACTION_DIR: ${{ github.action_path }}
+        HAB_AUTH_TOKEN: ${{ inputs.hab_auth_token }}
 
 branding:
   icon: "shield"
