@@ -29,6 +29,16 @@ name: Download SBOM from Insights and Convert to CSV
 on:
   workflow_call:
     inputs:
+      github-event-name:
+        description: 'GitHub event name (pass github.event_name from calling workflow for PR comment detection)'
+        required: false
+        type: string
+        default: ''
+      github-branch-name:
+        description: 'GitHub branch name (pass github.ref_name from calling workflow for branch-specific logic)'
+        required: false
+        type: string
+        default: ''
       version:
         description: 'Version of the project'
         required: true
@@ -38,14 +48,11 @@ on:
         required: false
         type: boolean
       perform-blackduck-sca-scan: # combined with export-github-sbom above
+      # generate-blackduck-polaris-sbom is OBSOLETE, use perform-blackduck-sca-scan instead
         description: 'Perform BlackDuck SCA scan'
         required: false
         type: boolean
         default: true
-      # generate-blackduck-sbom:  # obsolete
-      #   description: 'Generate SBOM using Blackduck Tool'
-      #   required: false
-      #   type: boolean
       blackduck-project-group-name:
         description: 'BlackDuck project group name'
         required: false
@@ -65,6 +72,41 @@ on:
       go-private-modules:
         required: false
         type: string
+      blackduck-force-low-accuracy-mode:
+        description: 'Force low accuracy mode for BlackDuck SCA scan to speed up scan time at the cost of accuracy (not recommended for production use)'
+        required: false
+        type: boolean
+        default: false
+      run-bundle-install:
+        description: 'Run bundle install before scanning to generate Gemfile.lock at runtime'
+        required: false
+        type: boolean
+        default: false
+      language:
+        description: 'Primary programming language of the project, used for SBOM enrichment (e.g., "ruby", "go", "python", "erlang", "ruby-erlang")'
+        required: false
+        type: string
+        default: 'ruby'
+      ruby-app-directory:
+        description: 'Subdirectory containing Ruby Gemfile (e.g., "src/supermarket" for repos with non-root Gemfile location). Leave empty if Gemfile is in root.'
+        required: false
+        type: string
+        default: ''
+      blackduck-fail-on-blocker:
+        description: 'Fail the pipeline if BlackDuck SCA scan finds BLOCKER vulnerabilities'
+        required: false
+        type: boolean
+        default: false
+      blackduck-fail-on-critical:
+        description: 'Fail the pipeline if BlackDuck SCA scan finds CRITICAL vulnerabilities'
+        required: false
+        type: boolean
+        default: false
+      blackduck-fail-on-major:
+        description: 'Fail the pipeline if BlackDuck SCA scan finds MAJOR vulnerabilities'
+        required: false
+        type: boolean
+        default: false
 
 env:
   # Set the default SBOM filename prefix
@@ -174,9 +216,9 @@ jobs:
 # Blackduck SBOM is at SERVER: https://progresssoftware.app.blackduck.com/ - org variable!
 # API token in repo - https://github.com/chef/chef-vault/settings/secrets/actions
   generate-blackduck-sbom:
-    name: Generate SBOM using Blackduck Tool (BLUE)
+    name: Blackduck SCA Scan (PURPLE)
     runs-on: ubuntu-latest
-    if: ${{ inputs.perform-blackduck-sca-scan == true || inputs.generate-blackduck-polaris-sbom == true }} # generate-blackduck--polaris-sbom is OBSOLETE, use perform-blackduck-sca-scan instead
+    if: ${{ inputs.perform-blackduck-sca-scan == true }}
     steps:
       - name: 'Echo inputs'
         run: |
@@ -186,38 +228,332 @@ jobs:
           echo "DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name }}"
           echo "DETECT_PROJECT_NAME: ${{ inputs.blackduck-project-name }}"
           echo "DETECT_PROJECT_VERSION_NAME: ${{ inputs.version }}"
+          echo "GitHub branch: ${{ inputs.github-branch-name }}"
          
       - name: Checkout source
         uses: actions/checkout@v6
 
+      - name: Set up Ruby and run bundle install
+        if: inputs.language == 'ruby' || inputs.language == 'ruby-erlang'
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4.2'
+          bundler-cache: false
+          working-directory: ${{ inputs.ruby-app-directory != '' && inputs.ruby-app-directory || '.' }}
+
+      - name: Configure Bundler for private Ruby gems
+        if: ${{ inputs.run-bundle-install == true && (inputs.language == 'ruby' || inputs.language == 'ruby-erlang') }}
+        run: |
+          if [ -z "${{ secrets.PRIVATE_ACCESS_KITCHEN_CHEF_ENTERPRISE }}" ]; then
+            echo "Skipping: PRIVATE_ACCESS_KITCHEN_CHEF_ENTERPRISE secret not configured or not in scope"
+            exit 0
+          fi
+          bundle config set --local github.com "x-access-token:${{ secrets.PRIVATE_ACCESS_KITCHEN_CHEF_ENTERPRISE }}"
+
+      - name: Set up Erlang/OTP and rebar3
+        if: inputs.language == 'erlang' || inputs.language == 'ruby-erlang'
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: '25.3.2.16'
+          rebar3-version: '3.22.0'
+
+      - name: Verify rebar3 installation and add to PATH
+        if: inputs.language == 'erlang' || inputs.language == 'ruby-erlang'
+        run: |
+          echo "Checking for rebar3..."
+          which rebar3 || echo "rebar3 not found in PATH"
+          rebar3 version || echo "rebar3 command failed"
+          echo "PATH: $PATH"
+
       - name: Configure git for private Go modules
+        if : ${{ inputs.go-private-modules != '' }}
         env:
           GOPRIVATE: ${{ inputs.go-private-modules }}
         run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
-      - name: BlackDuck SCA scan
-        id: black-duck-sca-scan
+      - name: generate Gemfile.lock if needed for Ruby projects
+        if: ${{ inputs.run-bundle-install == true && (inputs.language == 'ruby' || inputs.language == 'ruby-erlang') }} 
+        continue-on-error: true
+        working-directory: ${{ inputs.ruby-app-directory != '' && inputs.ruby-app-directory || '.' }}
         run: |
-          echo "BLACKDUCK_SBOM_URL: ${{ secrets.BLACKDUCK_SBOM_URL }}"
-        # echo "BLACKDUCK_SBOM_API_KEY: ${{ secrets.BLACKDUCK_SBOM_API_KEY }}" no longer used, see BLACKDUCK_SCA_TOKEN
+          if [ ! -f Gemfile.lock ]; then
+            bundle install 
+          fi
 
-      - name: BlackDuck SBOM scan
-        uses: blackduck-inc/black-duck-security-scan@v2.1.1
-        continue-on-error: true  # Allow pipeline to continue even with policy violations
-        env: 
-          GOPRIVATE: ${{ inputs.go-private-modules }}
-          DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name}} #'Chef-Agents' # <the_parent_group_of_your_target_project>, Chef, Chef-Agents, Chef-Automate, Chef-Chef360, Chef-Habitat, Chef-Infrastructure-Server, Chef-Shared-Services
-          DETECT_PROJECT_NAME: ${{ inputs.blackduck-project-name }}
-          DETECT_PROJECT_VERSION_NAME: ${{ inputs.version }} # <the_existing_version_in_your_project>
+      - name: attach artifact for Gemfile.lock for debugging
+        if: ${{ inputs.language == 'ruby' || inputs.language == 'ruby-erlang' }} 
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
-          blackducksca_url: ${{ secrets.BLACKDUCK_SBOM_URL }}  # BLACKDUCK_URL, should be https://progresssoftware.app.blackduck.com/ 
+          path: ${{ inputs.ruby-app-directory != '' && format('{0}/Gemfile.lock', inputs.ruby-app-directory) || 'Gemfile.lock' }}
+          name: ${{ github.event.repository.name }}-Gemfile-lock.txt 
+
+      - name: Set up Go (required for Go workspace vendoring)
+        if: ${{ hashFiles('go.work') != '' }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: Resolve Erlang/HEX dependencies for BlackDuck scanning
+        if: inputs.language == 'erlang' || inputs.language == 'ruby-erlang'
+        continue-on-error: true
+        run: |
+          # BlackDuck Detect needs rebar.lock files to accurately detect HEX dependencies.
+          # Run `rebar3 get-deps` in every directory containing a rebar.config to generate
+          # the lock files that the HEX detector relies on.
+          # Also calculate the maximum nesting depth of rebar.config files so the detector
+          # search depth can be set dynamically — works for any repo layout.
+          echo "Resolving Erlang/HEX dependencies via rebar3..."
+          MAX_DEPTH=0
+          while IFS= read -r cfg; do
+            dir=$(dirname "$cfg")
+            echo "Running rebar3 get-deps in: $dir"
+            (cd "$dir" && rebar3 get-deps) || echo "rebar3 get-deps failed in $dir (continuing)"
+            # Count directory depth relative to repo root (number of '/' separators after leading ./)
+            depth=$(echo "$dir" | tr -cd '/' | wc -c)
+            [ "$depth" -gt "$MAX_DEPTH" ] && MAX_DEPTH="$depth"
+          done < <(find . -name "rebar.config" -not -path "*/.bridge/*" -not -path "*/node_modules/*" -not -path "*/.git/*")
+          # Ensure at least depth 1 so the root rebar.config is always found
+          [ "$MAX_DEPTH" -lt 1 ] && MAX_DEPTH=1
+          echo "ERLANG_DETECTOR_DEPTH=${MAX_DEPTH}" >> "$GITHUB_ENV"
+          echo "Erlang detector search depth: ${MAX_DEPTH}"
+          echo "Erlang dependency resolution complete"
+
+      - name: Resolve Ruby dependencies for BlackDuck scanning
+        if: ${{ inputs.run-bundle-install != true && (inputs.language == 'ruby' || inputs.language == 'ruby-erlang') }}
+        continue-on-error: true
+        run: |
+          # BlackDuck Detect needs Gemfile.lock files to accurately detect RubyGems dependencies.
+          # Find every Gemfile across the repo (at any depth), run bundle install where a
+          # Gemfile.lock is missing, and calculate the max nesting depth so the detector
+          # search depth covers all Gemfile locations — works for any repo layout.
+          BASE_DIR="${{ inputs.ruby-app-directory != '' && inputs.ruby-app-directory || '.' }}"
+          echo "Scanning for Gemfiles under: $BASE_DIR"
+          MAX_DEPTH=0
+          while IFS= read -r gemfile; do
+            dir=$(dirname "$gemfile")
+            depth=$(echo "$dir" | tr -cd '/' | wc -c)
+            [ "$depth" -gt "$MAX_DEPTH" ] && MAX_DEPTH="$depth"
+            if [ ! -f "$dir/Gemfile.lock" ]; then
+              echo "No Gemfile.lock in $dir — running bundle install..."
+              (cd "$dir" && bundle install --without development test) \
+                || echo "bundle install failed in $dir (continuing)"
+            else
+              echo "Gemfile.lock already exists in $dir — skipping"
+            fi
+          done < <(find "$BASE_DIR" -name "Gemfile" -not -name "*.lock" \
+            -not -path "*/.bridge/*" -not -path "*/node_modules/*" -not -path "*/.git/*")
+          [ "$MAX_DEPTH" -lt 1 ] && MAX_DEPTH=1
+          echo "RUBY_DETECTOR_DEPTH=${MAX_DEPTH}" >> "$GITHUB_ENV"
+          echo "Ruby detector search depth: ${MAX_DEPTH}"
+          echo "Ruby dependency resolution complete"
+
+      - name: Prepare Go workspace for BlackDuck scanning
+        if: ${{ hashFiles('go.work') != '' }}
+        run: |
+          # Extract all relative module paths from go.work.
+          # grep -oE handles both single-line (use ./path) and block (use (\n  ./path\n)) syntax
+          # because it matches any './' sequence anywhere in the file.
+          GO_WORK_DEPTH=$(grep -oE '\./[^[:space:]"/)]+' go.work \
+            | awk -F'/' '{print NF-1}' \
+            | sort -rn | head -1)
+          # Default to 1 if all modules sit at root or grep returned nothing
+          [[ -z "$GO_WORK_DEPTH" || "$GO_WORK_DEPTH" -le 0 ]] && GO_WORK_DEPTH=1
+          echo "GO_WORK_DETECTOR_DEPTH=${GO_WORK_DEPTH}" >> "$GITHUB_ENV"
+          echo "Go workspace detector search depth: ${GO_WORK_DEPTH}"
+          # Vendor all workspace dependencies (requires Go 1.22+).
+          # If this fails (e.g. private module network issue) Detect will still run
+          # with the correct search depth and resolve modules via the Go toolchain.
+          if go work vendor; then
+            echo "GOFLAGS=-mod=vendor" >> "$GITHUB_ENV"
+            echo "Successfully vendored Go workspace dependencies"
+          else
+            echo "go work vendor did not complete; Detect will resolve modules via Go toolchain"
+          fi
+
+      - name: Construct BlackDuck detect arguments
+        id: detect-args
+        run: |
+          # Start with base arguments (always exclude PIP detector)
+          DETECT_ARGS="--detect.excluded.detector.types=PIP"
+          
+          # Add timeout configurations to prevent FAILURE_TIMEOUT errors
+          DETECT_ARGS="${DETECT_ARGS} --detect.timeout=1800"
+          
+          # Add low accuracy mode if requested
+          if [[ "${{ inputs.blackduck-force-low-accuracy-mode }}" == "true" ]]; then
+            DETECT_ARGS="${DETECT_ARGS} --detect.accuracy.required=NONE"
+          fi
+          
+          # Add source path if ruby-app-directory is specified
+          if [[ -n "${{ inputs.ruby-app-directory }}" ]]; then
+            DETECT_ARGS="${DETECT_ARGS} --detect.source.path=${{ inputs.ruby-app-directory }}"
+          fi
+
+          if [[ "${{ inputs.github-event-name }}" == "pull_request" ]]; then
+            # RAPID scan for PRs - automatically compares against baseline from target branch
+            DETECT_ARGS="${DETECT_ARGS} --detect.blackduck.scan.mode=RAPID"
+          fi
+
+          # If repo uses a Go workspace, increase detector search depth so Detect finds
+          # go.mod files inside module subdirectories (default depth 0 = root only = only Git found).
+          # Also set accuracy.required=NONE: Detect's default HIGH accuracy check fails for multi-module
+          # Go workspaces (FAILURE_ACCURACY_NOT_MET / exit 15) because it can't fully resolve the graph
+          # via `go list` across workspace modules. Vendor mode resolves deps; accuracy=NONE lets it proceed.
+          if [[ -f "go.work" ]]; then
+            DETECT_ARGS="${DETECT_ARGS} --detect.detector.search.depth=${{ env.GO_WORK_DETECTOR_DEPTH }}"
+            DETECT_ARGS="${DETECT_ARGS} --detect.accuracy.required=NONE"
+          fi
+
+          # For Erlang, ruby-erlang, and pure Ruby repos, rebar.config/Gemfile files may
+          # be nested in subdirectories. Default detector search depth is 0 (root only),
+          # which causes only the Git detector to run. Use the dynamically calculated depth
+          # (max nesting of rebar.config or Gemfile in this repo) so this works for any layout.
+          if [[ "${{ inputs.language }}" == "erlang" || "${{ inputs.language }}" == "ruby-erlang" ]]; then
+            ERLANG_DEPTH="${{ env.ERLANG_DETECTOR_DEPTH }}"
+            RUBY_DEPTH="${{ env.RUBY_DETECTOR_DEPTH }}"
+            # Use the greater of the two depths to cover both Ruby and Erlang file trees
+            MAX_DEPTH=$(( ERLANG_DEPTH > RUBY_DEPTH ? ERLANG_DEPTH : RUBY_DEPTH ))
+            [ "$MAX_DEPTH" -lt 1 ] && MAX_DEPTH=1
+            DETECT_ARGS="${DETECT_ARGS} --detect.detector.search.depth=${MAX_DEPTH}"
+          elif [[ "${{ inputs.language }}" == "ruby" ]]; then
+            RUBY_DEPTH="${{ env.RUBY_DETECTOR_DEPTH }}"
+            [ -n "$RUBY_DEPTH" ] && [ "$RUBY_DEPTH" -gt 0 ] && \
+              DETECT_ARGS="${DETECT_ARGS} --detect.detector.search.depth=${RUBY_DEPTH}"
+          fi
+          
+          echo "DETECT_ARGS=${DETECT_ARGS}" >> $GITHUB_ENV
+          echo "Constructed detect_args: ${DETECT_ARGS}"
+
+      - name: Construct BlackDuck failure severities
+        id: failure-severities
+        run: |
+          SEVERITIES=""
+          
+          if [[ "${{ inputs.blackduck-fail-on-blocker }}" == "true" ]]; then
+            SEVERITIES="BLOCKER"
+          fi
+          
+          if [[ "${{ inputs.blackduck-fail-on-critical }}" == "true" ]]; then
+            if [[ -n "$SEVERITIES" ]]; then
+              SEVERITIES="${SEVERITIES},CRITICAL"
+            else
+              SEVERITIES="CRITICAL"
+            fi
+          fi
+          
+          if [[ "${{ inputs.blackduck-fail-on-major }}" == "true" ]]; then
+            if [[ -n "$SEVERITIES" ]]; then
+              SEVERITIES="${SEVERITIES},MAJOR"
+            else
+              SEVERITIES="MAJOR"
+            fi
+          fi
+          
+          echo "FAILURE_SEVERITIES=${SEVERITIES}" >> $GITHUB_ENV
+          echo "Enforcement policy: ${SEVERITIES}"
+
+      # Full / INTELLIGENT scan — push to main, develop, release branches.
+      # Persists a baseline to the BlackDuck server so PR scans can diff against it.
+      - name: BlackDuck SCA Full Scan
+        id: blackduck-full-scan
+        if: ${{ inputs.github-event-name != 'pull_request' }}
+        uses: blackduck-inc/black-duck-security-scan@v2.1.1
+        continue-on-error: false
+        env:
+          GOPRIVATE: ${{ inputs.go-private-modules }}
+          DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name }}
+          DETECT_PROJECT_NAME: ${{ inputs.blackduck-project-name }}
+          DETECT_PROJECT_VERSION_NAME: ${{ inputs.version }}
+        with:
+          blackducksca_url: ${{ secrets.BLACKDUCK_SBOM_URL }}
+          blackducksca_token: ${{ secrets.BLACKDUCK_SCA_TOKEN }}
+          blackducksca_scan_failure_severities: ${{ env.FAILURE_SEVERITIES }}
+          blackducksca_scan_full: true
+          detect_args: ${{ env.DETECT_ARGS }}
+
+      # RAPID scan — pull request events only.
+      # Diffs against the persisted baseline so only violations *new to this PR* are reported.
+      - name: BlackDuck SCA PR Scan
+        id: blackduck-pr-scan
+        if: ${{ inputs.github-event-name == 'pull_request' }}
+        uses: blackduck-inc/black-duck-security-scan@v2.1.1
+        continue-on-error: false
+        env:
+          GOPRIVATE: ${{ inputs.go-private-modules }}
+          DETECT_PROJECT_GROUP_NAME: ${{ inputs.blackduck-project-group-name }}
+          DETECT_PROJECT_NAME: ${{ inputs.blackduck-project-name }}
+          DETECT_PROJECT_VERSION_NAME: ${{ inputs.version }}
+          DETECT_BLACKDUCK_RAPID_COMPARE_MODE: BOM_COMPARE
+        with:
+          blackducksca_url: ${{ secrets.BLACKDUCK_SBOM_URL }} # BLACKDUCK_URL, should be https://progresssoftware.app.blackduck.com/ 
           blackducksca_token: ${{ secrets.BLACKDUCK_SCA_TOKEN }}  # was BLACKDUCK_API_KEY
-          # blackducksca_scan_failure_severities: 'BLOCKER,CRITICAL'
-          detect_args: --detect.excluded.detector.types=PIP   # ignore python per https://documentation.blackduck.com/bundle/detect/page/packagemgrs/python.html
+          blackducksca_scan_failure_severities: ${{ env.FAILURE_SEVERITIES }}
+          blackducksca_scan_full: false
+          detect_args: ${{ env.DETECT_ARGS }}
+          github_token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          blackducksca_prComment_enabled: true
 
-######################################################
+      - name: Check BlackDuck SCA results and report violations
+        if: ${{ always() && (inputs.blackduck-fail-on-blocker == true || inputs.blackduck-fail-on-critical == true || inputs.blackduck-fail-on-major == true) }}
+        run: |
+          BRIDGE_LOG=".bridge/bridge.log"
+          BLOCKER_COUNT=0
+          CRITICAL_COUNT=0
+          MAJOR_COUNT=0
+
+          if [ ! -f "$BRIDGE_LOG" ]; then
+            echo "⚠️  Bridge log not found - skipping violation count check"
+            exit 0
+          fi
+
+          # Works for both RAPID and Full scans:
+          # - RAPID log has: "Critical and blocking policy violations" → "* Components: N", "* Security: N", etc.
+          # - Full  log has: "Policy Severity counts:" → "N matches have a severity level of BLOCKER", etc.
+          extract() { grep "$1" "$BRIDGE_LOG" | awk '{print $NF}' | head -1; }
+
+          if grep -q "Critical and blocking policy violations" "$BRIDGE_LOG"; then
+            # RAPID scan — map categories to severity levels
+            BLOCKER_COUNT=$(extract "\* Components:" || echo 0)
+            CRITICAL_COUNT=$(extract "\* Security:" || echo 0)
+            MAJOR_COUNT=$(extract "\* License:" || echo 0)
+            OTHER_COUNT=$(extract "\* Other:" || echo 0)
+            [ "${OTHER_COUNT:-0}" -gt 0 ] && CRITICAL_COUNT=$((CRITICAL_COUNT + OTHER_COUNT))
+          elif grep -q "Policy Severity counts:" "$BRIDGE_LOG"; then
+            # Full scan
+            # Example log line: "--- Black Duck found: 1 component in violation (Policy Severity counts: 1 match has a severity level of UNSPECIFIED, 0 matches have a severity level of BLOCKER"
+            BLOCKER_COUNT=$(grep "severity level of BLOCKER" "$BRIDGE_LOG" | grep -oE '[0-9]+ matches have a severity level of BLOCKER' | grep -oE '^[0-9]+' || echo 0)
+            CRITICAL_COUNT=$(grep "severity level of CRITICAL" "$BRIDGE_LOG" | grep -oE '[0-9]+ matches have a severity level of CRITICAL' | grep -oE '^[0-9]+' || echo 0)
+            MAJOR_COUNT=$(grep "severity level of MAJOR" "$BRIDGE_LOG" | grep -oE '[0-9]+ matches have a severity level of MAJOR' | grep -oE '^[0-9]+' || echo 0)
+          else
+            echo "⚠️  No policy violation summary found in bridge.log"
+            exit 0
+          fi
+
+          echo ""
+          echo "============================================"
+          echo "BlackDuck SCA Policy Violation Summary"
+          echo "============================================"
+          echo "BLOCKER  violations: ${BLOCKER_COUNT}"
+          echo "CRITICAL violations: ${CRITICAL_COUNT}"
+          echo "MAJOR    violations: ${MAJOR_COUNT}"
+          echo "============================================"
+
+          VIOLATIONS=""
+          [ "${{ inputs.blackduck-fail-on-blocker }}"  == "true" ] && [ "${BLOCKER_COUNT}"  -gt 0 ] && VIOLATIONS="${VIOLATIONS}${BLOCKER_COUNT} BLOCKER, "
+          [ "${{ inputs.blackduck-fail-on-critical }}" == "true" ] && [ "${CRITICAL_COUNT}" -gt 0 ] && VIOLATIONS="${VIOLATIONS}${CRITICAL_COUNT} CRITICAL, "
+          [ "${{ inputs.blackduck-fail-on-major }}"    == "true" ] && [ "${MAJOR_COUNT}"    -gt 0 ] && VIOLATIONS="${VIOLATIONS}${MAJOR_COUNT} MAJOR, "
+
+          if [ -n "$VIOLATIONS" ]; then
+            echo ""
+            echo "❌ Vulnerabilities Found: ${VIOLATIONS%, }"
+            exit 1
+          else
+            echo ""
+            echo "✅ No policy-violating vulnerabilities found"
+          fi
+
 # original from https://github.com/progress-platform-services/common-github-actions/blob/main/.github/workflows/examples/ci-all-sbom-main.yml
-
   generate-msft-sbom:
     name: Generate MSFT SBOM
     runs-on: ubuntu-latest

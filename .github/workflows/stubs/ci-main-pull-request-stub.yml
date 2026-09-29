@@ -15,21 +15,12 @@ on:
 
 permissions:
   contents: read
-  
-env:
-  STUB_VERSION: "1.0.7" 
 
 jobs: 
-  echo_version:
-    name: 'Echo stub version'
-    runs-on: ubuntu-latest
-    steps:
-      - name: echo version of stub and inputs
-        run: |
-          echo "CI main pull request stub version $STUB_VERSION"
-
   call-ci-main-pr-check-pipeline:
-    uses: chef/common-github-actions/.github/workflows/ci-main-pull-request.yml@main
+    # To pin to a specific version, change @main to a tag like @v1.0.7
+    # Available tags: https://github.com/chef/common-github-actions/tags
+    uses: chef/common-github-actions/.github/workflows/ci-main-pull-request.yml@main  # or use @v1.0.7
     secrets: inherit
     permissions: 
       id-token: write

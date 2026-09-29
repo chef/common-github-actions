@@ -1,0 +1,42 @@
+# Stub to call the common GitHub Action for creating release tags
+# Copy this file to your repository's .github/workflows/ directory
+#
+# This workflow will create a git tag when code is merged to main branch
+# Projects can then reference a specific version of common-github-actions
+
+name: Create Release Tag
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+      custom_version:
+        description: 'Custom version (overrides version_bump, format: X.Y.Z without v prefix)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  call-create-release-tag:
+    # To pin to a specific version, change @main to a tag like @v1.0.7
+    # Available tags: https://github.com/chef/common-github-actions/tags
+    uses: chef/common-github-actions/.github/workflows/create-release-tag.yml@main
+    secrets: inherit
+    permissions:
+      contents: write
+    with:
+      version_bump: ${{ inputs.version_bump || 'patch' }}
+      custom_version: ${{ inputs.custom_version || '' }}
