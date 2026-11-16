@@ -107,7 +107,7 @@ jobs:
                 export HAB_AUTH_TOKEN="${{ secrets.HAB_AUTH_TOKEN }}"
             fi
             HABITAT_VERSION="1.6.1245"
-            curl https://raw.githubusercontent.com/habitat-sh/habitat/master/components/hab/install.sh | sudo bash -s -- -v "$HABITAT_VERSION"
+            curl https://raw.githubusercontent.com/habitat-sh/habitat/master/components/hab/install.sh | sudo env HAB_AUTH_TOKEN="${HAB_AUTH_TOKEN:-}" HAB_LICENSE=accept-no-persist bash -s -- -v "$HABITAT_VERSION"
 
       - name: Configure Habitat
         run: |
@@ -152,7 +152,7 @@ jobs:
             hartifacts=$(ls results/*.hart)
             if [ -f "$hartifacts" ]; then
                 echo "Built package artifact: $hartifacts"
-                sudo -E hab pkg install $hartifacts
+                sudo env HAB_AUTH_TOKEN="${HAB_AUTH_TOKEN:-}" HAB_LICENSE="$HAB_LICENSE" hab pkg install "$hartifacts"
             else
                 echo "Error: No .hart file found in results/"
                 exit 1
@@ -189,10 +189,10 @@ jobs:
                 PACKAGE="${PACKAGE}/${{ inputs.hab_release }}"
             fi
             
-            INSTALL_CMD="sudo -E hab pkg install ${PACKAGE}"
+            INSTALL_CMD=(hab pkg install "$PACKAGE")
             
             if [ -n "${{ inputs.hab_channel }}" ]; then
-                INSTALL_CMD="${INSTALL_CMD} --channel ${{ inputs.hab_channel }}"
+                INSTALL_CMD+=(--channel "${{ inputs.hab_channel }}")
             fi
             
             if [ -n "${{ inputs.hab_auth_token }}" ]; then
@@ -203,8 +203,8 @@ jobs:
                 echo "Using token from repository secret"
             fi
             
-            echo "Installing: ${INSTALL_CMD}"
-            eval ${INSTALL_CMD}
+            echo "Installing: ${INSTALL_CMD[*]}"
+            sudo env HAB_AUTH_TOKEN="${HAB_AUTH_TOKEN:-}" HAB_LICENSE="$HAB_LICENSE" "${INSTALL_CMD[@]}"
 
       - name: Run Grype Scan on Habitat Package
         timeout-minutes: 15
@@ -497,7 +497,7 @@ jobs:
             elif [ -n "${{ secrets.HAB_AUTH_TOKEN }}" ]; then
                 export HAB_AUTH_TOKEN="${{ secrets.HAB_AUTH_TOKEN }}"
             fi
-            curl https://raw.githubusercontent.com/habitat-sh/habitat/main/components/hab/install.sh | sudo -E bash
+            curl https://raw.githubusercontent.com/habitat-sh/habitat/main/components/hab/install.sh | sudo env HAB_AUTH_TOKEN="${HAB_AUTH_TOKEN:-}" HAB_LICENSE=accept-no-persist bash
             hab license accept
             hab version
 
@@ -583,10 +583,10 @@ jobs:
                 PACKAGE="${PACKAGE}/${{ inputs.hab_release }}"
             fi
             
-            INSTALL_CMD="sudo -E hab pkg install ${PACKAGE}"
+            INSTALL_CMD=(hab pkg install "$PACKAGE")
             
             if [ -n "${{ inputs.hab_channel }}" ]; then
-                INSTALL_CMD="${INSTALL_CMD} --channel ${{ inputs.hab_channel }}"
+                INSTALL_CMD+=(--channel "${{ inputs.hab_channel }}")
             fi
             
             if [ -n "${{ inputs.hab_auth_token }}" ]; then
@@ -597,8 +597,8 @@ jobs:
                 echo "Using token from repository secret"
             fi
             
-            echo "Installing: ${INSTALL_CMD}"
-            eval ${INSTALL_CMD}
+            echo "Installing: ${INSTALL_CMD[*]}"
+            sudo env HAB_AUTH_TOKEN="${HAB_AUTH_TOKEN:-}" HAB_LICENSE="$HAB_LICENSE" "${INSTALL_CMD[@]}"
 
       - name: Run Grype Scan on Habitat Package
         timeout-minutes: 15

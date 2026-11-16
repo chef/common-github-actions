@@ -1,0 +1,25 @@
+name: Validate Habitat sudo environment
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/grype-hab-package-scan.yml
+      - .github/workflows/validate-habitat-sudo-env.yml
+      - workflow-supporting-files/test_habitat_sudo_env.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Test Habitat sudo environment handling
+        run: python3 workflow-supporting-files/test_habitat_sudo_env.py
