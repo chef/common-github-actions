@@ -76,95 +76,100 @@ jobs:
   #       echo "Quality JUnit report set to ${{ inputs.quality-junit-report }}"
   #       echo "Go private modules set to ${{ inputs.go-private-modules }}"
       
-  # MOVE INLINE - to main-PR-checkin
-
-  checkout:
-    name: 'Checkout code'
+  disabled-notice:
+    name: 'Steps disabled'
     runs-on: ubuntu-latest
     steps:
-    - name: Configure git for private modules
-      if: ${{ inputs.visibility == 'internal' }}
-      env:
-        GOPRIVATE: ${{ inputs.go-private-modules }}   # github.com/progress-platform-services/*
-      run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
-      continue-on-error: true
-    - name: checkout
-      # removed: if: ${{ inputs.perform-build == true && inputs.visibility == 'internal' }} -- this is internal, so always do checkout
-      uses: actions/checkout@v6
-      with:
-        fetch-depth: 0
+    - name: Echo disabled notice
+      run: echo "All other steps in this workflow have been disabled."
 
-  build:
-    runs-on: ubuntu-latest-4-cores
-    permissions: 
-      id-token: write
-      contents: read
-    steps:
-    - name: Set up Go
-      if: ${{ inputs.perform-build == true && inputs.language == 'Go' }}
-      uses: actions/setup-go@v5
-      with:
-        go-version: 'stable'
-#        go-version: 1.24.2
-        check-latest: true
+  # checkout:
+  #   name: 'Checkout code'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: Configure git for private modules
+  #     if: ${{ inputs.visibility == 'internal' }}
+  #     env:
+  #       GOPRIVATE: ${{ inputs.go-private-modules }}   # github.com/progress-platform-services/*
+  #     run: git config --global url."https://${{ secrets.GH_TOKEN }}@github.com/".insteadOf "https://github.com/"
+  #     continue-on-error: true
+  #   - name: checkout
+  #     # removed: if: ${{ inputs.perform-build == true && inputs.visibility == 'internal' }} -- this is internal, so always do checkout
+  #     uses: actions/checkout@v6
+  #     with:
+  #       fetch-depth: 0
 
-  unit-tests:
-    runs-on: ubuntu-latest-4-cores
-    steps:
-    #TODO: language specific unit tests (also needs paramterization)
-    # GoLang Unit tests
-    - name: Generate unit test coverage files
-      if: ${{ inputs.perform-build == true && inputs.report-unit-test-coverage == true && inputs.language == 'Go' && inputs.visibility == 'internal'}}
-      run: |
-        go test -v -coverprofile="coverage.out" ./... 
-        mkdir -p test/coverage
-        cp coverage.out test/coverage/coverage.out 
-      continue-on-error: true
+  # build:
+  #   runs-on: ubuntu-latest-4-cores
+  #   permissions: 
+  #     id-token: write
+  #     contents: read
+  #   steps:
+  #   - name: Set up Go
+  #     if: ${{ inputs.perform-build == true && inputs.language == 'Go' }}
+  #     uses: actions/setup-go@v5
+  #     with:
+  #       go-version: 'stable'
+  # #        go-version: 1.24.2
+  #       check-latest: true
 
-    # Ruby Unit tests
-    - name: Generate unit test coverage files
-      if: ${{ inputs.perform-build == true && inputs.report-unit-test-coverage == true && inputs.language == 'Ruby' && inputs.visibility == 'internal'}}
-      run: |
-        mkdir -p test/coverage
-        cp coverage/.resultset.json test/coverage/.resultset.json
-        coverage-test:
-      continue-on-error: true
+  # unit-tests:
+  #   runs-on: ubuntu-latest-4-cores
+  #   steps:
+  #   #TODO: language specific unit tests (also needs paramterization)
+  #   # GoLang Unit tests
+  #   - name: Generate unit test coverage files
+  #     if: ${{ inputs.perform-build == true && inputs.report-unit-test-coverage == true && inputs.language == 'Go' && inputs.visibility == 'internal'}}
+  #     run: |
+  #       go test -v -coverprofile="coverage.out" ./... 
+  #       mkdir -p test/coverage
+  #       cp coverage.out test/coverage/coverage.out 
+  #     continue-on-error: true
 
-    # name: Coverage from chef-vault
-    # runs-on: ubuntu-22.04
-    # steps:
-    #   - uses: actions/checkout@v6
-    #   - name: Set up ruby 3.1
-    #     uses: ruby/setup-ruby@v1
-    #     with:
-    #       ruby-version: 3.1
-    #       bundler-cache: true
-    #   - name: run specs
-    #     run: bundle exec rake spec --trace
-    #   - name: Simplecov Report
-    #     uses: aki77/simplecov-report-action@v1
-    #     with:
-    #       token: ${{ secrets.GITHUB_TOKEN }}
-    #       failedThreshold: 90
-    #       resultPath: coverage/.last_run.json
+  #   # Ruby Unit tests
+  #   - name: Generate unit test coverage files
+  #     if: ${{ inputs.perform-build == true && inputs.report-unit-test-coverage == true && inputs.language == 'Ruby' && inputs.visibility == 'internal'}}
+  #     run: |
+  #       mkdir -p test/coverage
+  #       cp coverage/.resultset.json test/coverage/.resultset.json
+  #       coverage-test:
+  #     continue-on-error: true
 
-  SonarQube:
-    runs-on: ubuntu-latest-4-cores
-    permissions: 
-      id-token: write
-      contents: read
-    steps:
-    - name: checkout
-      # removed: if: ${{ inputs.perform-build == true && inputs.visibility == 'internal' }} -- this is internal, so always do checkout
-      uses: actions/checkout@v6
-      with:
-        fetch-depth: 0
-    - name: SonarQube Scan
-      # if: ${{ inputs.perform-build == true && inputs.report-unit-test-coverage == true && inputs.visibility == 'internal' }} -- removing caveat,should be responsibility of caller
-      uses: sonarsource/sonarqube-scan-action@v5.3.1
-      # was uses: sonarsource/sonarqube-scan-action@v5.1.0
-      # was uses: sonarsource/sonarqube-scan-action@master
-      continue-on-error: true
-      env:
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}    
+  #   # name: Coverage from chef-vault
+  #   # runs-on: ubuntu-22.04
+  #   # steps:
+  #   #   - uses: actions/checkout@v6
+  #   #   - name: Set up ruby 3.1
+  #   #     uses: ruby/setup-ruby@v1
+  #   #     with:
+  #   #       ruby-version: 3.1
+  #   #       bundler-cache: true
+  #   #   - name: run specs
+  #   #     run: bundle exec rake spec --trace
+  #   #   - name: Simplecov Report
+  #   #     uses: aki77/simplecov-report-action@v1
+  #   #     with:
+  #   #       token: ${{ secrets.GITHUB_TOKEN }}
+  #   #       failedThreshold: 90
+  #   #       resultPath: coverage/.last_run.json
+
+  # SonarQube:
+  #   runs-on: ubuntu-latest-4-cores
+  #   permissions: 
+  #     id-token: write
+  #     contents: read
+  #   steps:
+  #   - name: checkout
+  #     # removed: if: ${{ inputs.perform-build == true && inputs.visibility == 'internal' }} -- this is internal, so always do checkout
+  #     uses: actions/checkout@v6
+  #     with:
+  #       fetch-depth: 0
+  #   - name: SonarQube Scan
+  #     # if: ${{ inputs.perform-build == true && inputs.report-unit-test-coverage == true && inputs.visibility == 'internal' }} -- removing caveat,should be responsibility of caller
+  #     uses: sonarsource/sonarqube-scan-action@v5.3.1
+  #     # was uses: sonarsource/sonarqube-scan-action@v5.1.0
+  #     # was uses: sonarsource/sonarqube-scan-action@master
+  #     continue-on-error: true
+  #     env:
+  #       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  #       SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}    
