@@ -1,0 +1,45 @@
+# DCO (Developer Certificate of Origin) Check
+#
+# Verifies that all commits in a pull request are signed off with DCO
+#
+# See https://developercertificate.org/ for more information about DCO
+
+name: DCO Check
+
+on:
+  workflow_call:
+    inputs:
+      github-event-name:
+        description: 'GitHub event name (pass github.event_name from calling workflow)'
+        required: false
+        type: string
+        default: ''
+
+permissions: {}
+
+jobs:
+  dco_check_job:
+    permissions:
+      contents: read
+      pull-requests: read
+    runs-on: ubuntu-latest
+    name: DCO Check
+    steps:
+      - name: Skip if not pull request
+        if: ${{ inputs.github-event-name != 'pull_request' && inputs.github-event-name != 'pull_request_target' }}
+        run: |
+          echo "DCO check only runs on pull_request events. Skipping..."
+          exit 0
+      
+      - name: Get PR Commits
+        if: ${{ inputs.github-event-name == 'pull_request' || inputs.github-event-name == 'pull_request_target' }}
+        uses: tim-actions/get-pr-commits@master
+        id: 'get-pr-commits'
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: DCO Check
+        if: ${{ inputs.github-event-name == 'pull_request' || inputs.github-event-name == 'pull_request_target' }}
+        uses: tim-actions/dco@master
+        with:
+          commits: ${{ steps.get-pr-commits.outputs.commits }}
