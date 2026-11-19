@@ -237,7 +237,7 @@ jobs:
         if: inputs.language == 'ruby' || inputs.language == 'ruby-erlang'
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.4.2'
+          ruby-version: '3.4'
           bundler-cache: false
           working-directory: ${{ inputs.ruby-app-directory != '' && inputs.ruby-app-directory || '.' }}
 
